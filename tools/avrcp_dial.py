@@ -2,11 +2,14 @@
 """CMF Buds Pro 2 — Smart Dial Daemon & Virtual Overlay Controller.
 
 Architecture:
-- Clicks: Captured from /dev/input/event* (KEY_PLAYCD=200 / KEY_PAUSECD=201)
+- Clicks: Captured from /dev/input/event* exclusively via EVIOCGRAB
+  (Prevents the OS / media players from pausing content when clicking the dial!)
 - Rotations: Captured via BlueZ D-Bus MediaTransport1 (Volume delta)
 - Volume Lock: While navigating the menu (or adjusting brightness),
   the volume is locked in hardware via D-Bus echo suppression so navigating
   DOES NOT change your actual audio volume, while the earbuds still beep in your ear!
+- System Brightness: Synchronized directly with GNOME Mutter DisplayConfig
+  AND sysfs so the on-screen dial and the GNOME system brightness slider stay 100% in sync!
 - Modes:
   - Menu Mode: Rotate to browse options; Click center to enter selected mode.
   - Active Modes (Volume / Brightness): Rotate to adjust level live with on-screen HUD; Click to confirm & exit.
@@ -18,6 +21,7 @@ import sys
 import os
 import glob
 import struct
+import fcntl
 import threading
 import time
 import subprocess
@@ -26,7 +30,7 @@ import dbus
 from dbus.mainloop.glib import DBusGMainLoop
 from gi.repository import GLib
 
-# Linux Input Event Format
+# Linux Input Event Format & Exclusive Grab
 EVENT_FORMAT = "llHHi"
 EVENT_SIZE = struct.calcsize(EVENT_FORMAT)
 EV_KEY = 0x01
@@ -34,6 +38,7 @@ KEY_PLAYPAUSE = 164
 KEY_PLAYCD = 200    # CMF Center Click (Play)
 KEY_PAUSECD = 201   # CMF Center Click (Pause)
 KEY_VOICECOMMAND = 582
+EVIOCGRAB = 0x40044590  # Linux ioctl to grab input device exclusively
 
 MENU_ACTIONS = [
     ("🔊 Volume", "volume_mode"),
@@ -70,10 +75,28 @@ def get_user_dbus_bus() -> dbus.bus.BusConnection:
     return dbus.bus.BusConnection(f"unix:path=/run/user/{uid}/bus")
 
 
-# ── Native Controls ───────────────────────────────────────────────────────────
+# ── Synchronized Brightness Controls ──────────────────────────────────────────
 
 def get_screen_brightness() -> int:
-    """Read screen brightness percentage from /sys/class/backlight."""
+    """Read screen brightness percentage (0-100), keeping in sync with GNOME system slider."""
+    # 1. Try GNOME Mutter DisplayConfig (System Slider)
+    try:
+        bus = get_user_dbus_bus()
+        obj = bus.get_object("org.gnome.Mutter.DisplayConfig", "/org/gnome/Mutter/DisplayConfig")
+        props_iface = dbus.Interface(obj, "org.freedesktop.DBus.Properties")
+        bl = props_iface.Get("org.gnome.Mutter.DisplayConfig", "Backlight")
+        if bl and len(bl) > 1 and len(bl[1]) > 0:
+            m = bl[1][0]
+            val = int(m["value"])
+            min_v = int(m.get("min", 0))
+            max_v = int(m.get("max", 100))
+            if max_v > min_v:
+                pct = int(((val - min_v) / (max_v - min_v)) * 100)
+                return max(0, min(100, pct))
+    except Exception:
+        pass
+
+    # 2. Try sysfs /sys/class/backlight
     try:
         paths = glob.glob("/sys/class/backlight/*/brightness")
         if paths:
@@ -86,18 +109,32 @@ def get_screen_brightness() -> int:
     except Exception:
         pass
 
-    # Fallback to brightnessctl if installed
-    try:
-        out = subprocess.check_output(["brightnessctl", "g"], text=True).strip()
-        max_b = subprocess.check_output(["brightnessctl", "m"], text=True).strip()
-        return int((int(out) / int(max_b)) * 100)
-    except Exception:
-        pass
     return 50
 
 
-def adjust_screen_brightness(delta_percent: int) -> int:
-    """Adjust brightness via /sys/class/backlight directly (zero dependencies)."""
+def set_screen_brightness(target_pct: int) -> int:
+    """Set screen brightness percentage (0-100), updating both hardware and GNOME system slider."""
+    target_pct = max(5, min(100, target_pct))
+
+    # 1. Update GNOME Mutter DisplayConfig (moves the system brightness slider!)
+    try:
+        bus = get_user_dbus_bus()
+        obj = bus.get_object("org.gnome.Mutter.DisplayConfig", "/org/gnome/Mutter/DisplayConfig")
+        props_iface = dbus.Interface(obj, "org.freedesktop.DBus.Properties")
+        iface = dbus.Interface(obj, "org.gnome.Mutter.DisplayConfig")
+        bl = props_iface.Get("org.gnome.Mutter.DisplayConfig", "Backlight")
+        if bl and len(bl) > 1 and len(bl[1]) > 0:
+            serial = bl[0]
+            m = bl[1][0]
+            conn = str(m["connector"])
+            min_v = int(m.get("min", 10))
+            max_v = int(m.get("max", 210))
+            target_val = int(min_v + (max_v - min_v) * (target_pct / 100.0))
+            iface.SetBacklight(serial, conn, dbus.Int32(target_val))
+    except Exception as e:
+        print(f"[!] Mutter SetBacklight error: {e}")
+
+    # 2. Update physical backlight via sysfs (ensures hardware changes smoothly)
     try:
         paths = glob.glob("/sys/class/backlight/*/brightness")
         if paths:
@@ -105,26 +142,23 @@ def adjust_screen_brightness(delta_percent: int) -> int:
             max_path = b_path.replace("brightness", "max_brightness")
             with open(max_path, "r") as f:
                 max_b = int(f.read().strip())
-            with open(b_path, "r") as f:
-                curr_b = int(f.read().strip())
-
-            step = int(max_b * (delta_percent / 100.0))
-            new_b = max(int(max_b * 0.05), min(max_b, curr_b + step))
+            new_b = max(int(max_b * 0.05), min(max_b, int(max_b * (target_pct / 100.0))))
             with open(b_path, "w") as f:
                 f.write(str(new_b))
-            return int((new_b / max_b) * 100)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[!] Direct sysfs brightness error: {e}")
 
-    # Fallback to brightnessctl
-    try:
-        sign = "+" if delta_percent > 0 else "-"
-        subprocess.run(["brightnessctl", "set", f"{abs(delta_percent)}%{sign}"], check=False)
-        return get_screen_brightness()
-    except Exception:
-        pass
-    return get_screen_brightness()
+    return target_pct
 
+
+def adjust_screen_brightness(delta_percent: int) -> int:
+    """Adjust brightness by a relative delta percentage."""
+    curr = get_screen_brightness()
+    target = max(5, min(100, curr + delta_percent))
+    return set_screen_brightness(target)
+
+
+# ── Native Media & Audio Controls ─────────────────────────────────────────────
 
 def control_mpris(action: str) -> bool:
     """Control active media player (Spotify, Firefox, Chrome, Zen, etc.) via MPRIS D-Bus."""
@@ -664,7 +698,7 @@ class DualPairingDialDaemon:
         self.overlay.after(0, self.overlay.on_click_event)
 
     def start_input_listener(self):
-        """Read click events from /dev/input/event*."""
+        """Read click events from /dev/input/event* exclusively."""
         while True:
             dev = find_cmf_avrcp_device()
             if not dev or not os.path.exists(dev):
@@ -673,16 +707,25 @@ class DualPairingDialDaemon:
 
             self.dev_path = dev
             print(f"[+] Reading clicks from {self.dev_path}")
+            f = None
             try:
-                with open(self.dev_path, "rb") as f:
-                    while True:
-                        data = f.read(EVENT_SIZE)
-                        if not data:
-                            break
-                        _, _, ev_type, ev_code, ev_value = struct.unpack(EVENT_FORMAT, data)
-                        if ev_type == EV_KEY and ev_value == 1:
-                            if ev_code in (KEY_PLAYCD, KEY_PAUSECD, KEY_PLAYPAUSE, KEY_VOICECOMMAND):
-                                self.on_click_received()
+                f = open(self.dev_path, "rb")
+                # Exclusively grab the device so KEY_PLAYCD/KEY_PAUSECD
+                # are NOT passed to GNOME/system media players!
+                try:
+                    fcntl.ioctl(f.fileno(), EVIOCGRAB, 1)
+                    print(f"[+] Device {self.dev_path} grabbed exclusively! (Play/Pause blocked from system)")
+                except Exception as ge:
+                    print(f"[!] Warning: Could not grab device exclusively: {ge}")
+
+                while True:
+                    data = f.read(EVENT_SIZE)
+                    if not data:
+                        break
+                    _, _, ev_type, ev_code, ev_value = struct.unpack(EVENT_FORMAT, data)
+                    if ev_type == EV_KEY and ev_value == 1:
+                        if ev_code in (KEY_PLAYCD, KEY_PAUSECD, KEY_PLAYPAUSE, KEY_VOICECOMMAND):
+                            self.on_click_received()
             except PermissionError:
                 print("[-] Permission denied reading input event.")
                 print("    Run with: sudo python3 tools/avrcp_dial.py")
@@ -690,12 +733,22 @@ class DualPairingDialDaemon:
             except Exception as e:
                 print(f"[-] Input listener error ({e}), reconnecting in 2s...")
                 time.sleep(2.0)
+            finally:
+                if f:
+                    try:
+                        fcntl.ioctl(f.fileno(), EVIOCGRAB, 0)
+                    except Exception:
+                        pass
+                    try:
+                        f.close()
+                    except Exception:
+                        pass
 
     def run(self):
         print("==================================================")
         print("CMF Buds Pro 2 Dual-Pairing Dial Controller Active")
         print("Phone connection & Dual-Pairing are 100% PRESERVED!")
-        print("• Click Dial   -> Opens Virtual Dial on Laptop")
+        print("• Click Dial   -> Opens Virtual Dial (System Play/Pause Blocked!)")
         print("• Rotate Dial  -> Rotates Options (Audio Volume Locked!)")
         print("• Click Again  -> Selects Mode (Volume / Brightness / Media)")
         print("• Esc / Right-Click -> Dismisses Dial")
