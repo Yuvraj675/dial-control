@@ -20,7 +20,6 @@
         "transparent": true,
         "decorations": false,
         "alwaysOnTop": true,
-        "focus": false,
         "visible": false,
         "center": true,
         "url": "index.html?view=hud"

@@ -19,10 +19,18 @@ pub struct AppState {
 
 #[tauri::command]
 fn show_hud(app: AppHandle, state: tauri::State<AppState>) {
+    let windows: Vec<String> = app.webview_windows().keys().map(|k| k.to_string()).collect();
+    println!("[HUD] show_hud called. Registered windows: {:?}", windows);
     state.is_hud_open.store(true, Ordering::SeqCst);
     state.locked_vol.store(50, Ordering::SeqCst);
     if let Some(window) = app.get_webview_window("hud") {
-        let _ = window.show();
+        let res_show = window.show();
+        let res_unmin = window.unminimize();
+        let res_focus = window.set_focus();
+        let res_top = window.set_always_on_top(true);
+        println!("[HUD] window.show(): {:?}, unmin: {:?}, focus: {:?}, on_top: {:?}", res_show, res_unmin, res_focus, res_top);
+    } else {
+        eprintln!("[HUD] ERROR: Webview window 'hud' NOT FOUND in app!");
     }
     let _ = app.emit("hud:visibility", true);
 }
@@ -32,7 +40,8 @@ fn hide_hud(app: AppHandle, state: tauri::State<AppState>) {
     state.is_hud_open.store(false, Ordering::SeqCst);
     state.locked_vol.store(0, Ordering::SeqCst);
     if let Some(window) = app.get_webview_window("hud") {
-        let _ = window.hide();
+        let res = window.hide();
+        println!("[HUD] hide_hud: {:?}", res);
     }
     let _ = app.emit("hud:visibility", false);
 }
@@ -161,9 +170,38 @@ pub fn run() {
             let handle_bluez = app.handle().clone();
             let handle_context = app.handle().clone();
 
-            dial_backend::start_input_grabber(handle_grabber, is_hud_open.clone());
+            dial_backend::start_input_grabber(handle_grabber, is_hud_open.clone(), locked_vol.clone());
             dial_backend::start_bluez_listener(handle_bluez, is_hud_open.clone(), locked_vol.clone());
             context_detector::start_context_detector(handle_context);
+
+            // Optional startup test flag to show HUD or Settings automatically
+            if std::env::args().any(|a| a == "--show-settings") {
+                let test_handle = app.handle().clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(500));
+                    show_settings(test_handle);
+                    println!("[+] Preferences window opened (--show-settings).");
+                });
+            }
+
+            if std::env::args().any(|a| a == "--show-hud") || std::env::var("SHOW_HUD").is_ok() {
+                let test_handle = app.handle().clone();
+                let test_hud_open = is_hud_open.clone();
+                let test_locked_vol = locked_vol.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(500));
+                    test_hud_open.store(true, Ordering::SeqCst);
+                    test_locked_vol.store(50, Ordering::SeqCst);
+                    if let Some(window) = test_handle.get_webview_window("hud") {
+                        let _ = window.show();
+                        let _ = window.unminimize();
+                        let _ = window.set_focus();
+                        let _ = window.set_always_on_top(true);
+                        let _ = test_handle.emit("hud:visibility", true);
+                        println!("[+] Initial HUD test window automatically opened (--show-hud).");
+                    }
+                });
+            }
 
             println!("[+] Dial Control Tauri v2 Daemon initialized with BlueZ & evdev bridge.");
             Ok(())
