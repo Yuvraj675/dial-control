@@ -609,6 +609,10 @@ class DualPairingDialDaemon:
         if new_mode == "closed":
             self.locked_hardware_vol = None
             self.ignore_restore_vol = None
+        elif new_mode == "volume":
+            # Entering volume mode: release volume lock so volume adjusts freely!
+            self.locked_hardware_vol = None
+            self.ignore_restore_vol = None
 
     def on_dbus_property_changed(self, iface, changed, invalidated, path):
         """Called whenever the dial is rotated (Bluetooth Absolute Volume change)."""
@@ -644,12 +648,18 @@ class DualPairingDialDaemon:
 
         # Handle based on overlay state
         if self.overlay.is_visible:
-            # 2. Advance menu or adjust sub-mode gauge
-            self.overlay.after(0, self.overlay.on_rotate_event, direction)
+            if self.overlay.current_mode == "volume":
+                # Natural volume mode: BlueZ & PipeWire update hardware volume naturally.
+                # Update our HUD percentage directly WITHOUT calling set_sink_volume!
+                # This completely eliminates the runaway feedback loop (going to 0% or 100%).
+                vol_pct = max(0, min(100, int((new_vol / 127.0) * 100)))
+                self.overlay.active_val = vol_pct
+                self.overlay.after(0, self.overlay.draw_ui)
+            else:
+                # Menu or Brightness mode: advance selection or step brightness
+                self.overlay.after(0, self.overlay.on_rotate_event, direction)
 
-            # 3. VOLUME LOCK: While browsing menu or adjusting brightness,
-            #    restore hardware volume back to the locked value so audio volume DOES NOT CHANGE!
-            if self.overlay.current_mode != "volume":
+                # VOLUME LOCK: Restore hardware volume back to locked value so audio volume does not change!
                 if self.locked_hardware_vol is not None and self.transport_path:
                     try:
                         self.ignore_restore_vol = self.locked_hardware_vol
@@ -664,9 +674,6 @@ class DualPairingDialDaemon:
                         )
                     except Exception as e:
                         print(f"[!] Volume lock restore error: {e}")
-            else:
-                # In volume mode: user explicitly wants to adjust volume
-                self.locked_hardware_vol = new_vol
         else:
             # Overlay is closed: normal volume behavior
             pass
