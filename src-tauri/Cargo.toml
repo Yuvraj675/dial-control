@@ -1,0 +1,20 @@
+[package]
+name = "dial-control"
+version = "1.0.0"
+description = "Context-Aware Radial Dial Controller for CMF Buds Pro 2"
+authors = ["Yuvraj Gupta"]
+edition = "2021"
+
+[lib]
+name = "dial_control_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.2", features = [] }
+
+[dependencies]
+tauri = { version = "2.2", features = ["tray-icon"] }
+tauri-plugin-shell = "2.2"
+tauri-plugin-global-shortcut = "2.2"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"

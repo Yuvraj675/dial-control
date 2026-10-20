@@ -36,3 +36,8 @@ venv.bak/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+node_modules/
+
+dist/
+src-tauri/target/
