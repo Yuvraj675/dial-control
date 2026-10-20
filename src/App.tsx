@@ -64,7 +64,20 @@ export function App() {
   // Execute an action (either mode switch or native system command/hotkey)
   const handleExecuteAction = (action: WheelAction) => {
     if (action.type === "mode") {
-      setCurrentMode(action.id === "volume_mode" ? "volume" : "brightness");
+      const mode = action.id === "volume_mode" ? "volume" : "brightness";
+      setCurrentMode(mode);
+      if (isTauri) {
+        invoke("set_mode", { mode }).catch(console.error);
+        if (mode === "brightness") {
+          invoke<number>("get_system_brightness")
+            .then((b) => setGaugeValue(b))
+            .catch(console.error);
+        } else {
+          invoke<number>("get_system_volume")
+            .then((v) => setGaugeValue(v))
+            .catch(console.error);
+        }
+      }
     } else {
       if (isTauri) {
         invoke("execute_action", { action }).catch(console.error);
@@ -95,8 +108,17 @@ export function App() {
         } else {
           // Adjust volume or brightness gauge
           const step = dir * 4;
-          setGaugeValue((prev) => Math.max(0, Math.min(100, prev + step)));
-          invoke("adjust_gauge", { mode: currentMode, delta: step }).catch(console.error);
+          setGaugeValue((prev) => {
+            const next = Math.max(0, Math.min(100, prev + step));
+            if (isTauri) {
+              if (currentMode === "brightness") {
+                invoke("set_system_brightness", { pct: next }).catch(console.error);
+              } else if (currentMode === "volume") {
+                invoke("set_system_volume", { pct: next }).catch(console.error);
+              }
+            }
+            return next;
+          });
         }
       });
       unlistenList.push(unlistenRotate);
@@ -106,7 +128,12 @@ export function App() {
         const { currentMode, selectedIndex, activeProfile } = stateRef.current;
 
         if (currentMode !== "menu") {
+          if (isTauri) {
+            invoke("set_mode", { mode: "menu" }).catch(console.error);
+            invoke("hide_hud").catch(console.error);
+          }
           setCurrentMode("menu");
+          setIsHudOpen(false);
           return;
         }
 
@@ -132,6 +159,9 @@ export function App() {
         setIsHudOpen(event.payload);
         if (event.payload) {
           setCurrentMode("menu");
+          if (isTauri) {
+            invoke("set_mode", { mode: "menu" }).catch(console.error);
+          }
         }
       });
       unlistenList.push(unlistenVis);
@@ -148,7 +178,11 @@ export function App() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        if (isTauri) invoke("hide_hud").catch(console.error);
+        if (isTauri) {
+          invoke("set_mode", { mode: "menu" }).catch(console.error);
+          invoke("hide_hud").catch(console.error);
+        }
+        setCurrentMode("menu");
         setIsHudOpen(false);
       } else if (e.key === " " && view === "hud") {
         e.preventDefault();
@@ -158,19 +192,47 @@ export function App() {
         if (currentMode === "menu") {
           setSelectedIndex((prev) => (prev + 1) % actionsCount);
         } else {
-          setGaugeValue((prev) => Math.min(100, prev + 5));
-          if (isTauri) invoke("adjust_gauge", { mode: currentMode, delta: 5 }).catch(console.error);
+          setGaugeValue((prev) => {
+            const next = Math.min(100, prev + 5);
+            if (isTauri) {
+              if (currentMode === "brightness") {
+                invoke("set_system_brightness", { pct: next }).catch(console.error);
+              } else if (currentMode === "volume") {
+                invoke("set_system_volume", { pct: next }).catch(console.error);
+              }
+            }
+            return next;
+          });
         }
       } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
         e.preventDefault();
         if (currentMode === "menu") {
           setSelectedIndex((prev) => (prev - 1 + actionsCount) % actionsCount);
         } else {
-          setGaugeValue((prev) => Math.max(0, prev - 5));
-          if (isTauri) invoke("adjust_gauge", { mode: currentMode, delta: -5 }).catch(console.error);
+          setGaugeValue((prev) => {
+            const next = Math.max(0, prev - 5);
+            if (isTauri) {
+              if (currentMode === "brightness") {
+                invoke("set_system_brightness", { pct: next }).catch(console.error);
+              } else if (currentMode === "volume") {
+                invoke("set_system_volume", { pct: next }).catch(console.error);
+              }
+            }
+            return next;
+          });
         }
       } else if (e.key === "Enter") {
         e.preventDefault();
+        const { currentMode, selectedIndex, activeProfile } = stateRef.current;
+        if (currentMode !== "menu") {
+          if (isTauri) {
+            invoke("set_mode", { mode: "menu" }).catch(console.error);
+            invoke("hide_hud").catch(console.error);
+          }
+          setCurrentMode("menu");
+          setIsHudOpen(false);
+          return;
+        }
         const action = activeProfile.actions[selectedIndex];
         if (action) {
           handleExecuteAction(action);
@@ -277,7 +339,11 @@ export function App() {
           theme={config.settings.theme}
           onSelectAction={handleExecuteAction}
           onDismiss={() => {
-            if (isTauri) invoke("hide_hud").catch(console.error);
+            if (isTauri) {
+              invoke("set_mode", { mode: "menu" }).catch(console.error);
+              invoke("hide_hud").catch(console.error);
+            }
+            setCurrentMode("menu");
             setIsHudOpen(false);
           }}
         />
