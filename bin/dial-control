@@ -1,32 +1,16 @@
 #!/usr/bin/env bash
 # Dial Control Launcher
-# Checks permissions and launches the unified application cleanly.
+# Launches the commercial-grade native Rust + Tauri v2 desktop application.
 
 APP_DIR="/home/yuvraj/Documents/Code_Projects/dial-control"
 cd "$APP_DIR"
 
-# Check if user has direct access to /dev/uinput and /dev/input
-CAN_ACCESS=0
-
-# Try reading CMF input device
-python3 -c "
-import sys, os
-sys.path.insert(0, '$APP_DIR')
-from tools.avrcp_dial import find_cmf_avrcp_device
-dev = find_cmf_avrcp_device()
-if dev and os.access(dev, os.R_OK):
-    sys.exit(0)
-sys.exit(1)
-" >/dev/null 2>&1 && CAN_ACCESS=1
-
-if [ "$CAN_ACCESS" -eq 1 ] || [ "$EUID" -eq 0 ]; then
-    exec /usr/bin/python3 "$APP_DIR/dial_app.py" "$@"
-else
-    # Needs root permission for the exclusive input grab & uinput
-    # Use pkexec (native GNOME polkit authentication dialog)
-    if [ -n "$DISPLAY" ] || [ -n "$WAYLAND_DISPLAY" ]; then
-        exec pkexec env DISPLAY="$DISPLAY" XAUTHORITY="$XAUTHORITY" WAYLAND_DISPLAY="$WAYLAND_DISPLAY" /usr/bin/python3 "$APP_DIR/dial_app.py" "$@"
-    else
-        exec sudo /usr/bin/python3 "$APP_DIR/dial_app.py" "$@"
-    fi
+BINARY="$APP_DIR/src-tauri/target/debug/dial-control"
+if [ -f "$APP_DIR/src-tauri/target/release/dial-control" ]; then
+    BINARY="$APP_DIR/src-tauri/target/release/dial-control"
 fi
+
+# Ensure executable permissions
+chmod +x "$BINARY" 2>/dev/null || true
+
+exec "$BINARY" "$@"

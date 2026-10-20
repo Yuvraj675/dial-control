@@ -85,13 +85,30 @@ class ContextDetector:
 if __name__ == "__main__":
     import json
     import os
+    import time
 
     config_path = os.path.join(os.path.dirname(__file__), "..", "config", "profiles.json")
-    with open(config_path, "r") as f:
-        config = json.load(f)
+    config = {}
+    if os.path.exists(config_path):
+        with open(config_path, "r") as f:
+            try:
+                config = json.load(f)
+            except Exception:
+                pass
 
     detector = ContextDetector(config)
-    app, title = detector.get_active_window_info()
-    p_id, profile = detector.match_profile(app, title)
-    print(f"Active App: {app} | Title: {title}")
-    print(f"Matched Profile: {p_id} ({profile.get('name')}) with {len(profile.get('actions', []))} actions.")
+
+    if "--stream" in sys.argv:
+        last_profile = None
+        while True:
+            app, title = detector.get_active_window_info()
+            p_id, _ = detector.match_profile(app, title)
+            if p_id != last_profile:
+                last_profile = p_id
+                print(json.dumps({"app": app, "title": title, "profile_id": p_id}), flush=True)
+            time.sleep(0.35)
+    else:
+        app, title = detector.get_active_window_info()
+        p_id, profile = detector.match_profile(app, title)
+        print(f"Active App: {app} | Title: {title}")
+        print(f"Matched Profile: {p_id} ({profile.get('name')}) with {len(profile.get('actions', []))} actions.")
