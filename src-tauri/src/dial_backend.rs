@@ -101,7 +101,7 @@ pub fn start_input_grabber(
                                     || code == KEY_VOICECOMMAND
                                 {
                                     let now = Instant::now();
-                                    if now.duration_since(last_click_time) > Duration::from_millis(250) {
+                                    if now.duration_since(last_click_time) > Duration::from_millis(500) {
                                         last_click_time = now;
                                         let was_open = is_hud_open.load(Ordering::SeqCst);
 
