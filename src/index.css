@@ -2,6 +2,39 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Nothing OS Official Typefaces ────────────────────────────────────────── */
+@font-face {
+  font-family: 'Ndot57';
+  src: url('/fonts/Ndot57-Regular.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'NType82';
+  src: url('/fonts/NType82-Regular.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'NType82Headline';
+  src: url('/fonts/NType82-Headline.otf') format('opentype');
+  font-weight: bold;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'NType82Mono';
+  src: url('/fonts/NType82Mono-Regular.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+
 :root {
   color-scheme: dark;
 }
@@ -12,32 +45,65 @@ body {
   background: transparent;
   user-select: none;
   -webkit-user-select: none;
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Frosted obsidian glass */
-.glass-obsidian {
-  background: rgba(11, 12, 14, 0.78);
-  backdrop-filter: blur(28px) saturate(160%);
-  -webkit-backdrop-filter: blur(28px) saturate(160%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+/* ── Nothing Industrial Aesthetic ─────────────────────────────────────────── */
+
+.font-ndot {
+  font-family: 'Ndot57', monospace;
+  letter-spacing: 0.08em;
 }
 
-.glass-card {
-  background: rgba(20, 22, 27, 0.72);
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+.font-ntype {
+  font-family: 'NType82', system-ui, sans-serif;
 }
 
-/* Subtle knurling background pattern for center dial */
-.knurling-pattern {
-  background-image: radial-gradient(rgba(255, 255, 255, 0.12) 1px, transparent 0);
-  background-size: 8px 8px;
-  background-position: -19px -19px;
+.font-ntype-headline {
+  font-family: 'NType82Headline', system-ui, sans-serif;
+  letter-spacing: -0.02em;
 }
 
-/* Dot matrix indicator text */
-.dot-matrix {
-  font-family: 'Space Mono', monospace;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+.font-ntype-mono {
+  font-family: 'NType82Mono', monospace;
+  letter-spacing: 0.04em;
+}
+
+/* Pure Obsidian Surface with Micro-Separators */
+.nothing-chassis {
+  background: rgba(10, 11, 14, 0.88);
+  backdrop-filter: blur(32px) saturate(180%);
+  -webkit-backdrop-filter: blur(32px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+/* Tactile Industrial Knurling Texture */
+.knurling-bezel {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.14) 1.2px, transparent 0);
+  background-size: 7px 7px;
+  background-position: -3px -3px;
+}
+
+/* Red LED Indicator */
+.red-led {
+  background: #D71921;
+  box-shadow: 0 0 10px #D71921, 0 0 20px rgba(215, 25, 33, 0.5);
+}
+
+/* Custom minimal scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
 }
