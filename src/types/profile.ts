@@ -20,7 +20,7 @@ export interface DialProfile {
 }
 
 export interface AppSettings {
-  theme: "cmf_orange" | "cmf_cyan" | "stealth";
+  theme: "nothing_red" | "stealth" | "cmf_orange";
   dial_radius: number;
   donut_thickness: number;
   sensitivity: number;
