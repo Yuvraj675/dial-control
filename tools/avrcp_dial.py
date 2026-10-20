@@ -86,7 +86,7 @@ class VirtualKeyboard:
             # Full key range ensures udev sets ID_INPUT_KEYBOARD=1 so Mutter accepts it
             keys = list(range(1, 248))
             self.ui = UInput({ecodes.EV_KEY: keys}, name="CMF Dial Virtual Keyboard", bustype=ecodes.BUS_USB)
-            print("[+] Virtual Keyboard initialized (emulating hardware Fn+F5 / Fn+F6)")
+            print("[+] Virtual Keyboard initialized (Fn+F5/F6 brightness & multimedia keys)")
         except Exception as e:
             print(f"[!] Warning: Could not initialize uinput keyboard ({e})")
 
@@ -150,10 +150,27 @@ class VirtualKeyboard:
 
 # ── Native Media & Audio Controls (Process-Isolated) ──────────────────────────
 
-def control_mpris(action: str, vk: VirtualKeyboard = None) -> bool:
-    """Control active media player via busctl --address, with hardware media key fallback."""
+def control_media(action: str, vk: VirtualKeyboard = None) -> bool:
+    """Control active media playback via hardware media key (primary) or MPRIS (fallback)."""
+    # 1. Primary: Emulate hardware multimedia key (instant, native GNOME routing, zero D-Bus permission issues)
+    if vk and vk.ui:
+        if action == "playpause":
+            vk.play_pause()
+            return True
+        elif action == "next":
+            vk.next_track()
+            return True
+        elif action == "prev":
+            vk.prev_track()
+            return True
+
+    # 2. Fallback: MPRIS via busctl running under user UID
     uid = get_target_uid()
-    bus_arg = f"--address=unix:path=/run/user/{uid}/bus"
+    env = {
+        "DBUS_SESSION_BUS_ADDRESS": f"unix:path=/run/user/{uid}/bus",
+        "XDG_RUNTIME_DIR": f"/run/user/{uid}",
+        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+    }
     method_map = {
         "playpause": "PlayPause",
         "next": "Next",
@@ -163,13 +180,12 @@ def control_mpris(action: str, vk: VirtualKeyboard = None) -> bool:
     if not method_name:
         return False
 
-    success = False
     try:
-        out = subprocess.check_output(
-            ["busctl", bus_arg, "list"],
-            text=True,
-            stderr=subprocess.DEVNULL,
-        )
+        kwargs = {"env": env, "text": True, "stderr": subprocess.DEVNULL}
+        if os.getuid() == 0 and uid != 0:
+            kwargs["user"] = uid
+
+        out = subprocess.check_output(["busctl", "--user", "list"], **kwargs)
         for line in out.splitlines():
             parts = line.split()
             if parts and parts[0].startswith("org.mpris.MediaPlayer2."):
@@ -177,7 +193,7 @@ def control_mpris(action: str, vk: VirtualKeyboard = None) -> bool:
                 subprocess.run(
                     [
                         "busctl",
-                        bus_arg,
+                        "--user",
                         "call",
                         player,
                         "/org/mpris/MediaPlayer2",
@@ -187,23 +203,18 @@ def control_mpris(action: str, vk: VirtualKeyboard = None) -> bool:
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                     check=False,
+                    **kwargs,
                 )
                 print(f"[MPRIS] Triggered {method_name} on {player}")
-                success = True
-    except Exception as e:
-        print(f"[!] MPRIS error: {e}")
+                return True
+    except Exception:
+        pass
 
-    # Fallback to virtual multimedia key if no MPRIS player handled it
-    if not success and vk:
-        if action == "playpause":
-            vk.play_pause()
-        elif action == "next":
-            vk.next_track()
-        elif action == "prev":
-            vk.prev_track()
-        success = True
+    return False
 
-    return success
+
+# Backward compatibility alias
+control_mpris = control_media
 
 
 def get_current_sink_volume() -> int:
@@ -415,15 +426,15 @@ class VirtualDialOverlay(tk.Tk):
             self.draw_ui()
 
         elif action_key == "media_playpause":
-            control_mpris("playpause", self.vk)
+            control_media("playpause", self.vk)
             self.hide_overlay()
 
         elif action_key == "media_next":
-            control_mpris("next", self.vk)
+            control_media("next", self.vk)
             self.hide_overlay()
 
         elif action_key == "media_prev":
-            control_mpris("prev", self.vk)
+            control_media("prev", self.vk)
             self.hide_overlay()
 
         elif action_key == "mute_toggle":
