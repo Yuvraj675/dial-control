@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { ProfilesConfig, WheelAction, ActionType } from "../../types/profile";
+import { getActionIcon, ICON_MAP } from "../../utils/iconMap";
 import {
   Sliders,
   Palette,
@@ -15,7 +16,6 @@ import {
 interface SettingsWindowProps {
   config: ProfilesConfig;
   onSaveConfig: (updated: ProfilesConfig) => void;
-  onClose?: () => void;
 }
 
 export const SettingsWindow: React.FC<SettingsWindowProps> = ({
@@ -73,11 +73,11 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
   const handleAddAction = () => {
     const newAction: WheelAction = {
       id: `custom_${Date.now()}`,
-      label: "New Action",
-      icon: "⭐",
+      label: "NEW ACTION",
+      icon: "disc",
       type: "hotkey",
       keys: ["KEY_LEFTCTRL", "KEY_S"],
-      desc: "Custom shortcut",
+      desc: "CUSTOM SHORTCUT",
     };
     const updatedActions = [...actions, newAction];
     const updatedProfile = { ...activeProfile, actions: updatedActions };
@@ -111,18 +111,22 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
     setTimeout(() => setSaveSuccess(false), 2200);
   };
 
+  const availableIcons = Object.keys(ICON_MAP);
+
   return (
-    <div className="flex h-screen w-screen bg-[#08090A] text-white font-sans overflow-hidden select-none">
+    <div className="flex h-screen w-screen bg-[#07080A] text-white font-sans overflow-hidden select-none">
       {/* ── Left Sidebar Navigation ────────────────────────────────────────── */}
-      <div className="w-56 flex flex-col border-r border-white/[0.08] bg-[#0E1014] p-4">
-        {/* App Title with Dot-Matrix Accent */}
-        <div className="flex items-center gap-2.5 px-2 py-3 mb-6">
-          <div className="w-7 h-7 rounded-full bg-cmf-orange flex items-center justify-center shadow-cmf-glow">
-            <Disc className="w-4 h-4 text-black animate-spin-slow" />
+      <div className="w-60 flex flex-col border-r border-white/[0.08] bg-[#0C0D11] p-4">
+        {/* App Title in Ndot57 */}
+        <div className="flex items-center gap-2.5 px-2 py-3 mb-6 border-b border-white/[0.06] pb-5">
+          <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-black shadow-md">
+            <Disc className="w-5 h-5 text-black animate-spin-slow" />
           </div>
           <div>
-            <div className="text-sm font-bold tracking-wider">DIAL CONTROL</div>
-            <div className="text-[10px] font-mono text-neutral-400">CMF INDUSTRIAL</div>
+            <div className="font-ndot text-sm text-white tracking-widest">DIAL (1)</div>
+            <div className="text-[10px] font-mono text-neutral-400 uppercase tracking-wider">
+              NOTHING OS // OS_50
+            </div>
           </div>
         </div>
 
@@ -136,8 +140,8 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                 : "text-neutral-400 hover:text-white hover:bg-white/[0.04]"
             }`}
           >
-            <Layers className="w-4 h-4 text-cmf-orange" />
-            <span>Wheel Profiles</span>
+            <Layers className="w-4 h-4 text-white" />
+            <span className="font-mono tracking-wider text-[11px] uppercase">Profiles</span>
           </button>
 
           <button
@@ -148,8 +152,8 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                 : "text-neutral-400 hover:text-white hover:bg-white/[0.04]"
             }`}
           >
-            <Palette className="w-4 h-4 text-cmf-cyan" />
-            <span>Theme & Dial</span>
+            <Palette className="w-4 h-4 text-white" />
+            <span className="font-mono tracking-wider text-[11px] uppercase">Aesthetics</span>
           </button>
 
           <button
@@ -160,20 +164,20 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                 : "text-neutral-400 hover:text-white hover:bg-white/[0.04]"
             }`}
           >
-            <Sliders className="w-4 h-4 text-neutral-300" />
-            <span>Haptics & Startup</span>
+            <Sliders className="w-4 h-4 text-white" />
+            <span className="font-mono tracking-wider text-[11px] uppercase">Hardware</span>
           </button>
         </div>
 
         {/* Bottom Save Action */}
         <button
           onClick={handleSave}
-          className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg bg-cmf-orange hover:bg-cmf-orange-hover text-black text-xs font-bold transition-all shadow-cmf-glow"
+          className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg bg-white hover:bg-neutral-200 text-black text-xs font-bold transition-all shadow-md font-mono uppercase tracking-wider"
         >
           {saveSuccess ? (
             <>
               <Check className="w-4 h-4" />
-              <span>SAVED & SYNCED</span>
+              <span>SYNCED</span>
             </>
           ) : (
             <span>APPLY & SAVE</span>
@@ -182,17 +186,20 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
       </div>
 
       {/* ── Main Content Area ──────────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col bg-[#0B0C0E] overflow-hidden">
+      <div className="flex-1 flex flex-col bg-[#0A0B0E] overflow-hidden">
         {/* Top Header */}
-        <div className="h-14 border-b border-white/[0.08] flex items-center justify-between px-8 bg-[#0E1014]/50 backdrop-blur-md">
+        <div className="h-14 border-b border-white/[0.08] flex items-center justify-between px-8 bg-[#0C0D11]/60 backdrop-blur-md">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-mono text-neutral-500 uppercase">Config //</span>
-            <span className="text-xs font-semibold tracking-wide uppercase text-white">
+            <div className="w-2 h-2 rounded-full red-led mr-1" />
+            <span className="font-ndot text-xs text-neutral-400 uppercase tracking-widest">
+              TELEMETRY //
+            </span>
+            <span className="font-ndot text-xs tracking-widest uppercase text-white">
               {activeTab === "profiles"
-                ? "Context-Aware Profiles"
+                ? "WHEEL CONFIGURATION"
                 : activeTab === "appearance"
-                ? "Visual Aesthetics & Dimensions"
-                : "Hardware Controls"}
+                ? "DIAL GEOMETRY"
+                : "HARDWARE BUS"}
             </span>
           </div>
         </div>
@@ -201,9 +208,9 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
         {activeTab === "profiles" && (
           <div className="flex-1 flex overflow-hidden">
             {/* Column 1: Profiles List */}
-            <div className="w-64 border-r border-white/[0.08] p-4 flex flex-col gap-2 overflow-y-auto">
-              <div className="text-[10px] font-mono uppercase text-neutral-500 tracking-wider mb-2">
-                Active Profiles ({Object.keys(currentConfig.profiles).length})
+            <div className="w-64 border-r border-white/[0.08] p-4 flex flex-col gap-2 overflow-y-auto bg-[#0C0D11]/40">
+              <div className="font-ndot text-[10px] uppercase text-neutral-500 tracking-widest mb-2">
+                ACTIVE PROFILES ({Object.keys(currentConfig.profiles).length})
               </div>
               {Object.entries(currentConfig.profiles).map(([id, prof]) => (
                 <button
@@ -214,52 +221,54 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                   }}
                   className={`flex items-center gap-3 p-3 rounded-xl text-left border transition-all ${
                     selectedProfileId === id
-                      ? "bg-white/[0.08] border-cmf-orange text-white shadow-sm"
-                      : "bg-[#14161B]/60 border-white/[0.04] text-neutral-400 hover:text-white hover:bg-white/[0.04]"
+                      ? "bg-white/[0.08] border-white/20 text-white shadow-sm"
+                      : "bg-[#101217]/60 border-white/[0.03] text-neutral-400 hover:text-white hover:bg-white/[0.04]"
                   }`}
                 >
-                  <span className="text-lg">{prof.icon}</span>
+                  <div className="p-2 rounded-lg bg-white/[0.05] border border-white/10 text-white">
+                    {getActionIcon(prof.icon, 16)}
+                  </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs font-semibold truncate">{prof.name}</div>
+                    <div className="font-ndot text-xs tracking-wider truncate">{prof.name}</div>
                     <div className="text-[10px] font-mono text-neutral-500 truncate">
-                      {prof.actions.length} slices
+                      {prof.actions.length} SLICES
                     </div>
                   </div>
                 </button>
               ))}
             </div>
 
-            {/* Column 2: Slices Reordering & Slices List */}
+            {/* Column 2: Slices List */}
             <div className="w-72 border-r border-white/[0.08] p-4 flex flex-col overflow-y-auto">
               <div className="flex items-center justify-between mb-3">
-                <div className="text-[10px] font-mono uppercase text-neutral-500 tracking-wider">
-                  Wheel Slices (Order)
+                <div className="font-ndot text-[10px] uppercase text-neutral-500 tracking-widest">
+                  WHEEL ORDER
                 </div>
                 <div className="flex gap-1">
                   <button
                     onClick={() => handleMoveAction(-1)}
-                    className="p-1 rounded bg-white/[0.06] hover:bg-white/10 text-neutral-300"
+                    className="p-1.5 rounded bg-white/[0.06] hover:bg-white/10 text-neutral-300"
                     title="Move slice earlier"
                   >
                     <ArrowUp className="w-3.5 h-3.5" />
                   </button>
                   <button
                     onClick={() => handleMoveAction(1)}
-                    className="p-1 rounded bg-white/[0.06] hover:bg-white/10 text-neutral-300"
+                    className="p-1.5 rounded bg-white/[0.06] hover:bg-white/10 text-neutral-300"
                     title="Move slice later"
                   >
                     <ArrowDown className="w-3.5 h-3.5" />
                   </button>
                   <button
                     onClick={handleAddAction}
-                    className="p-1 rounded bg-white/[0.06] hover:bg-white/10 text-cmf-orange"
+                    className="p-1.5 rounded bg-white/[0.06] hover:bg-white/10 text-white"
                     title="Add slice"
                   >
                     <Plus className="w-3.5 h-3.5" />
                   </button>
                   <button
                     onClick={handleRemoveAction}
-                    className="p-1 rounded bg-white/[0.06] hover:bg-white/10 text-red-400"
+                    className="p-1.5 rounded bg-white/[0.06] hover:bg-white/10 text-red-400"
                     title="Delete slice"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -275,12 +284,16 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                     className={`flex items-center gap-3 p-2.5 rounded-lg border text-left transition-all ${
                       selectedActionIndex === idx
                         ? "bg-white/[0.1] border-white/20 text-white"
-                        : "bg-[#14161B]/40 border-white/[0.04] text-neutral-400 hover:text-white"
+                        : "bg-[#101217]/40 border-white/[0.04] text-neutral-400 hover:text-white"
                     }`}
                   >
-                    <span className="text-base">{act.icon}</span>
+                    <div className="p-1.5 rounded bg-white/[0.05] text-white">
+                      {getActionIcon(act.icon, 14)}
+                    </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs font-medium truncate">{act.label}</div>
+                      <div className="font-ntype-headline text-xs font-bold tracking-wider truncate">
+                        {act.label}
+                      </div>
                       <div className="text-[10px] font-mono text-neutral-500 uppercase">
                         {act.type}
                       </div>
@@ -290,50 +303,64 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
               </div>
             </div>
 
-            {/* Column 3: Slice Editor Card */}
+            {/* Column 3: Slice Inspector */}
             <div className="flex-1 p-6 overflow-y-auto">
               {selectedAction && (
                 <div className="max-w-md flex flex-col gap-5">
-                  <div className="text-xs font-mono uppercase text-neutral-500 tracking-wider">
-                    Slice Inspector
+                  <div className="font-ndot text-xs uppercase text-neutral-500 tracking-widest">
+                    SLICE INSPECTOR // {selectedActionIndex + 1}
                   </div>
 
                   {/* Label */}
                   <div>
-                    <label className="text-xs text-neutral-400 mb-1.5 block">Label</label>
+                    <label className="font-mono text-xs text-neutral-400 mb-1.5 block uppercase">
+                      Label
+                    </label>
                     <input
                       type="text"
                       value={selectedAction.label}
                       onChange={(e) => handleUpdateAction({ label: e.target.value })}
-                      className="w-full px-3.5 py-2 rounded-lg bg-[#14161B] border border-white/10 text-xs text-white focus:outline-none focus:border-cmf-orange"
+                      className="w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white focus:outline-none focus:border-white font-mono"
                     />
                   </div>
 
-                  {/* Icon */}
+                  {/* Icon Selector */}
                   <div>
-                    <label className="text-xs text-neutral-400 mb-1.5 block">
-                      Icon (Emoji or Glyph)
+                    <label className="font-mono text-xs text-neutral-400 mb-1.5 block uppercase">
+                      Vector Icon
                     </label>
-                    <input
-                      type="text"
-                      value={selectedAction.icon}
-                      onChange={(e) => handleUpdateAction({ icon: e.target.value })}
-                      className="w-24 px-3.5 py-2 rounded-lg bg-[#14161B] border border-white/10 text-xs text-white focus:outline-none focus:border-cmf-orange text-center"
-                    />
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 rounded-lg bg-white/[0.08] border border-white/10 text-white">
+                        {getActionIcon(selectedAction.icon, 20)}
+                      </div>
+                      <select
+                        value={selectedAction.icon}
+                        onChange={(e) => handleUpdateAction({ icon: e.target.value })}
+                        className="flex-1 px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white focus:outline-none focus:border-white font-mono uppercase"
+                      >
+                        {availableIcons.map((ic) => (
+                          <option key={ic} value={ic}>
+                            {ic}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
 
                   {/* Type */}
                   <div>
-                    <label className="text-xs text-neutral-400 mb-1.5 block">Action Type</label>
+                    <label className="font-mono text-xs text-neutral-400 mb-1.5 block uppercase">
+                      Action Type
+                    </label>
                     <select
                       value={selectedAction.type}
                       onChange={(e) =>
                         handleUpdateAction({ type: e.target.value as ActionType })
                       }
-                      className="w-full px-3.5 py-2 rounded-lg bg-[#14161B] border border-white/10 text-xs text-white focus:outline-none focus:border-cmf-orange"
+                      className="w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white focus:outline-none focus:border-white font-mono uppercase"
                     >
                       <option value="hotkey">Hotkey Keypress</option>
-                      <option value="mode">Interactive Mode (Volume/Brightness)</option>
+                      <option value="mode">Interactive Mode (Volume/Backlight)</option>
                       <option value="key">Media Key (Play/Next/Prev)</option>
                       <option value="command">Shell Command</option>
                       <option value="mute">Mute Audio Toggle</option>
@@ -343,7 +370,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                   {/* Target / Keys */}
                   {selectedAction.type === "hotkey" && (
                     <div>
-                      <label className="text-xs text-neutral-400 mb-1.5 block">
+                      <label className="font-mono text-xs text-neutral-400 mb-1.5 block uppercase">
                         Keystroke Sequence
                       </label>
                       <input
@@ -354,23 +381,23 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                             keys: e.target.value.split("+").map((s) => s.trim().toUpperCase()),
                           })
                         }
-                        placeholder="e.g. KEY_LEFTCTRL + KEY_C"
-                        className="w-full px-3.5 py-2 rounded-lg bg-[#14161B] border border-white/10 text-xs text-white font-mono focus:outline-none focus:border-cmf-orange"
+                        placeholder="KEY_LEFTCTRL + KEY_C"
+                        className="w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white font-mono focus:outline-none focus:border-white"
                       />
                     </div>
                   )}
 
                   {/* Description */}
                   <div>
-                    <label className="text-xs text-neutral-400 mb-1.5 block">
-                      Hint / Description
+                    <label className="font-mono text-xs text-neutral-400 mb-1.5 block uppercase">
+                      Telemetry Hint
                     </label>
                     <input
                       type="text"
                       value={selectedAction.desc || ""}
                       onChange={(e) => handleUpdateAction({ desc: e.target.value })}
-                      placeholder="e.g. Save active document"
-                      className="w-full px-3.5 py-2 rounded-lg bg-[#14161B] border border-white/10 text-xs text-white focus:outline-none focus:border-cmf-orange"
+                      placeholder="e.g. CLIPBOARD COPY"
+                      className="w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white font-mono focus:outline-none focus:border-white uppercase"
                     />
                   </div>
                 </div>
@@ -379,18 +406,18 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
           </div>
         )}
 
-        {/* Tab 2: Appearance & Geometry */}
+        {/* Tab 2: Aesthetics */}
         {activeTab === "appearance" && (
           <div className="p-8 max-w-lg flex flex-col gap-6">
             <div>
-              <div className="text-xs font-mono uppercase text-neutral-500 tracking-wider mb-3">
-                Theme Color Accent
+              <div className="font-ndot text-xs uppercase text-neutral-400 tracking-widest mb-3">
+                ACCENT ILLUMINATION
               </div>
               <div className="grid grid-cols-3 gap-3">
                 {[
                   { id: "cmf_orange", name: "CMF Orange", color: "#FF5500" },
                   { id: "cmf_cyan", name: "Electric Cyan", color: "#00E5FF" },
-                  { id: "stealth", name: "Monochrome Stealth", color: "#FFFFFF" },
+                  { id: "stealth", name: "Pure Titanium", color: "#FFFFFF" },
                 ].map((th) => (
                   <button
                     key={th.id}
@@ -403,14 +430,14 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                         },
                       })
                     }
-                    className={`flex items-center gap-2.5 p-3 rounded-xl border text-xs font-medium transition-all ${
+                    className={`flex items-center gap-2.5 p-3 rounded-xl border text-xs font-mono uppercase transition-all ${
                       currentConfig.settings.theme === th.id
                         ? "bg-white/10 border-white/30 text-white"
-                        : "bg-[#14161B] border-white/5 text-neutral-400 hover:text-white"
+                        : "bg-[#111317] border-white/5 text-neutral-400 hover:text-white"
                     }`}
                   >
                     <div
-                      className="w-4 h-4 rounded-full"
+                      className="w-3.5 h-3.5 rounded-full"
                       style={{ backgroundColor: th.color }}
                     />
                     <span>{th.name}</span>
@@ -420,13 +447,13 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
             </div>
 
             <div>
-              <div className="flex justify-between text-xs text-neutral-400 mb-2">
-                <span>Outer Dial Radius</span>
-                <span className="font-mono">{currentConfig.settings.dial_radius}px</span>
+              <div className="flex justify-between font-mono text-xs text-neutral-400 mb-2 uppercase">
+                <span>Outer Bezel Radius</span>
+                <span className="font-ndot text-white">{currentConfig.settings.dial_radius} PX</span>
               </div>
               <input
                 type="range"
-                min="140"
+                min="150"
                 max="240"
                 value={currentConfig.settings.dial_radius}
                 onChange={(e) =>
@@ -438,19 +465,19 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                     },
                   })
                 }
-                className="w-full accent-cmf-orange"
+                className="w-full accent-white"
               />
             </div>
 
             <div>
-              <div className="flex justify-between text-xs text-neutral-400 mb-2">
-                <span>Donut Ring Thickness</span>
-                <span className="font-mono">{currentConfig.settings.donut_thickness}px</span>
+              <div className="flex justify-between font-mono text-xs text-neutral-400 mb-2 uppercase">
+                <span>Donut Ring Width</span>
+                <span className="font-ndot text-white">{currentConfig.settings.donut_thickness} PX</span>
               </div>
               <input
                 type="range"
-                min="40"
-                max="80"
+                min="45"
+                max="85"
                 value={currentConfig.settings.donut_thickness}
                 onChange={(e) =>
                   setCurrentConfig({
@@ -461,19 +488,21 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                     },
                   })
                 }
-                className="w-full accent-cmf-orange"
+                className="w-full accent-white"
               />
             </div>
           </div>
         )}
 
-        {/* Tab 3: Hardware & Background Behavior */}
+        {/* Tab 3: Hardware Controls */}
         {activeTab === "hardware" && (
           <div className="p-8 max-w-lg flex flex-col gap-6">
-            <div className="flex items-center justify-between p-4 rounded-xl bg-[#14161B] border border-white/10">
+            <div className="flex items-center justify-between p-4 rounded-xl bg-[#111317] border border-white/10">
               <div>
-                <div className="text-xs font-medium text-white">Audio Feedback Beep</div>
-                <div className="text-[10px] text-neutral-400">
+                <div className="font-ndot text-xs text-white uppercase tracking-wider">
+                  EARBUD AUDIO FEEDBACK
+                </div>
+                <div className="text-[10px] font-mono text-neutral-400 mt-1 uppercase">
                   Emit hardware audio tone in earbuds on rotation steps
                 </div>
               </div>
@@ -489,15 +518,17 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                     },
                   })
                 }
-                className="accent-cmf-orange w-4 h-4"
+                className="accent-white w-4 h-4"
               />
             </div>
 
-            <div className="flex items-center justify-between p-4 rounded-xl bg-[#14161B] border border-white/10">
+            <div className="flex items-center justify-between p-4 rounded-xl bg-[#111317] border border-white/10">
               <div>
-                <div className="text-xs font-medium text-white">Start Minimized in System Tray</div>
-                <div className="text-[10px] text-neutral-400">
-                  Keep running quietly in top panel tray when window closes
+                <div className="font-ndot text-xs text-white uppercase tracking-wider">
+                  START RESIDENT IN TRAY
+                </div>
+                <div className="text-[10px] font-mono text-neutral-400 mt-1 uppercase">
+                  Run quietly in background panel when window closes
                 </div>
               </div>
               <input
@@ -512,7 +543,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                     },
                   })
                 }
-                className="accent-cmf-orange w-4 h-4"
+                className="accent-white w-4 h-4"
               />
             </div>
           </div>

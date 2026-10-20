@@ -3,6 +3,7 @@ import { DonutRadialHUD } from "./components/hud/DonutRadialHUD";
 import { SettingsWindow } from "./components/settings/SettingsWindow";
 import { DEFAULT_CONFIG } from "./data/defaultProfiles";
 import { ProfilesConfig, WheelAction } from "./types/profile";
+import { Disc, Layers, Sliders, Eye, EyeOff } from "lucide-react";
 
 export function App() {
   const [config, setConfig] = useState<ProfilesConfig>(() => {
@@ -36,7 +37,7 @@ export function App() {
     localStorage.setItem("dial_config", JSON.stringify(updated));
   };
 
-  // Keyboard controls for testing & navigation
+  // Keyboard navigation & mouse wheel
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -98,52 +99,66 @@ export function App() {
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-transparent">
-      {/* Top Testing Switcher Toolbar (hidden in production frameless mode) */}
-      <div className="fixed top-3 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 p-1.5 rounded-full bg-[#14161B]/80 backdrop-blur-md border border-white/10 shadow-lg text-xs">
+      {/* ── Top Industrial Toolbar (for Testing & Context Switching) ─────── */}
+      <div className="fixed top-3 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 p-1.5 rounded-full bg-[#0E1014]/90 backdrop-blur-xl border border-white/10 shadow-2xl">
         <button
           onClick={() => setView("hud")}
-          className={`px-3 py-1 rounded-full transition-all ${
-            view === "hud" ? "bg-cmf-orange text-black font-bold" : "text-neutral-400 hover:text-white"
+          className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full transition-all text-xs font-mono uppercase tracking-wider ${
+            view === "hud"
+              ? "bg-white text-black font-bold shadow-md"
+              : "text-neutral-400 hover:text-white"
           }`}
         >
-          Radial Donut HUD
+          <Disc className="w-3.5 h-3.5" />
+          <span>Donut HUD</span>
         </button>
+
         <button
           onClick={() => setView("settings")}
-          className={`px-3 py-1 rounded-full transition-all ${
-            view === "settings" ? "bg-cmf-orange text-black font-bold" : "text-neutral-400 hover:text-white"
+          className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full transition-all text-xs font-mono uppercase tracking-wider ${
+            view === "settings"
+              ? "bg-white text-black font-bold shadow-md"
+              : "text-neutral-400 hover:text-white"
           }`}
         >
-          Settings & Customizer
+          <Sliders className="w-3.5 h-3.5" />
+          <span>Settings</span>
         </button>
 
         {view === "hud" && (
-          <div className="flex items-center gap-1.5 pl-2 border-l border-white/10">
-            <select
-              value={activeProfileId}
-              onChange={(e) => {
-                setActiveProfileId(e.target.value);
-                setSelectedIndex(0);
-                setCurrentMode("menu");
-              }}
-              className="bg-[#0B0C0E] text-white px-2 py-0.5 rounded text-[11px] border border-white/10 focus:outline-none"
-            >
-              {Object.entries(config.profiles).map(([id, p]) => (
-                <option key={id} value={id}>
-                  {p.icon} {p.name}
-                </option>
-              ))}
-            </select>
+          <div className="flex items-center gap-2 pl-2 border-l border-white/10">
+            <div className="flex items-center gap-1.5 bg-[#14161C] px-2.5 py-1 rounded-full border border-white/10">
+              <Layers className="w-3 h-3 text-neutral-400" />
+              <select
+                value={activeProfileId}
+                onChange={(e) => {
+                  setActiveProfileId(e.target.value);
+                  setSelectedIndex(0);
+                  setCurrentMode("menu");
+                }}
+                className="bg-transparent text-white text-[11px] font-ndot tracking-wider focus:outline-none uppercase cursor-pointer"
+              >
+                {Object.entries(config.profiles).map(([id, p]) => (
+                  <option key={id} value={id} className="bg-[#0E1014] text-white">
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <button
               onClick={() => setIsHudOpen((prev) => !prev)}
-              className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-neutral-300 text-[11px]"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/[0.08] hover:bg-white/15 text-neutral-300 text-[11px] font-mono uppercase tracking-wider"
+              title="Toggle HUD (Space)"
             >
-              {isHudOpen ? "Hide" : "Show"}
+              {isHudOpen ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+              <span>{isHudOpen ? "HIDE" : "SHOW"}</span>
             </button>
           </div>
         )}
       </div>
 
+      {/* ── View Router ───────────────────────────────────────────────────── */}
       {view === "hud" ? (
         <DonutRadialHUD
           profile={activeProfile}
@@ -159,14 +174,9 @@ export function App() {
               setIsHudOpen(false);
             }
           }}
-          onClose={() => setIsHudOpen(false)}
         />
       ) : (
-        <SettingsWindow
-          config={config}
-          onSaveConfig={handleSaveConfig}
-          onClose={() => setView("hud")}
-        />
+        <SettingsWindow config={config} onSaveConfig={handleSaveConfig} />
       )}
     </div>
   );
