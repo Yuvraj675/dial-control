@@ -1,56 +1,97 @@
 # CMF Buds Pro 2 — Smart Dial Control System
 
-Turn your **CMF Buds Pro 2** case dial into a versatile physical controller for your laptop.
+Turn your **CMF Buds Pro 2** smart dial case into a context-aware, beautifully animated radial controller for Linux, Windows, and macOS — inspired by **[KnifeLemon/Filee](https://github.com/KnifeLemon/Filee)**.
 
-- **Tap the Dial**: An on-screen virtual radial dial pops up.
-- **Rotate the Dial**: Rotates through options (Volume, Brightness, Media, Desktops, etc.).
-- **Click Again**: Confirms and executes the action.
+- **100% Dual-Pairing Preserved**: Keeps your phone connection and the Nothing X app active simultaneously.
+- **Click the Dial**: An animated, glowing Donut Radial HUD pops up on screen with options tailored to your currently focused application.
+- **Rotate the Dial**: Smoothly cycles options with audio beeps in your earbuds while your media volume remains locked.
+- **Click Again**: Executes the action (e.g. `Copy`/`Paste` in Files, `Seek`/`Fullscreen` in YouTube, `Format` in VS Code, or opens the Volume/Brightness gauge).
+- **System Tray Daemon**: Runs quietly in your top panel with quick controls, profile switching, and settings launcher.
+- **Applications Menu Integration**: Launch directly from GNOME "Show Applications" just like any native desktop app.
 
 ---
 
-## Project Structure
+## Architecture Overview
 
 ```
-.
+dial-control/
+├── assets/
+│   └── dial-control.png        # Application desktop & tray icon
+├── bin/
+│   └── dial-control            # Main application launcher
+├── config/
+│   └── profiles.json           # Declarative JSON schema for wheel slices & app profiles
 ├── docs/
-│   ├── PROTOCOL_SPEC.md       # Complete reverse-engineered RFCOMM wire protocol
-│   └── DEVELOPMENT_GUIDE.md   # Step-by-step setup, usage, and extension guide
+│   ├── CROSS_PLATFORM_SPEC.md  # Multi-OS architecture specification (Rust + Tauri v2)
+│   ├── DEVELOPMENT_GUIDE.md    # Developer guide
+│   └── PROTOCOL_SPEC.md        # Reverse-engineered Bluetooth wire protocol
+├── scripts/
+│   └── setup_udev.sh           # One-time udev rule setup for non-root dial access
 ├── tools/
-│   ├── proto.py               # Protocol parser, packet builder & CRC-16 engine
-│   ├── probe.py               # RFCOMM channel scanner & handshake prober
-│   ├── listen.py              # Live event stream monitor for dial rotations/clicks
-│   └── virtual_dial.py        # Complete on-screen radial UI & background daemon
-└── extracted/                 # Extracted APK assets, DEX files, and configs
+│   ├── context_detector.py     # Sub-millisecond active window tracker (At-Spi / Win32 / macOS)
+│   ├── donut_dial.py           # Filee-inspired animated Donut Radial HUD
+│   ├── settings_gui.py         # Visual wheel customizer & preferences app
+│   ├── tray_app.py             # System tray daemon (AppIndicator)
+│   └── avrcp_dial.py           # Core dual-pairing Bluetooth daemon & hardware grabber
+└── dial_app.py                 # Master unified desktop application
 ```
 
 ---
 
-## Quick Start
+## Context-Aware Profiles
 
-### 1. Test the Virtual Dial UI immediately (without Bluetooth)
+The dial automatically detects your active foreground application and adapts its options in real-time:
+
+| Foreground App | Profile | Slices on the Wheel |
+|---|---|---|
+| **Files / Nautilus / Dolphin** | **📁 Files & Folders** | 📋 Copy (`Ctrl+C`), 📥 Paste (`Ctrl+V`), 🗑️ Trash (`Delete`), 📁 New Folder (`Ctrl+Shift+N`), 🏷️ Rename (`F2`), 💻 Terminal |
+| **YouTube / Firefox / Chrome / Zen** | **🎬 Video & Media** | ⏯️ Play/Pause, ⏩ Seek +10s (`Right`), ⏪ Seek -10s (`Left`), 🖥️ Fullscreen (`F`), 🔇 Mute (`M`), 🔊 Volume Gauge |
+| **VS Code / Cursor / Zed** | **💻 Code & Editor** | 💾 Save All (`Ctrl+S`), ✨ Format (`Shift+Alt+F`), 🔍 Find in Files (`Ctrl+Shift+F`), 💬 Comment (`Ctrl+/`), 💻 Terminal (`Ctrl+\``), 🔄 Git |
+| **Desktop / General Apps** | **⚙️ System Controls** | 🔊 Volume Adjust, ☀️ Brightness Adjust, ⏯️ Play/Pause, ⏭️ Next Track, ⏮️ Prev Track, 🔇 Mute Toggle |
+
+---
+
+## Launching & Usage
+
+### Option 1: Applications Menu (Recommended)
+Press `Super` (Windows Key) and search for **Dial Control**, or find it in your App Drawer.
+- Starts the background hardware listener.
+- Places an icon in your top panel system tray.
+- Opens the Settings & Customizer window.
+
+### Option 2: Command Line
 ```bash
-python3 tools/virtual_dial.py --test
-```
-*(Use Space to open, Left/Right arrows to rotate, Enter to select)*
+# Run the unified desktop application
+./bin/dial-control
 
-### 2. Connect to Hardware
-```bash
-# 1. Connect your earbuds in Bluetooth
-bluetoothctl connect 2C:BE:EE:31:11:77
+# Or run the settings customizer directly
+python3 tools/settings_gui.py
 
-# 2. Probe active RFCOMM channel
-python3 tools/probe.py
-
-# 3. Stream live dial events
-python3 tools/listen.py --channel 15
-
-# 4. Launch the Virtual Dial system
-python3 tools/virtual_dial.py --channel 15
+# Or preview the animated Donut HUD without hardware
+python3 tools/donut_dial.py
 ```
 
 ---
 
-## Documentation
+## One-Time Permissions Setup (Non-Root Execution)
 
-- 📖 **[Protocol Specification](docs/PROTOCOL_SPEC.md)**: Packet structure, command tables (`0xE014`, `0xC0xx`, `0xF0xx`), gesture codes, and CRC-16 algorithm.
-- 🛠️ **[Development Guide](docs/DEVELOPMENT_GUIDE.md)**: How to add custom macros, shortcuts, app launchers, and mobile companion architecture.
+To allow Dial Control to intercept dial clicks and emulate keys without requiring `sudo`:
+
+```bash
+bash scripts/setup_udev.sh
+```
+
+This installs `/etc/udev/rules.d/99-cmf-dial.rules` and grants your user account `uaccess` to the CMF Buds AVRCP input events.
+
+---
+
+## Customizing the Wheel
+
+Open the customizer via the tray icon or by running:
+```bash
+python3 tools/settings_gui.py
+```
+- Reorder, add, or delete wheel slices.
+- Assign custom hotkeys (`Ctrl+C`, `Shift+Alt+F`), media keys, or shell commands.
+- Tweak dial outer radius, donut thickness, and haptic feedback.
+- Changes saved to `config/profiles.json` take effect immediately on the live dial without restarting!
