@@ -761,6 +761,10 @@ class DualPairingDialDaemon:
                 pass
             self.grabbed_fd = None
         self.vk.close()
+        try:
+            self.overlay.destroy()
+        except Exception:
+            pass
 
     def run(self):
         print("==================================================")
@@ -771,6 +775,7 @@ class DualPairingDialDaemon:
         print("• Brightness   -> Emulates Fn+F5 / Fn+F6 (Native GNOME Slider & OSD)")
         print("• Click Again  -> Selects Mode (Volume / Brightness / Media)")
         print("• Esc / Right-Click -> Dismisses Dial")
+        print("• Press Ctrl+C in terminal to exit")
         print("==================================================")
 
         # Background thread for click events
@@ -785,10 +790,17 @@ class DualPairingDialDaemon:
         dbus_thread = threading.Thread(target=dbus_loop, daemon=True)
         dbus_thread.start()
 
+        # Periodic wake-up every 100ms so Tkinter yields to Python and catches Ctrl+C immediately
+        def poll_signals():
+            self.overlay.after(100, poll_signals)
+
+        self.overlay.after(100, poll_signals)
+
         # Clean exit on Ctrl+C (SIGINT), SIGTERM, and Ctrl+Z (SIGTSTP)
         def handle_signal(signum, frame):
-            print("\n[*] Exiting and releasing exclusive device grab...")
+            print("\n[*] Exiting CMF Smart Dial Controller...")
             self.shutdown()
+            print("[+] Device released. Goodbye!")
             os._exit(0)
 
         signal.signal(signal.SIGINT, handle_signal)
@@ -801,8 +813,11 @@ class DualPairingDialDaemon:
         # Main thread runs Tkinter GUI event loop cleanly
         try:
             self.overlay.mainloop()
+        except KeyboardInterrupt:
+            print("\n[*] Exiting CMF Smart Dial Controller...")
         finally:
             self.shutdown()
+            print("[+] Device released. Goodbye!")
 
 
 if __name__ == "__main__":
