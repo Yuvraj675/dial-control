@@ -37,10 +37,12 @@ impl VirtualKeyboard {
         if let Ok(mut guard) = self.device.lock() {
             if let Some(ref mut dev) = *guard {
                 let down = InputEvent::new(EventType::KEY, key.code(), 1);
+                let syn1 = InputEvent::new(EventType::SYNCHRONIZATION, 0, 0);
                 let up = InputEvent::new(EventType::KEY, key.code(), 0);
-                let _ = dev.emit(&[down]);
+                let syn2 = InputEvent::new(EventType::SYNCHRONIZATION, 0, 0);
+                let _ = dev.emit(&[down, syn1]);
                 sleep(Duration::from_millis(15));
-                let _ = dev.emit(&[up]);
+                let _ = dev.emit(&[up, syn2]);
             }
         }
     }
@@ -80,20 +82,22 @@ impl VirtualKeyboard {
                 }
 
                 // Press down in order
-                let downs: Vec<InputEvent> = resolved_keys
+                let mut downs: Vec<InputEvent> = resolved_keys
                     .iter()
                     .map(|k| InputEvent::new(EventType::KEY, k.code(), 1))
                     .collect();
+                downs.push(InputEvent::new(EventType::SYNCHRONIZATION, 0, 0));
                 let _ = dev.emit(&downs);
 
                 sleep(Duration::from_millis(20));
 
                 // Release in reverse order
-                let ups: Vec<InputEvent> = resolved_keys
+                let mut ups: Vec<InputEvent> = resolved_keys
                     .iter()
                     .rev()
                     .map(|k| InputEvent::new(EventType::KEY, k.code(), 0))
                     .collect();
+                ups.push(InputEvent::new(EventType::SYNCHRONIZATION, 0, 0));
                 let _ = dev.emit(&ups);
             }
         }
