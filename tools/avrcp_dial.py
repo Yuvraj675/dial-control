@@ -8,8 +8,9 @@ Architecture:
 - Volume Lock: While navigating the menu (or adjusting brightness),
   the volume is locked in hardware via D-Bus echo suppression so navigating
   DOES NOT change your actual audio volume, while the earbuds still beep in your ear!
-- System Brightness: Synchronized directly with GNOME Mutter DisplayConfig
-  AND sysfs so the on-screen dial and the GNOME system brightness slider stay 100% in sync!
+- System Brightness: Emulates hardware Fn+F5 / Fn+F6 keys via Linux uinput virtual keyboard!
+  Directly triggers GNOME's native brightness manager, keeps the system slider in 100% sync,
+  and shows the native GNOME brightness HUD without fragile D-Bus timeouts.
 - Modes:
   - Menu Mode: Rotate to browse options; Click center to enter selected mode.
   - Active Modes (Volume / Brightness): Rotate to adjust level live with on-screen HUD; Click to confirm & exit.
@@ -29,6 +30,10 @@ import tkinter as tk
 import dbus
 from dbus.mainloop.glib import DBusGMainLoop
 from gi.repository import GLib
+
+# evdev for virtual keyboard emulation (Fn+F5 / Fn+F6)
+import evdev
+from evdev import ecodes, UInput
 
 # Linux Input Event Format & Exclusive Grab
 EVENT_FORMAT = "llHHi"
@@ -66,132 +71,83 @@ def get_user_pulse_env() -> dict:
     uid = get_target_uid()
     env["PULSE_SERVER"] = f"unix:/run/user/{uid}/pulse/native"
     env["XDG_RUNTIME_DIR"] = f"/run/user/{uid}"
+    env["DBUS_SESSION_BUS_ADDRESS"] = f"unix:path=/run/user/{uid}/bus"
     return env
 
 
-def get_user_dbus_bus() -> dbus.bus.BusConnection:
-    """Connect to user's D-Bus session bus (works even under sudo)."""
-    uid = get_target_uid()
-    return dbus.bus.BusConnection(f"unix:path=/run/user/{uid}/bus")
+# ── Virtual Hardware Keyboard Emulation (Fn+F5 / Fn+F6) ───────────────────────
+
+class VirtualKeyboard:
+    """Emulates hardware multimedia and brightness keys via Linux uinput."""
+    def __init__(self):
+        self.ui = None
+        try:
+            # Full key range ensures udev sets ID_INPUT_KEYBOARD=1 so Mutter accepts it
+            keys = list(range(1, 248))
+            self.ui = UInput({ecodes.EV_KEY: keys}, name="CMF Dial Virtual Keyboard", bustype=ecodes.BUS_USB)
+            print("[+] Virtual Keyboard initialized (emulating hardware Fn+F5 / Fn+F6)")
+        except Exception as e:
+            print(f"[!] Warning: Could not initialize uinput keyboard ({e})")
+
+    def step_brightness_up(self):
+        """Emulate Fn+F6 (KEY_BRIGHTNESSUP) -> triggers GNOME native brightness step."""
+        if self.ui:
+            self.ui.write(ecodes.EV_KEY, ecodes.KEY_BRIGHTNESSUP, 1)
+            self.ui.syn()
+            time.sleep(0.01)
+            self.ui.write(ecodes.EV_KEY, ecodes.KEY_BRIGHTNESSUP, 0)
+            self.ui.syn()
+            print("[Brightness] Emitted KEY_BRIGHTNESSUP (Fn+F6)")
+
+    def step_brightness_down(self):
+        """Emulate Fn+F5 (KEY_BRIGHTNESSDOWN) -> triggers GNOME native brightness step."""
+        if self.ui:
+            self.ui.write(ecodes.EV_KEY, ecodes.KEY_BRIGHTNESSDOWN, 1)
+            self.ui.syn()
+            time.sleep(0.01)
+            self.ui.write(ecodes.EV_KEY, ecodes.KEY_BRIGHTNESSDOWN, 0)
+            self.ui.syn()
+            print("[Brightness] Emitted KEY_BRIGHTNESSDOWN (Fn+F5)")
+
+    def close(self):
+        if self.ui:
+            try:
+                self.ui.close()
+            except Exception:
+                pass
 
 
-# ── Synchronized Brightness Controls ──────────────────────────────────────────
-
-def get_screen_brightness() -> int:
-    """Read screen brightness percentage (0-100), keeping in sync with GNOME system slider."""
-    # 1. Try GNOME Mutter DisplayConfig (System Slider)
-    try:
-        bus = get_user_dbus_bus()
-        obj = bus.get_object("org.gnome.Mutter.DisplayConfig", "/org/gnome/Mutter/DisplayConfig")
-        props_iface = dbus.Interface(obj, "org.freedesktop.DBus.Properties")
-        bl = props_iface.Get("org.gnome.Mutter.DisplayConfig", "Backlight")
-        if bl and len(bl) > 1 and len(bl[1]) > 0:
-            m = bl[1][0]
-            val = int(m["value"])
-            min_v = int(m.get("min", 0))
-            max_v = int(m.get("max", 100))
-            if max_v > min_v:
-                pct = int(((val - min_v) / (max_v - min_v)) * 100)
-                return max(0, min(100, pct))
-    except Exception:
-        pass
-
-    # 2. Try sysfs /sys/class/backlight
-    try:
-        paths = glob.glob("/sys/class/backlight/*/brightness")
-        if paths:
-            with open(paths[0], "r") as f:
-                curr = int(f.read().strip())
-            max_path = paths[0].replace("brightness", "max_brightness")
-            with open(max_path, "r") as f:
-                max_b = int(f.read().strip())
-            return int((curr / max_b) * 100)
-    except Exception:
-        pass
-
-    return 50
-
-
-def set_screen_brightness(target_pct: int) -> int:
-    """Set screen brightness percentage (0-100), updating both hardware and GNOME system slider."""
-    target_pct = max(5, min(100, target_pct))
-
-    # 1. Update GNOME Mutter DisplayConfig (moves the system brightness slider!)
-    try:
-        bus = get_user_dbus_bus()
-        obj = bus.get_object("org.gnome.Mutter.DisplayConfig", "/org/gnome/Mutter/DisplayConfig")
-        props_iface = dbus.Interface(obj, "org.freedesktop.DBus.Properties")
-        iface = dbus.Interface(obj, "org.gnome.Mutter.DisplayConfig")
-        bl = props_iface.Get("org.gnome.Mutter.DisplayConfig", "Backlight")
-        if bl and len(bl) > 1 and len(bl[1]) > 0:
-            serial = bl[0]
-            m = bl[1][0]
-            conn = str(m["connector"])
-            min_v = int(m.get("min", 10))
-            max_v = int(m.get("max", 210))
-            target_val = int(min_v + (max_v - min_v) * (target_pct / 100.0))
-            iface.SetBacklight(serial, conn, dbus.Int32(target_val))
-    except Exception as e:
-        print(f"[!] Mutter SetBacklight error: {e}")
-
-    # 2. Update physical backlight via sysfs (ensures hardware changes smoothly)
-    try:
-        paths = glob.glob("/sys/class/backlight/*/brightness")
-        if paths:
-            b_path = paths[0]
-            max_path = b_path.replace("brightness", "max_brightness")
-            with open(max_path, "r") as f:
-                max_b = int(f.read().strip())
-            new_b = max(int(max_b * 0.05), min(max_b, int(max_b * (target_pct / 100.0))))
-            with open(b_path, "w") as f:
-                f.write(str(new_b))
-    except Exception as e:
-        print(f"[!] Direct sysfs brightness error: {e}")
-
-    return target_pct
-
-
-def adjust_screen_brightness(delta_percent: int) -> int:
-    """Adjust brightness by a relative delta percentage."""
-    curr = get_screen_brightness()
-    target = max(5, min(100, curr + delta_percent))
-    return set_screen_brightness(target)
-
-
-# ── Native Media & Audio Controls ─────────────────────────────────────────────
+# ── Native Media & Audio Controls (Process-Isolated) ──────────────────────────
 
 def control_mpris(action: str) -> bool:
-    """Control active media player (Spotify, Firefox, Chrome, Zen, etc.) via MPRIS D-Bus."""
+    """Control active media player via busctl subprocess (safe across threads and UID)."""
+    env = get_user_pulse_env()
+    method_map = {
+        "playpause": "org.mpris.MediaPlayer2.Player.PlayPause",
+        "next": "org.mpris.MediaPlayer2.Player.Next",
+        "prev": "org.mpris.MediaPlayer2.Player.Previous",
+    }
+    method = method_map.get(action)
+    if not method:
+        return False
+
     try:
-        bus = get_user_dbus_bus()
-        for name in bus.list_names():
-            if name.startswith("org.mpris.MediaPlayer2"):
-                player = bus.get_object(name, "/org/mpris/MediaPlayer2")
-                iface = dbus.Interface(player, "org.mpris.MediaPlayer2.Player")
-                if action == "playpause":
-                    iface.PlayPause()
-                    print(f"[MPRIS] Toggled Play/Pause on {name}")
-                elif action == "next":
-                    iface.Next()
-                    print(f"[MPRIS] Next track on {name}")
-                elif action == "prev":
-                    iface.Previous()
-                    print(f"[MPRIS] Prev track on {name}")
+        out = subprocess.check_output(["busctl", "--user", "list"], env=env, text=True)
+        for line in out.splitlines():
+            parts = line.split()
+            if parts and parts[0].startswith("org.mpris.MediaPlayer2."):
+                player = parts[0]
+                subprocess.run(
+                    ["busctl", "--user", "call", player, "/org/mpris/MediaPlayer2", method],
+                    env=env,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=False,
+                )
+                print(f"[MPRIS] Triggered {action} on {player}")
                 return True
     except Exception as e:
         print(f"[!] MPRIS error: {e}")
-
-    # Fallback to playerctl
-    try:
-        cmd_map = {"playpause": "play-pause", "next": "next", "prev": "previous"}
-        subprocess.run(
-            ["playerctl", cmd_map.get(action, action)],
-            env=get_user_pulse_env(),
-            check=False,
-        )
-        return True
-    except Exception:
-        pass
     return False
 
 
@@ -270,12 +226,13 @@ def find_cmf_avrcp_device():
 # ── Virtual Dial GUI ──────────────────────────────────────────────────────────
 
 class VirtualDialOverlay(tk.Tk):
-    def __init__(self, on_mode_change_cb=None):
+    def __init__(self, vk: VirtualKeyboard, on_mode_change_cb=None):
         super().__init__()
         self.title("CMF Smart Dial")
         self.overrideredirect(True)
         self.attributes("-topmost", True)
         self.configure(bg="#121212")
+        self.vk = vk
         self.on_mode_change_cb = on_mode_change_cb
 
         self.size = 360
@@ -287,6 +244,7 @@ class VirtualDialOverlay(tk.Tk):
         self.current_mode = "menu"
         self.selected_index = 0
         self.active_val = 50
+        self.brightness_ticks = 0
 
         # Center on screen
         screen_w = self.winfo_screenwidth()
@@ -321,6 +279,7 @@ class VirtualDialOverlay(tk.Tk):
     def show_overlay(self):
         self.current_mode = "menu"
         self.is_visible = True
+        self.brightness_ticks = 0
         self.draw_ui()
         self.deiconify()
         self.lift()
@@ -362,9 +321,14 @@ class VirtualDialOverlay(tk.Tk):
             self.draw_ui()
 
         elif self.current_mode == "brightness":
-            step = 5 if direction > 0 else -5
-            new_b = adjust_screen_brightness(step)
-            self.active_val = new_b
+            # Emulate physical Fn+F5 / Fn+F6 keys!
+            # GNOME adjusts the brightness, moves the system slider, and displays native OSD
+            if direction > 0:
+                self.vk.step_brightness_up()
+                self.brightness_ticks += 1
+            else:
+                self.vk.step_brightness_down()
+                self.brightness_ticks -= 1
             self.draw_ui()
 
     def on_click_event(self):
@@ -390,7 +354,7 @@ class VirtualDialOverlay(tk.Tk):
 
         elif action_key == "brightness_mode":
             self.current_mode = "brightness"
-            self.active_val = get_screen_brightness()
+            self.brightness_ticks = 0
             if self.on_mode_change_cb:
                 self.on_mode_change_cb(self.current_mode)
             self.draw_ui()
@@ -451,8 +415,10 @@ class VirtualDialOverlay(tk.Tk):
 
         if self.current_mode == "menu":
             self.draw_menu_mode()
-        else:
-            self.draw_slider_mode()
+        elif self.current_mode == "volume":
+            self.draw_volume_mode()
+        elif self.current_mode == "brightness":
+            self.draw_brightness_mode()
 
     def draw_menu_mode(self):
         n = len(MENU_ACTIONS)
@@ -509,10 +475,9 @@ class VirtualDialOverlay(tk.Tk):
             justify=tk.CENTER,
         )
 
-    def draw_slider_mode(self):
-        """Draw interactive gauge for Volume or Brightness."""
-        is_vol = (self.current_mode == "volume")
-        title = "🔊 Volume Level" if is_vol else "☀️ Screen Brightness"
+    def draw_volume_mode(self):
+        """Draw interactive gauge for Volume."""
+        title = "🔊 Volume Level"
         val = self.active_val
 
         # Progress Arc
@@ -555,13 +520,50 @@ class VirtualDialOverlay(tk.Tk):
             justify=tk.CENTER,
         )
 
+    def draw_brightness_mode(self):
+        """Draw interactive brightness mode (emulating Fn+F5/Fn+F6 keys)."""
+        # Outer decorative track
+        self.canvas.create_oval(
+            self.center_x - self.radius + 15, self.center_y - self.radius + 15,
+            self.center_x + self.radius - 15, self.center_y + self.radius - 15,
+            outline="#ff4500", width=4,
+        )
+
+        # Center Display
+        self.canvas.create_text(
+            self.center_x, self.center_y - 36,
+            text="☀️ Screen Brightness",
+            fill="#ffffff",
+            font=("Sans", 11, "bold"),
+        )
+        self.canvas.create_text(
+            self.center_x, self.center_y - 6,
+            text="☀️",
+            fill="#ffcc00",
+            font=("Sans", 28),
+        )
+        self.canvas.create_text(
+            self.center_x, self.center_y + 26,
+            text="Rotating triggers Fn+F5 / Fn+F6\n(Native GNOME OSD & Slider)",
+            fill="#aaaaaa",
+            font=("Sans", 8),
+            justify=tk.CENTER,
+        )
+        self.canvas.create_text(
+            self.center_x, self.center_y + 54,
+            text="Click to Confirm & Exit",
+            fill="#ff4500",
+            font=("Sans", 8, "bold"),
+        )
+
 
 # ── Daemon Controller ─────────────────────────────────────────────────────────
 
 class DualPairingDialDaemon:
     def __init__(self):
+        self.vk = VirtualKeyboard()
         self.dev_path = find_cmf_avrcp_device()
-        self.overlay = VirtualDialOverlay(on_mode_change_cb=self.on_overlay_mode_change)
+        self.overlay = VirtualDialOverlay(vk=self.vk, on_mode_change_cb=self.on_overlay_mode_change)
 
         self.last_volume = None
         self.locked_hardware_vol = None
@@ -750,6 +752,7 @@ class DualPairingDialDaemon:
         print("Phone connection & Dual-Pairing are 100% PRESERVED!")
         print("• Click Dial   -> Opens Virtual Dial (System Play/Pause Blocked!)")
         print("• Rotate Dial  -> Rotates Options (Audio Volume Locked!)")
+        print("• Brightness   -> Emulates Fn+F5 / Fn+F6 (Native GNOME Slider & OSD)")
         print("• Click Again  -> Selects Mode (Volume / Brightness / Media)")
         print("• Esc / Right-Click -> Dismisses Dial")
         print("==================================================")
@@ -767,7 +770,10 @@ class DualPairingDialDaemon:
         dbus_thread.start()
 
         # Main thread runs Tkinter GUI event loop cleanly
-        self.overlay.mainloop()
+        try:
+            self.overlay.mainloop()
+        finally:
+            self.vk.close()
 
 
 if __name__ == "__main__":
