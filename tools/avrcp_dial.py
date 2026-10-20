@@ -32,6 +32,13 @@ import dbus
 from dbus.mainloop.glib import DBusGMainLoop
 from gi.repository import GLib
 
+# Add project root to path for local tool imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+try:
+    from tools.donut_dial import DonutRadialHUD
+except Exception:
+    DonutRadialHUD = None
+
 # evdev for virtual keyboard emulation (Fn+F5 / Fn+F6)
 import evdev
 from evdev import ecodes, UInput
@@ -139,6 +146,25 @@ class VirtualKeyboard:
             self.ui.write(ecodes.EV_KEY, ecodes.KEY_PREVIOUSSONG, 0)
             self.ui.syn()
             print("[MediaKey] Emitted KEY_PREVIOUSSONG")
+
+    def emit_hotkey_names(self, key_names: list):
+        """Emulate arbitrary key combos, e.g. ['KEY_LEFTCTRL', 'KEY_C']."""
+        if not self.ui or not key_names:
+            return
+        resolved = []
+        for name in key_names:
+            code = getattr(ecodes, name, None)
+            if code is not None:
+                resolved.append(code)
+        if resolved:
+            for k in resolved:
+                self.ui.write(ecodes.EV_KEY, k, 1)
+            self.ui.syn()
+            time.sleep(0.02)
+            for k in reversed(resolved):
+                self.ui.write(ecodes.EV_KEY, k, 0)
+            self.ui.syn()
+            print(f"[Hotkey] Emitted {key_names}")
 
     def close(self):
         if self.ui:
@@ -629,7 +655,15 @@ class DualPairingDialDaemon:
     def __init__(self):
         self.vk = VirtualKeyboard()
         self.dev_path = find_cmf_avrcp_device()
-        self.overlay = VirtualDialOverlay(vk=self.vk, on_mode_change_cb=self.on_overlay_mode_change)
+        if DonutRadialHUD:
+            self.overlay = DonutRadialHUD(
+                vk=self.vk,
+                on_mode_change_cb=self.on_overlay_mode_change,
+                on_action_cb=self.on_hud_action
+            )
+            print("[+] Loaded Filee-style Context-Aware Donut Radial HUD")
+        else:
+            self.overlay = VirtualDialOverlay(vk=self.vk, on_mode_change_cb=self.on_overlay_mode_change)
 
         self.last_volume = None
         self.locked_hardware_vol = None
@@ -678,6 +712,15 @@ class DualPairingDialDaemon:
             # Entering volume mode: release volume lock so volume adjusts freely!
             self.locked_hardware_vol = None
             self.ignore_restore_vol = None
+            self.overlay.active_val = get_current_sink_volume()
+
+    def on_hud_action(self, action_id: str, direction: int, value: float):
+        """Callback from DonutRadialHUD for system actions."""
+        if action_id == "mute_toggle":
+            toggle_sink_mute()
+        elif action_id == "volume":
+            # Direct volume adjustment if driven from HUD
+            pass
 
     def on_dbus_property_changed(self, iface, changed, invalidated, path):
         """Called whenever the dial is rotated (Bluetooth Absolute Volume change)."""
