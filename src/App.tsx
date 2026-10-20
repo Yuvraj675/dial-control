@@ -159,6 +159,7 @@ export function App() {
           setSelectedIndex((prev) => (prev + 1) % actionsCount);
         } else {
           setGaugeValue((prev) => Math.min(100, prev + 5));
+          if (isTauri) invoke("adjust_gauge", { mode: currentMode, delta: 5 }).catch(console.error);
         }
       } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
         e.preventDefault();
@@ -166,6 +167,7 @@ export function App() {
           setSelectedIndex((prev) => (prev - 1 + actionsCount) % actionsCount);
         } else {
           setGaugeValue((prev) => Math.max(0, prev - 5));
+          if (isTauri) invoke("adjust_gauge", { mode: currentMode, delta: -5 }).catch(console.error);
         }
       } else if (e.key === "Enter") {
         e.preventDefault();

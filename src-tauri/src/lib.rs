@@ -104,13 +104,85 @@ fn execute_action(
     }
 }
 
+fn adjust_gnome_brightness(delta: i32) {
+    let out = std::process::Command::new("busctl")
+        .args([
+            "--user",
+            "get-property",
+            "org.gnome.Mutter.DisplayConfig",
+            "/org/gnome/Mutter/DisplayConfig",
+            "org.gnome.Mutter.DisplayConfig",
+            "Backlight",
+        ])
+        .output();
+
+    if let Ok(output) = out {
+        let text = String::from_utf8_lossy(&output.stdout);
+        let parts: Vec<&str> = text.split_whitespace().collect();
+        let mut serial: u32 = 4;
+        let mut connector = "eDP-1".to_string();
+        let mut min_val: i32 = 10;
+        let mut max_val: i32 = 210;
+        let mut curr_val: i32 = 100;
+
+        if let Some(s_idx) = parts.iter().position(|&p| p == "(uaa{sv})") {
+            if let Some(s) = parts.get(s_idx + 1).and_then(|p| p.parse::<u32>().ok()) {
+                serial = s;
+            }
+        }
+        for (i, &p) in parts.iter().enumerate() {
+            if p == "\"connector\"" && i + 2 < parts.len() {
+                connector = parts[i + 2].trim_matches('"').to_string();
+            } else if p == "\"min\"" && i + 2 < parts.len() {
+                if let Ok(v) = parts[i + 2].parse::<i32>() {
+                    min_val = v;
+                }
+            } else if p == "\"max\"" && i + 2 < parts.len() {
+                if let Ok(v) = parts[i + 2].parse::<i32>() {
+                    max_val = v;
+                }
+            } else if p == "\"value\"" && i + 2 < parts.len() {
+                if let Ok(v) = parts[i + 2].parse::<i32>() {
+                    curr_val = v;
+                }
+            }
+        }
+
+        let step = (max_val - min_val) / 20; // 5% step
+        let step = if step < 1 { 5 } else { step };
+        let new_val = if delta > 0 {
+            (curr_val + step).min(max_val)
+        } else {
+            (curr_val - step).max(min_val)
+        };
+
+        let _ = std::process::Command::new("busctl")
+            .args([
+                "--user",
+                "call",
+                "org.gnome.Mutter.DisplayConfig",
+                "/org/gnome/Mutter/DisplayConfig",
+                "org.gnome.Mutter.DisplayConfig",
+                "SetBacklight",
+                "usi",
+                &serial.to_string(),
+                &connector,
+                &new_val.to_string(),
+            ])
+            .status();
+        println!("[Brightness] Adjusted backlight to {}/{} on {}", new_val, max_val, connector);
+    }
+}
+
 #[tauri::command]
 fn adjust_gauge(
     state: tauri::State<AppState>,
     mode: String,
     delta: i32,
 ) {
+    println!("[Gauge] adjust_gauge mode={}, delta={}", mode, delta);
     if mode == "brightness" {
+        adjust_gnome_brightness(delta);
         if delta > 0 {
             state.vk.emit_brightness_up();
         } else {
