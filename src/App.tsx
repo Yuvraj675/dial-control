@@ -29,7 +29,7 @@ export function App() {
 
   const [activeProfileId, setActiveProfileId] = useState<string>("default");
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
-  const [isHudOpen, setIsHudOpen] = useState<boolean>(!isTauri);
+  const [isHudOpen, setIsHudOpen] = useState<boolean>(true);
   const [currentMode, setCurrentMode] = useState<"menu" | "volume" | "brightness">("menu");
   const [gaugeValue, setGaugeValue] = useState<number>(50);
 
@@ -101,15 +101,9 @@ export function App() {
       });
       unlistenList.push(unlistenRotate);
 
-      // 2. Dial Center Click
+      // 2. Dial Center Click (Triggered when HUD is already open)
       const unlistenClick = await listen("dial:click", () => {
-        const { currentMode, selectedIndex, activeProfile, isHudOpen } = stateRef.current;
-
-        if (!isHudOpen) {
-          setIsHudOpen(true);
-          invoke("show_hud").catch(console.error);
-          return;
-        }
+        const { currentMode, selectedIndex, activeProfile } = stateRef.current;
 
         if (currentMode !== "menu") {
           setCurrentMode("menu");
@@ -280,6 +274,10 @@ export function App() {
           gaugeValue={gaugeValue}
           theme={config.settings.theme}
           onSelectAction={handleExecuteAction}
+          onDismiss={() => {
+            if (isTauri) invoke("hide_hud").catch(console.error);
+            setIsHudOpen(false);
+          }}
         />
       ) : (
         <SettingsWindow config={config} onSaveConfig={handleSaveConfig} />

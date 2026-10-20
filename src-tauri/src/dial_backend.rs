@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 use futures_lite::stream::StreamExt;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use zbus::zvariant;
 
 // CMF Buds Pro 2 Bluetooth MAC format in BlueZ D-Bus paths
@@ -55,7 +55,11 @@ pub fn find_cmf_input_device() -> Option<PathBuf> {
 }
 
 /// Spawns the exclusive input grabber thread to intercept center dial clicks
-pub fn start_input_grabber(app: AppHandle, _is_hud_open: Arc<AtomicBool>) {
+pub fn start_input_grabber(
+    app: AppHandle,
+    is_hud_open: Arc<AtomicBool>,
+    locked_vol: Arc<AtomicI32>,
+) {
     thread::spawn(move || {
         let mut last_click_time = Instant::now() - Duration::from_secs(1);
 
@@ -99,8 +103,23 @@ pub fn start_input_grabber(app: AppHandle, _is_hud_open: Arc<AtomicBool>) {
                                     let now = Instant::now();
                                     if now.duration_since(last_click_time) > Duration::from_millis(250) {
                                         last_click_time = now;
-                                        println!(">> [NATIVE DIAL CLICK]");
-                                        let _ = app.emit("dial:click", ());
+                                        let was_open = is_hud_open.load(Ordering::SeqCst);
+
+                                        if !was_open {
+                                            println!(">> [NATIVE DIAL CLICK] -> Opening HUD on Wayland");
+                                            is_hud_open.store(true, Ordering::SeqCst);
+                                            locked_vol.store(50, Ordering::SeqCst);
+                                            if let Some(window) = app.get_webview_window("hud") {
+                                                let _ = window.show();
+                                                let _ = window.unminimize();
+                                                let _ = window.set_focus();
+                                                let _ = window.set_always_on_top(true);
+                                            }
+                                            let _ = app.emit("hud:visibility", true);
+                                        } else {
+                                            println!(">> [NATIVE DIAL CLICK] -> Dispatched action select to HUD");
+                                            let _ = app.emit("dial:click", ());
+                                        }
                                     }
                                 }
                             }

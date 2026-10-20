@@ -12,6 +12,7 @@ interface DonutRadialHUDProps {
   gaugeValue?: number; // 0-100
   theme?: "nothing_red" | "stealth" | "cmf_orange";
   onSelectAction?: (action: WheelAction) => void;
+  onDismiss?: () => void;
 }
 
 export const DonutRadialHUD: React.FC<DonutRadialHUDProps> = ({
@@ -22,6 +23,7 @@ export const DonutRadialHUD: React.FC<DonutRadialHUDProps> = ({
   gaugeValue = 50,
   theme = "nothing_red",
   onSelectAction,
+  onDismiss,
 }) => {
   const size = 450;
   const cx = size / 2;
@@ -65,7 +67,13 @@ export const DonutRadialHUD: React.FC<DonutRadialHUDProps> = ({
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 flex items-center justify-center bg-transparent pointer-events-auto">
+        <div
+          onContextMenu={(e) => {
+            e.preventDefault();
+            onDismiss?.();
+          }}
+          className="fixed inset-0 flex items-center justify-center bg-transparent pointer-events-auto"
+        >
           <motion.div
             initial={{ scale: 0.65, rotate: -20, opacity: 0, filter: "blur(12px)" }}
             animate={{ scale: 1, rotate: 0, opacity: 1, filter: "blur(0px)" }}
