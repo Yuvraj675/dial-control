@@ -1,5 +1,5 @@
 use evdev::uinput::{VirtualDevice, VirtualDeviceBuilder};
-use evdev::{AttributeSet, Key, InputEvent, EventType};
+use evdev::{AttributeSet, BusType, EventType, InputEvent, InputId, Key};
 use std::sync::Mutex;
 use std::thread::sleep;
 use std::time::Duration;
@@ -11,13 +11,20 @@ pub struct VirtualKeyboard {
 impl VirtualKeyboard {
     pub fn new() -> Self {
         let mut keys = AttributeSet::<Key>::new();
-        // Support keys from 1 to 255 for media, navigation, and function keys
+        // Support keys from 1 to 255 for standard, media, navigation, and function keys
         for code in 1..255 {
             keys.insert(Key::new(code));
         }
 
+        let input_id = InputId::new(BusType::BUS_USB, 0x046d, 0xc52b, 1);
         let dev = VirtualDeviceBuilder::new()
-            .and_then(|builder| builder.name("CMF Dial Virtual Keyboard").with_keys(&keys)?.build())
+            .and_then(|builder| {
+                builder
+                    .name("CMF Buds Pro 2 Virtual Keyboard")
+                    .input_id(input_id)
+                    .with_keys(&keys)?
+                    .build()
+            })
             .map_err(|e| {
                 eprintln!("[!] Warning: Could not create uinput virtual device: {:?}", e);
                 e
@@ -25,7 +32,7 @@ impl VirtualKeyboard {
             .ok();
 
         if dev.is_some() {
-            println!("[+] Virtual Keyboard initialized via Linux uinput.");
+            println!("[+] Virtual Keyboard initialized via Linux uinput (CMF Buds Pro 2 Virtual Keyboard).");
         }
 
         Self {

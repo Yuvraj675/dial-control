@@ -7,11 +7,13 @@ import { Disc, Layers, Sliders, Eye, EyeOff } from "lucide-react";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 
+const CURRENT_CONFIG_KEY = "dial_config_v3";
+
 export function App() {
   const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
   const [config, setConfig] = useState<ProfilesConfig>(() => {
-    const saved = localStorage.getItem("dial_config");
+    const saved = localStorage.getItem(CURRENT_CONFIG_KEY);
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -38,7 +40,7 @@ export function App() {
 
   const handleSaveConfig = (updated: ProfilesConfig) => {
     setConfig(updated);
-    localStorage.setItem("dial_config", JSON.stringify(updated));
+    localStorage.setItem(CURRENT_CONFIG_KEY, JSON.stringify(updated));
   };
 
   // Keep references for event listener callbacks without stale closures
@@ -95,8 +97,8 @@ export function App() {
 
     async function setupTauriListeners() {
       // 1. Dial Rotation
-      const unlistenRotate = await listen<{ direction: number; delta: number }>("dial:rotate", (event) => {
-        const { currentMode, actionsCount } = stateRef.current;
+      const unlistenRotate = await listen<{ direction: number; delta: number; volume?: number; volume_pct?: number }>("dial:rotate", (event) => {
+        const { currentMode, actionsCount, gaugeValue } = stateRef.current;
         const dir = event.payload.direction;
 
         if (currentMode === "menu") {
@@ -105,17 +107,24 @@ export function App() {
             if (next < 0) return actionsCount - 1;
             return next % actionsCount;
           });
-        } else {
-          // Adjust volume or brightness gauge
-          const step = dir * 4;
+        } else if (currentMode === "volume") {
+          // Volume mapping: CMF AVRCP 15..79 maps directly to 0..100%
+          if (typeof event.payload.volume_pct === "number") {
+            setGaugeValue(event.payload.volume_pct);
+          } else {
+            const next = Math.max(0, Math.min(100, gaugeValue + dir * 5));
+            setGaugeValue(next);
+            if (isTauri) {
+              invoke("set_system_volume", { pct: next }).catch(console.error);
+            }
+          }
+        } else if (currentMode === "brightness") {
+          // Step by 5% to cleanly match GNOME's 20-step increments
+          const step = dir * 5;
           setGaugeValue((prev) => {
             const next = Math.max(0, Math.min(100, prev + step));
             if (isTauri) {
-              if (currentMode === "brightness") {
-                invoke("set_system_brightness", { pct: next }).catch(console.error);
-              } else if (currentMode === "volume") {
-                invoke("set_system_volume", { pct: next }).catch(console.error);
-              }
+              invoke("set_system_brightness", { pct: next }).catch(console.error);
             }
             return next;
           });
@@ -127,13 +136,14 @@ export function App() {
       const unlistenClick = await listen("dial:click", () => {
         const { currentMode, selectedIndex, activeProfile } = stateRef.current;
 
+        // When in active volume/brightness adjustment mode, click confirms and dismisses HUD
         if (currentMode !== "menu") {
+          setCurrentMode("menu");
+          setIsHudOpen(false);
           if (isTauri) {
             invoke("set_mode", { mode: "menu" }).catch(console.error);
             invoke("hide_hud").catch(console.error);
           }
-          setCurrentMode("menu");
-          setIsHudOpen(false);
           return;
         }
 
@@ -161,6 +171,10 @@ export function App() {
           setCurrentMode("menu");
           if (isTauri) {
             invoke("set_mode", { mode: "menu" }).catch(console.error);
+            // Pre-fetch actual system levels so gauges are instantly accurate
+            invoke<number>("get_system_brightness")
+              .then((b) => setGaugeValue(b))
+              .catch(console.error);
           }
         }
       });

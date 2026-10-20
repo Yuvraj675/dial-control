@@ -231,7 +231,12 @@ export const DonutRadialHUD: React.FC<DonutRadialHUDProps> = ({
 
             {/* ── Central Clean Obsidian Disc (No Knurling Pattern) ────────── */}
             <motion.div
-              className="relative z-10 flex flex-col items-center justify-center rounded-full bg-[#121316] border border-white/10 shadow-2xl"
+              onClick={() => {
+                if (currentMode !== "menu") {
+                  onDismiss?.();
+                }
+              }}
+              className="relative z-10 flex flex-col items-center justify-center rounded-full bg-[#121316] border border-white/10 shadow-2xl cursor-pointer"
               style={{
                 width: rInner * 2 - 14,
                 height: rInner * 2 - 14,
