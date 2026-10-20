@@ -23,6 +23,7 @@ import os
 import glob
 import struct
 import fcntl
+import signal
 import threading
 import time
 import subprocess
@@ -570,6 +571,7 @@ class DualPairingDialDaemon:
         self.ignore_restore_vol = None
         self.transport_path = None
         self.last_click_time = 0
+        self.grabbed_fd = None
 
         # D-Bus connection for Volume (Rotation) monitoring on System Bus
         DBusGMainLoop(set_as_default=True)
@@ -712,6 +714,8 @@ class DualPairingDialDaemon:
             f = None
             try:
                 f = open(self.dev_path, "rb")
+                self.grabbed_fd = f.fileno()
+
                 # Exclusively grab the device so KEY_PLAYCD/KEY_PAUSECD
                 # are NOT passed to GNOME/system media players!
                 try:
@@ -719,6 +723,7 @@ class DualPairingDialDaemon:
                     print(f"[+] Device {self.dev_path} grabbed exclusively! (Play/Pause blocked from system)")
                 except Exception as ge:
                     print(f"[!] Warning: Could not grab device exclusively: {ge}")
+                    print("    (If another instance is paused, run: sudo pkill -9 -f avrcp_dial.py)")
 
                 while True:
                     data = f.read(EVENT_SIZE)
@@ -745,6 +750,17 @@ class DualPairingDialDaemon:
                         f.close()
                     except Exception:
                         pass
+                self.grabbed_fd = None
+
+    def shutdown(self):
+        """Cleanly release device grab and virtual keyboard on exit."""
+        if self.grabbed_fd is not None:
+            try:
+                fcntl.ioctl(self.grabbed_fd, EVIOCGRAB, 0)
+            except Exception:
+                pass
+            self.grabbed_fd = None
+        self.vk.close()
 
     def run(self):
         print("==================================================")
@@ -769,11 +785,24 @@ class DualPairingDialDaemon:
         dbus_thread = threading.Thread(target=dbus_loop, daemon=True)
         dbus_thread.start()
 
+        # Clean exit on Ctrl+C (SIGINT), SIGTERM, and Ctrl+Z (SIGTSTP)
+        def handle_signal(signum, frame):
+            print("\n[*] Exiting and releasing exclusive device grab...")
+            self.shutdown()
+            os._exit(0)
+
+        signal.signal(signal.SIGINT, handle_signal)
+        signal.signal(signal.SIGTERM, handle_signal)
+        try:
+            signal.signal(signal.SIGTSTP, handle_signal)
+        except Exception:
+            pass
+
         # Main thread runs Tkinter GUI event loop cleanly
         try:
             self.overlay.mainloop()
         finally:
-            self.vk.close()
+            self.shutdown()
 
 
 if __name__ == "__main__":
