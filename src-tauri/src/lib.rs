@@ -108,7 +108,7 @@ fn get_system_brightness() -> i32 {
 }
 
 #[tauri::command]
-fn set_system_brightness(state: tauri::State<AppState>, pct: i32) -> i32 {
+fn set_system_brightness(_state: tauri::State<AppState>, pct: i32) -> i32 {
     let pct = pct.clamp(0, 100);
     if let Some(b) = get_backlight_info() {
         let range = b.max - b.min;
@@ -129,20 +129,28 @@ fn set_system_brightness(state: tauri::State<AppState>, pct: i32) -> i32 {
             .status();
         println!("[Brightness] Set to {}% (raw: {}/{}) on {}", pct, raw, b.max, b.connector);
     }
-    if pct > 0 {
-        state.vk.emit_brightness_up();
-    } else {
-        state.vk.emit_brightness_down();
-    }
     pct
 }
 
 #[tauri::command]
 fn get_system_volume() -> i32 {
-    let out = std::process::Command::new("pactl")
+    // 1. Try wpctl (native WirePlumber)
+    if let Ok(output) = std::process::Command::new("wpctl")
+        .args(["get-volume", "@DEFAULT_AUDIO_SINK@"])
+        .output()
+    {
+        let text = String::from_utf8_lossy(&output.stdout);
+        for part in text.split_whitespace() {
+            if let Ok(val) = part.parse::<f64>() {
+                return ((val * 100.0).round() as i32).clamp(0, 100);
+            }
+        }
+    }
+    // 2. Fallback to pactl
+    if let Ok(output) = std::process::Command::new("pactl")
         .args(["get-sink-volume", "@DEFAULT_SINK@"])
-        .output();
-    if let Ok(output) = out {
+        .output()
+    {
         let text = String::from_utf8_lossy(&output.stdout);
         for part in text.split_whitespace() {
             if part.ends_with('%') {
@@ -158,34 +166,46 @@ fn get_system_volume() -> i32 {
 #[tauri::command]
 fn set_system_volume(pct: i32) -> i32 {
     let pct = pct.clamp(0, 100);
+    let frac = format!("{:.2}", (pct as f64) / 100.0);
+    let _ = std::process::Command::new("wpctl")
+        .args(["set-volume", "-l", "1.0", "@DEFAULT_AUDIO_SINK@", &frac])
+        .status();
     let _ = std::process::Command::new("pactl")
         .args(["set-sink-volume", "@DEFAULT_SINK@", &format!("{}%", pct)])
         .status();
-    println!("[Volume] Set to {}%", pct);
+    println!("[Volume] Set to {}% (wpctl: {})", pct, frac);
     pct
 }
 
 #[tauri::command]
 fn set_mode(state: tauri::State<AppState>, mode: String) {
-    if mode == "volume" {
-        state.locked_vol.store(0, Ordering::SeqCst);
-        println!("[HUD] Volume mode: hardware volume lock RELEASED.");
-    } else {
-        state.locked_vol.store(50, Ordering::SeqCst);
-        println!("[HUD] {} mode: hardware volume lock ACTIVE.", mode);
-    }
+    state.locked_vol.store(50, Ordering::SeqCst);
+    println!("[HUD] Switched to mode: {} (lock maintained at 50 for continuous rotation)", mode);
 }
 
-fn control_mpris(method: &str) {
+fn control_mpris_or_fallback(method: &str, fallback_vk: impl FnOnce()) {
     let script = format!(
         r#"
 for p in $(busctl --user list 2>/dev/null | awk '/org\.mpris\.MediaPlayer2/ {{print $1}}'); do
-    busctl --user call "$p" /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player "{}" 2>/dev/null || true
+    if busctl --user call "$p" /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player "{}" 2>/dev/null; then
+        exit 0
+    fi
 done
+exit 1
 "#,
         method
     );
-    let _ = std::process::Command::new("sh").arg("-c").arg(script).spawn();
+    let success = std::process::Command::new("sh")
+        .arg("-c")
+        .arg(script)
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+
+    if !success {
+        println!("[Media] MPRIS player not reachable, invoking virtual keyboard fallback");
+        fallback_vk();
+    }
 }
 
 #[tauri::command]
@@ -241,31 +261,32 @@ fn execute_action(
     println!("[Action] Executing action: {} (type: {}, action: {})", action_id, action_type, action_key);
 
     if action_id == "mute_toggle" || action_type == "mute" || action_id == "video_mute" {
+        let _ = std::process::Command::new("wpctl")
+            .args(["set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"])
+            .status();
         let _ = std::process::Command::new("pactl")
             .args(["set-sink-mute", "@DEFAULT_SINK@", "toggle"])
             .status();
-        println!("[Audio] Toggled sink mute.");
+        state.vk.emit_key(evdev::Key::KEY_MUTE);
+        println!("[Audio] Toggled sink mute via wpctl, pactl and virtual key.");
         return;
     }
 
     if action_id == "media_playpause" || action_key == "playpause" {
-        println!("[Action] Play/Pause: sending MPRIS + virtual key");
-        control_mpris("PlayPause");
-        state.vk.emit_play_pause();
+        println!("[Action] Play/Pause: sending MPRIS or fallback");
+        control_mpris_or_fallback("PlayPause", || state.vk.emit_play_pause());
         return;
     }
 
     if action_id == "media_next" || action_key == "next" {
-        println!("[Action] Next track: sending MPRIS + virtual key");
-        control_mpris("Next");
-        state.vk.emit_next_track();
+        println!("[Action] Next track: sending MPRIS or fallback");
+        control_mpris_or_fallback("Next", || state.vk.emit_next_track());
         return;
     }
 
     if action_id == "media_prev" || action_key == "prev" {
-        println!("[Action] Previous track: sending MPRIS + virtual key");
-        control_mpris("Previous");
-        state.vk.emit_prev_track();
+        println!("[Action] Previous track: sending MPRIS or fallback");
+        control_mpris_or_fallback("Previous", || state.vk.emit_prev_track());
         return;
     }
 

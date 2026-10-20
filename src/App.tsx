@@ -89,6 +89,8 @@ export function App() {
     }
   };
 
+  const lastDialClickRef = useRef<number>(0);
+
   // Tauri Event Listeners (Hardware Dial & Context Detection)
   useEffect(() => {
     if (!isTauri) return;
@@ -98,7 +100,7 @@ export function App() {
     async function setupTauriListeners() {
       // 1. Dial Rotation
       const unlistenRotate = await listen<{ direction: number; delta: number; volume?: number; volume_pct?: number }>("dial:rotate", (event) => {
-        const { currentMode, actionsCount, gaugeValue } = stateRef.current;
+        const { currentMode, actionsCount } = stateRef.current;
         const dir = event.payload.direction;
 
         if (currentMode === "menu") {
@@ -108,18 +110,17 @@ export function App() {
             return next % actionsCount;
           });
         } else if (currentMode === "volume") {
-          // Volume mapping: CMF AVRCP 15..79 maps directly to 0..100%
-          if (typeof event.payload.volume_pct === "number") {
-            setGaugeValue(event.payload.volume_pct);
-          } else {
-            const next = Math.max(0, Math.min(100, gaugeValue + dir * 5));
-            setGaugeValue(next);
+          // Continuous 4% steps reaching exact 0% and 100% on both HUD and system sink
+          const step = dir * 4;
+          setGaugeValue((prev) => {
+            const next = Math.max(0, Math.min(100, prev + step));
             if (isTauri) {
               invoke("set_system_volume", { pct: next }).catch(console.error);
             }
-          }
+            return next;
+          });
         } else if (currentMode === "brightness") {
-          // Step by 5% to cleanly match GNOME's 20-step increments
+          // Step by 5% to cleanly match GNOME's 20-step intervals
           const step = dir * 5;
           setGaugeValue((prev) => {
             const next = Math.max(0, Math.min(100, prev + step));
@@ -134,6 +135,12 @@ export function App() {
 
       // 2. Dial Center Click (Triggered when HUD is already open)
       const unlistenClick = await listen("dial:click", () => {
+        const now = Date.now();
+        if (now - lastDialClickRef.current < 450) {
+          return; // Ignore hardware bounce / duplicate events
+        }
+        lastDialClickRef.current = now;
+
         const { currentMode, selectedIndex, activeProfile } = stateRef.current;
 
         // When in active volume/brightness adjustment mode, click confirms and dismisses HUD
@@ -186,7 +193,7 @@ export function App() {
     return () => {
       unlistenList.forEach((unsub) => unsub());
     };
-  }, [isTauri, config.profiles]);
+  }, [isTauri]);
 
   // Keyboard navigation & mouse wheel (for Desktop browser preview or fallback)
   useEffect(() => {
