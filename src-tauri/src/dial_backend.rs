@@ -249,14 +249,22 @@ pub fn start_bluez_listener(
 
                             let direction = if delta > 0 { 1 } else { -1 };
                             let dir_name = if delta > 0 { "CW (+)" } else { "CCW (-)" };
-                            println!(">> [NATIVE DIAL TURN] {} (Volume: {})", dir_name, new_vol);
+                            // CMF Buds Pro 2 AVRCP volume range is [15..79] mapped to [0..100]%
+                            let mapped_pct = (((new_vol - 15) as f64 / (79.0 - 15.0)) * 100.0)
+                                .round()
+                                .clamp(0.0, 100.0) as i32;
+                            println!(
+                                ">> [NATIVE DIAL TURN] {} (Raw AVRCP: {}, Mapped: {}%)",
+                                dir_name, new_vol, mapped_pct
+                            );
 
                             let _ = app.emit(
                                 "dial:rotate",
                                 serde_json::json!({
                                     "direction": direction,
                                     "delta": delta,
-                                    "volume": new_vol
+                                    "volume": new_vol,
+                                    "volume_pct": mapped_pct
                                 }),
                             );
 

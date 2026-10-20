@@ -78,6 +78,22 @@ fn get_backlight_info() -> Option<BacklightInfo> {
     })
 }
 
+fn get_sysfs_backlight() -> Option<i32> {
+    let actual_str = std::fs::read_to_string("/sys/class/backlight/intel_backlight/actual_brightness")
+        .or_else(|_| std::fs::read_to_string("/sys/class/backlight/amdgpu_bl0/actual_brightness"))
+        .ok()?;
+    let max_str = std::fs::read_to_string("/sys/class/backlight/intel_backlight/max_brightness")
+        .or_else(|_| std::fs::read_to_string("/sys/class/backlight/amdgpu_bl0/max_brightness"))
+        .ok()?;
+    let actual: f64 = actual_str.trim().parse().ok()?;
+    let max: f64 = max_str.trim().parse().ok()?;
+    if max > 0.0 {
+        Some(((actual / max) * 100.0).round().clamp(0.0, 100.0) as i32)
+    } else {
+        None
+    }
+}
+
 #[tauri::command]
 fn get_system_brightness() -> i32 {
     if let Some(b) = get_backlight_info() {
@@ -85,11 +101,14 @@ fn get_system_brightness() -> i32 {
         let pct = ((b.value - b.min) * 100) / range;
         return pct.clamp(0, 100);
     }
+    if let Some(pct) = get_sysfs_backlight() {
+        return pct;
+    }
     50
 }
 
 #[tauri::command]
-fn set_system_brightness(pct: i32) -> i32 {
+fn set_system_brightness(state: tauri::State<AppState>, pct: i32) -> i32 {
     let pct = pct.clamp(0, 100);
     if let Some(b) = get_backlight_info() {
         let range = b.max - b.min;
@@ -109,6 +128,11 @@ fn set_system_brightness(pct: i32) -> i32 {
             ])
             .status();
         println!("[Brightness] Set to {}% (raw: {}/{}) on {}", pct, raw, b.max, b.connector);
+    }
+    if pct > 0 {
+        state.vk.emit_brightness_up();
+    } else {
+        state.vk.emit_brightness_down();
     }
     pct
 }
@@ -153,11 +177,15 @@ fn set_mode(state: tauri::State<AppState>, mode: String) {
 }
 
 fn control_mpris(method: &str) {
-    let cmd = format!(
-        "for p in $(busctl --user list | awk '/org.mpris.MediaPlayer2/ {{print $1}}'); do busctl --user call $p /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player {} 2>/dev/null; done",
+    let script = format!(
+        r#"
+for p in $(busctl --user list 2>/dev/null | awk '/org\.mpris\.MediaPlayer2/ {{print $1}}'); do
+    busctl --user call "$p" /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player "{}" 2>/dev/null || true
+done
+"#,
         method
     );
-    let _ = std::process::Command::new("sh").arg("-c").arg(cmd).spawn();
+    let _ = std::process::Command::new("sh").arg("-c").arg(script).spawn();
 }
 
 #[tauri::command]
@@ -220,22 +248,24 @@ fn execute_action(
         return;
     }
 
-    if action_type == "key" || action_type == "media" {
-        match action_key {
-            "playpause" => {
-                state.vk.emit_play_pause();
-                control_mpris("PlayPause");
-            }
-            "next" => {
-                state.vk.emit_next_track();
-                control_mpris("Next");
-            }
-            "prev" => {
-                state.vk.emit_prev_track();
-                control_mpris("Previous");
-            }
-            _ => {}
-        }
+    if action_id == "media_playpause" || action_key == "playpause" {
+        println!("[Action] Play/Pause: sending MPRIS + virtual key");
+        control_mpris("PlayPause");
+        state.vk.emit_play_pause();
+        return;
+    }
+
+    if action_id == "media_next" || action_key == "next" {
+        println!("[Action] Next track: sending MPRIS + virtual key");
+        control_mpris("Next");
+        state.vk.emit_next_track();
+        return;
+    }
+
+    if action_id == "media_prev" || action_key == "prev" {
+        println!("[Action] Previous track: sending MPRIS + virtual key");
+        control_mpris("Previous");
+        state.vk.emit_prev_track();
         return;
     }
 
@@ -272,7 +302,7 @@ fn adjust_gauge(
     if mode == "brightness" {
         let curr = get_system_brightness();
         let next_val = (curr + delta).clamp(0, 100);
-        set_system_brightness(next_val);
+        set_system_brightness(state, next_val);
     } else if mode == "volume" {
         let curr = get_system_volume();
         let next_val = (curr + delta).clamp(0, 100);

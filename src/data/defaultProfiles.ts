@@ -17,9 +17,9 @@ export const DEFAULT_CONFIG: ProfilesConfig = {
       icon: "sliders",
       match_patterns: ["*"],
       actions: [
-        { id: "volume_mode", label: "VOLUME", icon: "volume", type: "mode" },
-        { id: "brightness_mode", label: "BRIGHTNESS", icon: "brightness", type: "mode" },
         { id: "media_playpause", label: "PLAY / PAUSE", icon: "playpause", type: "key", action: "playpause" },
+        { id: "brightness_mode", label: "BRIGHTNESS", icon: "brightness", type: "mode" },
+        { id: "volume_mode", label: "VOLUME", icon: "volume", type: "mode" },
         { id: "media_next", label: "NEXT TRACK", icon: "next", type: "key", action: "next" },
         { id: "media_prev", label: "PREV TRACK", icon: "prev", type: "key", action: "prev" },
         { id: "mute_toggle", label: "MUTE", icon: "mute", type: "mute" },
