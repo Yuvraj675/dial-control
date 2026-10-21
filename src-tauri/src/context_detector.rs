@@ -7,9 +7,23 @@ use tauri::{AppHandle, Emitter};
 pub fn start_context_detector(app: AppHandle) {
     thread::spawn(move || {
         loop {
-            // Launch streaming context detector
+            // Check if local prototype script exists in temp/tools or tools for development fallback
+            let script_path = if std::path::Path::new("temp/tools/context_detector.py").exists() {
+                "temp/tools/context_detector.py"
+            } else if std::path::Path::new("tools/context_detector.py").exists() {
+                "tools/context_detector.py"
+            } else {
+                ""
+            };
+
+            if script_path.is_empty() {
+                // Graceful fallback when running standalone without legacy python prototypes
+                thread::sleep(Duration::from_secs(5));
+                continue;
+            }
+
             let mut child = match Command::new("python3")
-                .args(["tools/context_detector.py", "--stream"])
+                .args([script_path, "--stream"])
                 .stdout(Stdio::piped())
                 .stderr(Stdio::null())
                 .spawn()

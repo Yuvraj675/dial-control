@@ -39,6 +39,13 @@ Thumbs.db
 
 node_modules/
 
+# Build outputs & Binaries
+bin/
+backups/
 dist/
 src-tauri/target/
+
+# Local reference and prototype storage
+temp/
+tools/
 
