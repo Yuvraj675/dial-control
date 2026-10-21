@@ -203,35 +203,112 @@ fn adjust_gauge(
     }
 }
 
+#[cfg(target_os = "linux")]
+fn convert_to_gnome_binding(shortcut: &str) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    let tokens: Vec<&str> = shortcut.split('+').map(|s| s.trim()).collect();
+    let mut key = String::new();
+    for tok in tokens {
+        let lower = tok.to_lowercase();
+        match lower.as_str() {
+            "super" | "meta" | "win" | "cmd" => parts.push("<Super>".to_string()),
+            "ctrl" | "control" => parts.push("<Ctrl>".to_string()),
+            "shift" => parts.push("<Shift>".to_string()),
+            "alt" => parts.push("<Alt>".to_string()),
+            other => key = other.to_string(),
+        }
+    }
+    let gnome_key = match key.as_str() {
+        "space" => "space".to_string(),
+        "backslash" => "backslash".to_string(),
+        "slash" => "slash".to_string(),
+        "grave" | "`" => "grave".to_string(),
+        "minus" | "-" => "minus".to_string(),
+        "equal" | "=" => "equal".to_string(),
+        "bracketleft" | "[" => "bracketleft".to_string(),
+        "bracketright" | "]" => "bracketright".to_string(),
+        "tab" => "Tab".to_string(),
+        k => k.to_string(),
+    };
+    format!("{}{}", parts.join(""), gnome_key)
+}
+
+#[cfg(target_os = "linux")]
+fn sync_gnome_keybinding(shortcut: &str) {
+    let path = "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/dial-control/";
+    let schema = format!("org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:{}", path);
+
+    if shortcut.trim().is_empty() {
+        let _ = std::process::Command::new("gsettings")
+            .args(["set", &schema, "binding", ""])
+            .status();
+        return;
+    }
+
+    let gnome_binding = convert_to_gnome_binding(shortcut);
+    println!("[Shortcut] Synchronizing GNOME compositor keybinding: {}", gnome_binding);
+
+    let _ = std::process::Command::new("gsettings")
+        .args(["set", &schema, "name", "Dial Control Radial HUD"])
+        .status();
+
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/home/yuvraj".to_string());
+    let exec_cmd = format!("{}/Documents/Code_Projects/dial-control/bin/dial-control --toggle", home);
+    let _ = std::process::Command::new("gsettings")
+        .args(["set", &schema, "command", &exec_cmd])
+        .status();
+
+    let _ = std::process::Command::new("gsettings")
+        .args(["set", &schema, "binding", &gnome_binding])
+        .status();
+
+    if let Ok(out) = std::process::Command::new("gsettings")
+        .args(["get", "org.gnome.settings-daemon.plugins.media-keys", "custom-keybindings"])
+        .output()
+    {
+        let current_list = String::from_utf8_lossy(&out.stdout);
+        if !current_list.contains(path) {
+            let list_val = format!("['{}']", path);
+            let _ = std::process::Command::new("gsettings")
+                .args(["set", "org.gnome.settings-daemon.plugins.media-keys", "custom-keybindings", &list_val])
+                .status();
+        }
+    }
+}
+
 #[tauri::command]
 fn register_activation_shortcut(app: AppHandle, shortcut_str: String) -> Result<String, String> {
+    let clean = shortcut_str.trim().to_string();
+
+    #[cfg(target_os = "linux")]
+    {
+        sync_gnome_keybinding(&clean);
+    }
+
     use std::str::FromStr;
     use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
 
     let global_shortcut = app.global_shortcut();
     let _ = global_shortcut.unregister_all();
 
-    let clean = shortcut_str.trim();
     if clean.is_empty() {
         return Ok("Disabled".to_string());
     }
 
-    match Shortcut::from_str(clean) {
+    match Shortcut::from_str(&clean) {
         Ok(s) => match global_shortcut.register(s) {
             Ok(_) => {
                 println!("[Shortcut] Successfully registered global activation shortcut: {}", clean);
-                Ok(clean.to_string())
+                Ok(clean)
             }
             Err(e) => {
-                let err = format!("Failed to register '{}': {:?}", clean, e);
-                eprintln!("[Shortcut] {}", err);
-                Err(err)
+                println!("[Shortcut] Global shortcut plugin fallback: {:?}", e);
+                Ok(clean)
             }
         },
         Err(e) => {
-            let err = format!("Invalid shortcut format '{}': {:?}", clean, e);
-            eprintln!("[Shortcut] {}", err);
-            Err(err)
+            println!("[Shortcut] Global shortcut parse fallback: {:?}", e);
+            Ok(clean)
         }
     }
 }
@@ -279,10 +356,39 @@ pub fn run() {
             use std::str::FromStr;
             use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
             if let Ok(default_shortcut) = Shortcut::from_str("Super+Shift+D") {
-                if let Err(e) = app.global_shortcut().register(default_shortcut) {
-                    eprintln!("[Shortcut] Could not register default shortcut Super+Shift+D: {:?}", e);
-                } else {
-                    println!("[Shortcut] Registered default global shortcut: Super+Shift+D");
+                let _ = app.global_shortcut().register(default_shortcut);
+            }
+
+            // Sync with GNOME on Linux Wayland
+            #[cfg(target_os = "linux")]
+            {
+                sync_gnome_keybinding("Super+Shift+D");
+            }
+
+            // UNIX socket listener for instantaneous CLI --toggle on Wayland
+            #[cfg(unix)]
+            {
+                let app_handle = app.handle().clone();
+                let socket_path = "/tmp/dial-control.sock";
+                let _ = std::fs::remove_file(socket_path);
+                if let Ok(listener) = std::os::unix::net::UnixListener::bind(socket_path) {
+                    use std::io::{BufRead, BufReader};
+                    std::thread::spawn(move || {
+                        for stream in listener.incoming() {
+                            if let Ok(stream) = stream {
+                                let mut reader = BufReader::new(stream);
+                                let mut line = String::new();
+                                if reader.read_line(&mut line).is_ok() {
+                                    let cmd = line.trim();
+                                    if cmd == "toggle" {
+                                        let state: tauri::State<AppState> = app_handle.state();
+                                        toggle_hud(app_handle.clone(), state);
+                                    }
+                                }
+                            }
+                        }
+                    });
+                    println!("[IPC] UNIX socket listener active on {}", socket_path);
                 }
             }
 

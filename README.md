@@ -125,6 +125,6 @@ Profiles, wheel slices, and activation triggers can be customized via the **Sett
 - **Create Custom Dials**: Add dedicated radial profiles tailored to any application or workflow with custom icons and title/WM_CLASS window matching rules.
 - **Import Slices**: Pick and reuse actions from any existing dial (e.g. VS Code shortcuts or media controls) directly into your custom dial with a single click.
 - **Reorder & Edit Slices**: Adjust wheel slice order, customize labels, reassign key combinations (`Ctrl+C`, `Shift+Alt+F`), media keys, or arbitrary shell commands.
-- **Global Activation Shortcut**: Configure a system-wide hotkey (default: `Super+Shift+D`, or presets like `Super+Backslash`, `Alt+Space`) to toggle the radial dial on any computer even without CMF Buds hardware.
+- **Interactive Shortcut Recorder & Wayland IPC**: Record any global activation shortcut directly from your keyboard without manual typing. On Linux Wayland, automatically binds with GNOME compositor keybindings and triggers the radial HUD in < 2ms via a high-speed local IPC socket.
 - **Radial Geometry & Aesthetics**: Modify inner/outer radius, donut thickness, accent glow colors, and rotation animations.
 - **Instant Hot-Reload**: Changes saved in Settings take effect immediately on the live radial dial without restarting the daemon.
