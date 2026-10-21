@@ -4,6 +4,7 @@ Turn your **CMF Buds Pro 2** smart dial case into a context-aware, beautifully a
 
 - **100% Dual-Pairing Preserved**: Keeps your phone connection and the Nothing X app active simultaneously.
 - **Click the Dial**: An animated, glowing Donut Radial HUD pops up on screen with options tailored to your currently focused application.
+- **Home Dial Option**: Every dial menu features a `HOME` option that opens the interactive Home Dial switcher where you can manually choose between any dial menu (System, Media, Code, Files, Browser, Design, or custom profiles).
 - **Rotate the Dial**: Smoothly cycles options with audio beeps in your earbuds while your media volume remains locked.
 - **Click Again**: Executes the action (e.g. `Copy`/`Paste` in Files, `Seek`/`Fullscreen` in YouTube, `Format` in VS Code, or opens the Volume/Brightness gauge).
 - **System Tray Daemon**: Runs quietly in your system tray / top panel with quick controls, radial toggles, and settings customizer.
@@ -22,7 +23,7 @@ dial-control/
 ├── scripts/                # Platform helper scripts (e.g. udev rules)
 ├── src/                    # Frontend UI (React 18, TypeScript, Tailwind CSS)
 │   ├── components/
-│   │   ├── hud/            # DonutRadialHUD (Framer Motion circular wheel)
+│   │   ├── hud/            # DonutRadialHUD (Framer Motion circular wheel & Home Dial)
 │   │   └── settings/       # SettingsWindow (Slice editor & profile manager)
 │   ├── data/               # Default wheel slices & actions
 │   └── types/              # TypeScript profile schemas
@@ -33,7 +34,7 @@ dial-control/
 │       └── platform/       # Modular OS Abstractions (Linux, Windows, macOS)
 │           ├── mod.rs      # Unified provider switcher
 │           ├── traits.rs   # Core platform traits
-│           ├── linux/      # WirePlumber, Mutter, uinput, BlueZ & evdev
+│           ├── linux/      # WirePlumber, Mutter, uinput, BlueZ, evdev & D-Bus Context
 │           ├── windows/    # WASAPI, Win32 & RawInput stubs
 │           └── macos/      # CoreAudio, IOKit & Cocoa stubs
 └── temp/                   # [Gitignored] Reference prototypes & scripts
@@ -45,22 +46,23 @@ dial-control/
 
 | Platform | Dial / AVRCP Interception | Volume Control | Brightness Control | Context Detection | Status |
 |---|---|---|---|---|---|
-| **Linux (X11 / Wayland)** | BlueZ D-Bus + `evdev` grabber | WirePlumber (`wpctl`) / PulseAudio | `/sys/class/backlight` + GNOME Mutter D-Bus | AT-SPI2 / X11 EWMH | **Fully Functional** |
+| **Linux (X11 / Wayland)** | BlueZ D-Bus + `evdev` grabber | WirePlumber (`wpctl`) / PulseAudio | `/sys/class/backlight` + GNOME Mutter D-Bus | GNOME FocusedWindow D-Bus + Sway/Hyprland/KDE/X11 | **Fully Functional** |
 | **Windows** | Win32 RawInput / AVRCP | WASAPI (`IAudioEndpointVolume`) | WMI / Win32 Monitor API | Win32 `GetForegroundWindow` | **In Development** |
 | **macOS** | CoreBluetooth / IOHIDManager | CoreAudio HAL | DisplayServices / IOKit | Cocoa `NSWorkspace` | **In Development** |
 
 ---
 
-## Context-Aware Profiles
+## Context-Aware Profiles & Home Dial
 
-The dial automatically detects your active foreground application and adapts its options in real-time:
+The dial automatically detects your active foreground application and adapts its options in real-time. In addition, you can rotate to **HOME** in any dial menu to manually open the **Home Dial** launcher and choose between different profiles:
 
 | Foreground App | Profile | Slices on the Wheel |
 |---|---|---|
-| **Files / Nautilus / Dolphin** | **📁 Files & Folders** | 📋 Copy (`Ctrl+C`), 📥 Paste (`Ctrl+V`), 🗑️ Trash (`Delete`), 📁 New Folder (`Ctrl+Shift+N`), 🏷️ Rename (`F2`), 💻 Terminal |
-| **YouTube / Firefox / Chrome / Zen** | **🎬 Video & Media** | ⏯️ Play/Pause, ⏩ Seek +10s (`Right`), ⏪ Seek -10s (`Left`), 🖥️ Fullscreen (`F`), 🔇 Mute (`M`), 🔊 Volume Gauge |
-| **VS Code / Cursor / Zed** | **💻 Code & Editor** | 💾 Save All (`Ctrl+S`), ✨ Format (`Shift+Alt+F`), 🔍 Find in Files (`Ctrl+Shift+F`), 💬 Comment (`Ctrl+/`), 💻 Terminal (`Ctrl+\``), 🔄 Git |
-| **Desktop / General Apps** | **⚙️ System Controls** | 🔊 Volume Adjust, ☀️ Brightness Adjust, ⏯️ Play/Pause, ⏭️ Next Track, ⏮️ Prev Track, 🔇 Mute Toggle |
+| **Files / Nautilus / Dolphin** | **📁 Files & Folders** | 📋 Copy (`Ctrl+C`), 📥 Paste (`Ctrl+V`), 🗑️ Trash (`Delete`), 📁 New Folder (`Ctrl+Shift+N`), 🏷️ Rename (`F2`), 💻 Terminal, 🏠 Home Dial |
+| **YouTube / Firefox / Chrome / Zen** | **🎬 Video & Media** | ⏯️ Play/Pause, ⏩ Seek +10s (`Right`), ⏪ Seek -10s (`Left`), 🖥️ Fullscreen (`F`), 🔇 Mute (`M`), 🔊 Volume Gauge, 🏠 Home Dial |
+| **VS Code / Cursor / Zed** | **💻 Code & Editor** | 💾 Save All (`Ctrl+S`), ✨ Format (`Shift+Alt+F`), 🔍 Find in Files (`Ctrl+Shift+F`), 💬 Comment (`Ctrl+/`), 💻 Terminal (`Ctrl+\``), 🔄 Git, 🏠 Home Dial |
+| **Desktop / General Apps** | **⚙️ System Controls** | 🔊 Volume Adjust, ☀️ Brightness Adjust, ⏯️ Play/Pause, ⏭️ Next Track, ⏮️ Prev Track, 🔇 Mute Toggle, 🏠 Home Dial |
+| **Any Screen (via Home)** | **🏠 Home Dial Switcher** | ⚙️ System, 🎬 Media, 💻 Code, 📁 Files, 🌐 Browser, 🎨 Design (plus any custom user profiles) |
 
 ---
 

@@ -258,8 +258,13 @@ export const DonutRadialHUD: React.FC<DonutRadialHUDProps> = ({
                     {getActionIcon(activeAction?.icon || "disc", 30, "text-white", 2.0)}
                   </motion.div>
 
-                  {/* ONLY ONE Single Main Text in Ndot57 */}
-                  <div className="font-ndot text-sm text-white tracking-widest uppercase mt-2.5">
+                  {/* Profile Context Tag */}
+                  <div className="font-ndot text-[10px] text-neutral-400 tracking-widest uppercase mt-2">
+                    {profile.name}
+                  </div>
+
+                  {/* Main Action Text in Ndot57 */}
+                  <div className="font-ndot text-sm text-white tracking-widest uppercase mt-0.5">
                     {activeAction?.label}
                   </div>
                 </div>

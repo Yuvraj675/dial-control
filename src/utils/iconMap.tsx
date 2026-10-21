@@ -39,6 +39,7 @@ import {
   Video,
   Globe,
   Palette,
+  Home,
 } from "lucide-react";
 
 export const ICON_MAP: Record<string, React.FC<{ className?: string; size?: number; strokeWidth?: number }>> = {
@@ -50,6 +51,7 @@ export const ICON_MAP: Record<string, React.FC<{ className?: string; size?: numb
   sliders: Sliders,
   disc: Disc,
   layers: Layers,
+  home: Home,
 
   // Media
   play: Play,
