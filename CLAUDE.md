@@ -85,7 +85,7 @@ dial-control/
 |---|---|---|---|---|
 | **Volume Control** | WASAPI (`IAudioEndpointVolume`) | CoreAudio (`kAudioHardwareServiceDeviceProperty_VirtualMasterVolume`) | WirePlumber (`wpctl`) / PulseAudio (`pactl` / `libpulse`) | Same as Linux Base |
 | **Brightness Control** | WMI (`WmiMonitorBrightness`) / Win32 Monitor API | DisplayServices / IOKit | `/sys/class/backlight` / `systemd-logind` | Mutter D-Bus `SetBacklight` fallback |
-| **Active Window Context** | Win32 `GetForegroundWindow` + `GetWindowTextW` | Cocoa `NSWorkspace.frontmostApplication` | X11 `_NET_ACTIVE_WINDOW` / `wlr-foreign-toplevel` | AT-SPI2 / Mutter Shell fallback |
+| **Active Window Context** | Win32 `GetForegroundWindow` + `GetWindowTextW` | Cocoa `NSWorkspace.frontmostApplication` | X11 `_NET_ACTIVE_WINDOW` / `wlr-foreign-toplevel` | GNOME FocusedWindow D-Bus + native multi-compositor fallbacks |
 | **Key Simulation** | Win32 `SendInput` / `enigo` | `CGEventPost` / `enigo` | `enigo` / `/dev/uinput` | `/dev/uinput` via `evdev` |
 | **Dial Interception** | RawInput / Bluetooth AVRCP | CoreBluetooth / IOHIDManager | BlueZ `MediaTransport1` + `evdev` grabber | Same as Linux Base |
 

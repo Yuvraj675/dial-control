@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { DonutRadialHUD } from "./components/hud/DonutRadialHUD";
 import { SettingsWindow } from "./components/settings/SettingsWindow";
 import { DEFAULT_CONFIG } from "./data/defaultProfiles";
-import { ProfilesConfig, WheelAction } from "./types/profile";
+import { ProfilesConfig, WheelAction, DialProfile } from "./types/profile";
 import { Disc, Layers, Sliders, Eye, EyeOff } from "lucide-react";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
@@ -13,15 +13,28 @@ export function App() {
   const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
   const [config, setConfig] = useState<ProfilesConfig>(() => {
+    let cfg: ProfilesConfig = DEFAULT_CONFIG;
     const saved = localStorage.getItem(CURRENT_CONFIG_KEY);
     if (saved) {
       try {
-        return JSON.parse(saved);
+        cfg = JSON.parse(saved);
       } catch (e) {
-        return DEFAULT_CONFIG;
+        cfg = DEFAULT_CONFIG;
       }
     }
-    return DEFAULT_CONFIG;
+    // Ensure every profile has the HOME dial option
+    for (const prof of Object.values(cfg.profiles)) {
+      if (!prof.actions.some((a) => a.id === "home_dial" || a.type === "home")) {
+        prof.actions.push({
+          id: "home_dial",
+          label: "HOME",
+          icon: "home",
+          type: "home",
+          desc: "Choose Dial Menu",
+        });
+      }
+    }
+    return cfg;
   });
 
   const [view, setView] = useState<"hud" | "settings">(() => {
@@ -39,7 +52,28 @@ export function App() {
     return saved !== null ? Number(saved) : 55;
   });
 
-  const activeProfile = config.profiles[activeProfileId] || config.profiles.default;
+  // Dynamic Home Dial profile that lists all available profiles
+  const activeProfile: DialProfile = (() => {
+    if (activeProfileId === "home") {
+      const profileEntries = Object.entries(config.profiles).filter(([id]) => id !== "home");
+      return {
+        id: "home",
+        name: "Home",
+        icon: "home",
+        match_patterns: [],
+        actions: profileEntries.map(([id, prof]) => ({
+          id: `profile_${id}`,
+          label: prof.name.toUpperCase(),
+          icon: prof.icon || "sliders",
+          type: "profile" as const,
+          action: id,
+          desc: `Switch to ${prof.name} dial`,
+        })),
+      };
+    }
+    return config.profiles[activeProfileId] || config.profiles.default;
+  })();
+
   const actionsCount = activeProfile.actions.length;
 
   const handleSaveConfig = (updated: ProfilesConfig) => {
@@ -55,6 +89,7 @@ export function App() {
     activeProfile,
     isHudOpen,
     gaugeValue,
+    config,
   });
   useEffect(() => {
     stateRef.current = {
@@ -64,11 +99,31 @@ export function App() {
       activeProfile,
       isHudOpen,
       gaugeValue,
+      config,
     };
-  }, [currentMode, selectedIndex, actionsCount, activeProfile, isHudOpen, gaugeValue]);
+  }, [currentMode, selectedIndex, actionsCount, activeProfile, isHudOpen, gaugeValue, config]);
 
-  // Execute an action (either mode switch or native system command/hotkey)
+  // Execute an action (either mode switch, profile switch, home dial, or native system command/hotkey)
   const handleExecuteAction = (action: WheelAction) => {
+    // 1. Home Dial Selector
+    if (action.type === "home" || action.id === "home_dial") {
+      setActiveProfileId("home");
+      setSelectedIndex(0);
+      setCurrentMode("menu");
+      return;
+    }
+
+    // 2. Switching to a chosen profile from the Home Dial
+    if (action.type === "profile" && action.action) {
+      if (config.profiles[action.action]) {
+        setActiveProfileId(action.action);
+        setSelectedIndex(0);
+        setCurrentMode("menu");
+      }
+      return;
+    }
+
+    // 3. Continuous Mode switches (Volume / Brightness)
     if (action.type === "mode") {
       const mode = action.id === "volume_mode" ? "volume" : "brightness";
       setCurrentMode(mode);
@@ -178,9 +233,39 @@ export function App() {
       unlistenList.push(unlistenClick);
 
       // 3. Context Aware Profile Change
-      const unlistenContext = await listen<{ profile_id: string }>("context:change", (event) => {
-        if (config.profiles[event.payload.profile_id]) {
-          setActiveProfileId(event.payload.profile_id);
+      const unlistenContext = await listen<{
+        profile_id: string;
+        app?: string;
+        title?: string;
+        wm_class?: string;
+      }>("context:change", (event) => {
+        const { profile_id, app, title, wm_class } = event.payload;
+        console.log(`[Context] Foreground -> App: '${app}', Title: '${title}', Backend matched: '${profile_id}'`);
+
+        const profiles = stateRef.current.config.profiles;
+        const query = `${wm_class || ""} ${app || ""} ${title || ""}`.toLowerCase();
+        let targetId = profile_id;
+
+        // Custom profiles from settings have priority
+        for (const [id, prof] of Object.entries(profiles)) {
+          if (id === "default") continue;
+          if (
+            prof.match_patterns?.some((pat) => {
+              const clean = pat.replace(/\*/g, "").toLowerCase().trim();
+              return clean.length > 0 && query.includes(clean);
+            })
+          ) {
+            targetId = id;
+            break;
+          }
+        }
+
+        if (targetId && profiles[targetId]) {
+          setActiveProfileId(targetId);
+          setSelectedIndex(0);
+          setCurrentMode("menu");
+        } else if (profiles.default) {
+          setActiveProfileId("default");
           setSelectedIndex(0);
           setCurrentMode("menu");
         }

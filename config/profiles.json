@@ -60,6 +60,13 @@
           "icon": "🔇",
           "type": "mute",
           "desc": "Toggle mute"
+        },
+        {
+          "id": "home_dial",
+          "label": "Home",
+          "icon": "🏠",
+          "type": "home",
+          "desc": "Choose Dial Menu"
         }
       ]
     },
@@ -115,6 +122,13 @@
           "type": "command",
           "cmd": "gnome-terminal || xterm",
           "desc": "Open terminal"
+        },
+        {
+          "id": "home_dial",
+          "label": "Home",
+          "icon": "🏠",
+          "type": "home",
+          "desc": "Choose Dial Menu"
         }
       ]
     },
@@ -169,6 +183,13 @@
           "icon": "🔊",
           "type": "mode",
           "desc": "Rotate to adjust volume"
+        },
+        {
+          "id": "home_dial",
+          "label": "Home",
+          "icon": "🏠",
+          "type": "home",
+          "desc": "Choose Dial Menu"
         }
       ]
     },
@@ -224,6 +245,13 @@
           "type": "hotkey",
           "keys": ["KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_G"],
           "desc": "Git panel [Ctrl+Shift+G]"
+        },
+        {
+          "id": "home_dial",
+          "label": "Home",
+          "icon": "🏠",
+          "type": "home",
+          "desc": "Choose Dial Menu"
         }
       ]
     }

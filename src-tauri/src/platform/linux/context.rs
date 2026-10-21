@@ -1,10 +1,24 @@
 use crate::platform::traits::ContextDetector;
-use std::io::{BufRead, BufReader};
-use std::path::Path;
-use std::process::{Command, Stdio};
-use std::thread;
+use futures_lite::StreamExt;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ContextEvent {
+    pub profile_id: String,
+    pub app: String,
+    pub title: String,
+    pub wm_class: String,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct FocusedWindowJson {
+    title: Option<String>,
+    wm_class: Option<String>,
+    #[serde(rename = "wm_class_instance")]
+    _wm_class_instance: Option<String>,
+    pid: Option<u32>,
+}
 
 pub struct LinuxContext;
 
@@ -14,59 +28,377 @@ impl LinuxContext {
     }
 }
 
+/// Matches foreground application details against known profile patterns.
+pub fn match_profile(app: &str, wm_class: &str, title: &str) -> &'static str {
+    let query = format!("{} {} {}", wm_class, app, title).to_lowercase();
+
+    // 1. Media & Streaming (checked first so YouTube/Netflix in Chrome stays media)
+    let media_patterns = [
+        "youtube", "netflix", "spotify", "vlc", "mpv", "twitch", "prime video",
+        "soundcloud", "disney", "jellyfin", "plex", "rhythmbox", "audacious",
+    ];
+    for pat in &media_patterns {
+        if query.contains(pat) {
+            return "media_video";
+        }
+    }
+
+    // 2. Code Editors & IDEs
+    let code_patterns = [
+        "code", "cursor", "zed", "sublime", "nvim", "vim", "pycharm", "intellij",
+        "rustrover", "webstorm", "android-studio", "clion", "eclipse", "neovim",
+    ];
+    for pat in &code_patterns {
+        if query.contains(pat) {
+            return "code_editor";
+        }
+    }
+
+    // 3. File Managers
+    let file_patterns = [
+        "nautilus", "dolphin", "thunar", "pcmanfm", "filee", "explorer", "nemo",
+        "caja", "files", "org.gnome.nautilus",
+    ];
+    for pat in &file_patterns {
+        if query.contains(pat) {
+            return "file_manager";
+        }
+    }
+
+    // 4. Web Browsers
+    let browser_patterns = [
+        "firefox", "chrome", "chromium", "zen", "brave", "edge", "opera",
+        "vivaldi", "epiphany", "google-chrome",
+    ];
+    for pat in &browser_patterns {
+        if query.contains(pat) {
+            return "browser_nav";
+        }
+    }
+
+    // 5. Creative & Design
+    let design_patterns = [
+        "figma", "blender", "resolve", "photoshop", "inkscape", "gimp",
+        "krita", "illustrator", "premiere", "darktable", "freecad",
+    ];
+    for pat in &design_patterns {
+        if query.contains(pat) {
+            return "creative_design";
+        }
+    }
+
+    "default"
+}
+
+// ── Compositor Fallbacks ───────────────────────────────────────────────────
+
+fn find_sway_focused_node(node: &serde_json::Value) -> Option<(String, String)> {
+    if node.get("focused").and_then(|v| v.as_bool()) == Some(true) {
+        let app = node
+            .get("app_id")
+            .and_then(|v| v.as_str())
+            .or_else(|| {
+                node.get("window_properties")
+                    .and_then(|p| p.get("class"))
+                    .and_then(|v| v.as_str())
+            })
+            .unwrap_or("")
+            .to_string();
+        let name = node
+            .get("name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        return Some((app, name));
+    }
+    if let Some(nodes) = node.get("nodes").and_then(|v| v.as_array()) {
+        for n in nodes {
+            if let Some(res) = find_sway_focused_node(n) {
+                return Some(res);
+            }
+        }
+    }
+    if let Some(floating) = node.get("floating_nodes").and_then(|v| v.as_array()) {
+        for n in floating {
+            if let Some(res) = find_sway_focused_node(n) {
+                return Some(res);
+            }
+        }
+    }
+    None
+}
+
+fn get_active_window_fallback() -> Option<(String, String)> {
+    // 1. Hyprland
+    if std::env::var("HYPRLAND_INSTANCE_SIGNATURE").is_ok() {
+        if let Ok(out) = std::process::Command::new("hyprctl")
+            .args(["activewindow", "-j"])
+            .output()
+        {
+            if let Ok(val) = serde_json::from_slice::<serde_json::Value>(&out.stdout) {
+                let class = val
+                    .get("class")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let title = val
+                    .get("title")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                if !class.is_empty() || !title.is_empty() {
+                    return Some((class, title));
+                }
+            }
+        }
+    }
+
+    // 2. Sway
+    if std::env::var("SWAYSOCK").is_ok() {
+        if let Ok(out) = std::process::Command::new("swaymsg")
+            .args(["-t", "get_tree"])
+            .output()
+        {
+            if let Ok(val) = serde_json::from_slice::<serde_json::Value>(&out.stdout) {
+                if let Some(res) = find_sway_focused_node(&val) {
+                    return Some(res);
+                }
+            }
+        }
+    }
+
+    // 3. KDE Plasma
+    if let Ok(out) = std::process::Command::new("kdotool")
+        .arg("getactivewindow")
+        .output()
+    {
+        if out.status.success() {
+            let win_id = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            if !win_id.is_empty() {
+                if let Ok(title_out) = std::process::Command::new("kdotool")
+                    .args(["getwindowname", &win_id])
+                    .output()
+                {
+                    let title = String::from_utf8_lossy(&title_out.stdout)
+                        .trim()
+                        .to_string();
+                    return Some(("kde_app".to_string(), title));
+                }
+            }
+        }
+    }
+
+    // 4. X11 / XWayland via xdotool
+    if std::env::var("DISPLAY").is_ok() {
+        if let Ok(out) = std::process::Command::new("xdotool")
+            .args(["getactivewindow", "getwindowname"])
+            .output()
+        {
+            if out.status.success() {
+                let title = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                if !title.is_empty() {
+                    return Some(("x11_window".to_string(), title));
+                }
+            }
+        }
+    }
+
+    None
+}
+
 impl ContextDetector for LinuxContext {
     fn start(&self, app: AppHandle) {
-        thread::spawn(move || {
-            loop {
-                // Check if local prototype script exists in temp/tools or tools for development fallback
-                let script_path = if Path::new("temp/tools/context_detector.py").exists() {
-                    "temp/tools/context_detector.py"
-                } else if Path::new("tools/context_detector.py").exists() {
-                    "tools/context_detector.py"
-                } else {
-                    ""
-                };
-
-                if script_path.is_empty() {
-                    // Graceful fallback when running standalone without legacy python prototypes
-                    thread::sleep(Duration::from_secs(5));
-                    continue;
+        std::thread::spawn(move || {
+            let rt = match tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+            {
+                Ok(r) => r,
+                Err(e) => {
+                    eprintln!("[!] Failed to build context tokio runtime: {:?}", e);
+                    return;
                 }
+            };
 
-                let mut child = match Command::new("python3")
-                    .args([script_path, "--stream"])
-                    .stdout(Stdio::piped())
-                    .stderr(Stdio::null())
-                    .spawn()
-                {
-                    Ok(c) => c,
-                    Err(e) => {
-                        eprintln!("[!] Failed to spawn context detector: {:?}. Retrying in 5s...", e);
-                        thread::sleep(Duration::from_secs(5));
-                        continue;
-                    }
-                };
+            rt.block_on(async move {
+                let mut last_profile = String::new();
+                let mut last_title = String::new();
+                let my_pid = std::process::id();
 
-                if let Some(stdout) = child.stdout.take() {
-                    let reader = BufReader::new(stdout);
-                    for line in reader.lines() {
-                        if let Ok(line_str) = line {
-                            let trimmed = line_str.trim();
-                            if trimmed.is_empty() {
-                                continue;
+                loop {
+                    // Attempt connection to session D-Bus for GNOME Shell FocusedWindow extension
+                    let connection = match zbus::Connection::session().await {
+                        Ok(c) => Some(c),
+                        Err(e) => {
+                            eprintln!("[Linux Context] Session D-Bus connection: {:?}", e);
+                            None
+                        }
+                    };
+
+                    if let Some(ref conn) = connection {
+                        // Check if FocusedWindow extension is active
+                        let proxy = zbus::Proxy::new(
+                            conn,
+                            "org.gnome.Shell",
+                            "/org/gnome/shell/extensions/FocusedWindow",
+                            "org.gnome.shell.extensions.FocusedWindow",
+                        )
+                        .await;
+
+                        let mut has_extension = if let Ok(ref p) = proxy {
+                            p.call_method("Get", &()).await.is_ok()
+                        } else {
+                            false
+                        };
+
+                        // Auto-install extension if missing on GNOME Wayland
+                        if !has_extension {
+                            println!("[Linux Context] FocusedWindow extension not detected. Auto-enabling via GNOME Shell D-Bus...");
+                            if let Ok(shell_proxy) = zbus::Proxy::new(
+                                conn,
+                                "org.gnome.Shell",
+                                "/org/gnome/Shell",
+                                "org.gnome.Shell.Extensions",
+                            )
+                            .await
+                            {
+                                let _ = shell_proxy
+                                    .call_method(
+                                        "InstallRemoteExtension",
+                                        &("focused-window-dbus@flexagoon.com",),
+                                    )
+                                    .await;
+                                let _ = shell_proxy
+                                    .call_method(
+                                        "EnableExtension",
+                                        &("focused-window-dbus@flexagoon.com",),
+                                    )
+                                    .await;
                             }
 
-                            if let Ok(json) = serde_json::from_str::<serde_json::Value>(trimmed) {
-                                println!("[Linux Context] Active foreground: {:?}", json);
-                                let _ = app.emit("context:change", json);
+                            tokio::time::sleep(Duration::from_millis(800)).await;
+
+                            if let Ok(ref p) = proxy {
+                                has_extension = p.call_method("Get", &()).await.is_ok();
+                            }
+                        }
+
+                        if has_extension {
+                            println!("[Linux Context] Active listener registered on GNOME FocusedWindow D-Bus service.");
+                            let rule = match zbus::MatchRule::builder()
+                                .msg_type(zbus::message::Type::Signal)
+                                .sender("org.gnome.Shell")
+                            {
+                                Ok(b) => match b.interface("org.gnome.shell.extensions.FocusedWindow") {
+                                    Ok(b) => match b.member("FocusChanged") {
+                                        Ok(b) => Some(b.build()),
+                                        Err(_) => None,
+                                    },
+                                    Err(_) => None,
+                                },
+                                Err(_) => None,
+                            };
+
+                            let mut stream = if let Some(r) = rule {
+                                zbus::MessageStream::for_match_rule(r, conn, None)
+                                    .await
+                                    .ok()
+                            } else {
+                                None
+                            };
+
+                            let win_proxy = proxy.unwrap();
+
+                            // Primary monitoring loop for GNOME
+                            loop {
+                                let window_json_str: Option<String> = tokio::select! {
+                                    Some(Ok(msg)) = async {
+                                        if let Some(ref mut s) = stream {
+                                            s.next().await
+                                        } else {
+                                            tokio::time::sleep(Duration::from_secs(3600)).await;
+                                            None
+                                        }
+                                    } => {
+                                        msg.body().deserialize::<(String,)>().map(|(s,)| s)
+                                            .or_else(|_| msg.body().deserialize::<String>())
+                                            .ok()
+                                    }
+                                    _ = tokio::time::sleep(Duration::from_millis(350)) => {
+                                        if let Ok(msg) = win_proxy.call_method("Get", &()).await {
+                                            msg.body().deserialize::<(String,)>().map(|(s,)| s)
+                                                .or_else(|_| msg.body().deserialize::<String>())
+                                                .ok()
+                                        } else {
+                                            None
+                                        }
+                                    }
+                                };
+
+                                if let Some(raw_json) = window_json_str {
+                                    if let Ok(win) = serde_json::from_str::<FocusedWindowJson>(&raw_json) {
+                                        let pid = win.pid.unwrap_or(0);
+                                        let wm_class = win.wm_class.unwrap_or_default();
+                                        let title = win.title.unwrap_or_default();
+
+                                        // Ignore self / HUD window
+                                        if pid == my_pid
+                                            || wm_class == "dial-control"
+                                            || title.contains("Dial Control")
+                                        {
+                                            continue;
+                                        }
+
+                                        let profile_id = match_profile(&wm_class, &wm_class, &title);
+
+                                        if profile_id != last_profile || title != last_title {
+                                            last_profile = profile_id.to_string();
+                                            last_title = title.clone();
+
+                                            println!(
+                                                "[Linux Context] Focus -> App: '{}' | Title: '{}' | Profile: {}",
+                                                wm_class, title, profile_id
+                                            );
+
+                                            let event = ContextEvent {
+                                                profile_id: profile_id.to_string(),
+                                                app: wm_class.clone(),
+                                                title: title.clone(),
+                                                wm_class: wm_class.clone(),
+                                            };
+                                            let _ = app.emit("context:change", event);
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
-                }
 
-                let _ = child.wait();
-                thread::sleep(Duration::from_secs(2));
-            }
+                    // Fallback polling for other compositors (Hyprland, Sway, KDE, X11)
+                    if let Some((app_name, title)) = get_active_window_fallback() {
+                        let profile_id = match_profile(&app_name, &app_name, &title);
+                        if profile_id != last_profile || title != last_title {
+                            last_profile = profile_id.to_string();
+                            last_title = title.clone();
+
+                            println!(
+                                "[Linux Context Fallback] Focus -> App: '{}' | Title: '{}' | Profile: {}",
+                                app_name, title, profile_id
+                            );
+
+                            let event = ContextEvent {
+                                profile_id: profile_id.to_string(),
+                                app: app_name.clone(),
+                                title: title.clone(),
+                                wm_class: app_name.clone(),
+                            };
+                            let _ = app.emit("context:change", event);
+                        }
+                    }
+
+                    tokio::time::sleep(Duration::from_millis(500)).await;
+                }
+            });
         });
     }
 }
