@@ -336,8 +336,10 @@ export function App() {
     };
   }, [isTauri, view]);
 
-  // Keyboard navigation & mouse wheel (for Desktop browser preview or fallback)
+  // Keyboard navigation & mouse wheel (strictly for Donut HUD window)
   useEffect(() => {
+    if (view !== "hud") return;
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         if (isTauri) {

@@ -41,11 +41,13 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
   // Action Importer Drawer in Slice Inspector
   const [isImportActionOpen, setIsImportActionOpen] = useState(false);
 
-  // Shortcut state
+  // Shortcut state & recording
   const [shortcutText, setShortcutText] = useState(
     currentConfig.settings.activation_shortcut || "Super+Shift+D"
   );
   const [shortcutStatus, setShortcutStatus] = useState<string | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [pressedModifiers, setPressedModifiers] = useState<string[]>([]);
   const [showShortcutBanner, setShowShortcutBanner] = useState(() => {
     return !localStorage.getItem("dial_shortcut_banner_dismissed");
   });
@@ -53,6 +55,102 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
   const activeProfile = currentConfig.profiles[selectedProfileId] || currentConfig.profiles.default;
   const actions = activeProfile?.actions || [];
   const selectedAction = actions[selectedActionIndex] || actions[0];
+
+  const handleSaveShortcut = (sc: string) => {
+    setShortcutText(sc);
+    const updated: ProfilesConfig = {
+      ...currentConfig,
+      settings: {
+        ...currentConfig.settings,
+        activation_shortcut: sc,
+      },
+    };
+    setCurrentConfig(updated);
+    onSaveConfig(updated);
+    invoke<string>("register_activation_shortcut", { shortcutStr: sc })
+      .then(() => setShortcutStatus(sc ? "RECORDED & ACTIVE" : "DISABLED"))
+      .catch(() => setShortcutStatus("ERROR"));
+    setTimeout(() => setShortcutStatus(null), 3000);
+  };
+
+  // Keyboard shortcut recorder listener
+  React.useEffect(() => {
+    if (!isRecording) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (e.key === "Escape") {
+        setIsRecording(false);
+        setPressedModifiers([]);
+        return;
+      }
+
+      if (e.key === "Backspace" && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey) {
+        handleSaveShortcut("");
+        setIsRecording(false);
+        setPressedModifiers([]);
+        return;
+      }
+
+      const mods: string[] = [];
+      if (e.metaKey || e.key === "Meta") mods.push("Super");
+      if (e.ctrlKey || e.key === "Control") mods.push("Ctrl");
+      if (e.altKey || e.key === "Alt") mods.push("Alt");
+      if (e.shiftKey || e.key === "Shift") mods.push("Shift");
+
+      const isModifier = ["Control", "Alt", "Shift", "Meta"].includes(e.key);
+      if (!isModifier) {
+        let keyName = e.key.toUpperCase();
+        if (e.code.startsWith("Key")) {
+          keyName = e.code.replace("Key", "");
+        } else if (e.code.startsWith("Digit")) {
+          keyName = e.code.replace("Digit", "");
+        } else if (e.code === "Space") {
+          keyName = "Space";
+        } else if (e.code === "Backslash") {
+          keyName = "Backslash";
+        } else if (e.code === "Slash") {
+          keyName = "Slash";
+        } else if (e.code === "Backquote") {
+          keyName = "Grave";
+        } else if (e.code === "Tab") {
+          keyName = "Tab";
+        }
+
+        const comboParts = [...mods];
+        if (!comboParts.includes(keyName)) {
+          comboParts.push(keyName);
+        }
+
+        const combo = comboParts.join("+");
+        handleSaveShortcut(combo);
+        setIsRecording(false);
+        setPressedModifiers([]);
+      } else {
+        setPressedModifiers(mods);
+      }
+    };
+
+    const onKeyUp = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const mods: string[] = [];
+      if (e.metaKey) mods.push("Super");
+      if (e.ctrlKey) mods.push("Ctrl");
+      if (e.altKey) mods.push("Alt");
+      if (e.shiftKey) mods.push("Shift");
+      setPressedModifiers(mods);
+    };
+
+    window.addEventListener("keydown", onKeyDown, true);
+    window.addEventListener("keyup", onKeyUp, true);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown, true);
+      window.removeEventListener("keyup", onKeyUp, true);
+    };
+  }, [isRecording, currentConfig]);
 
   const handleUpdateAction = (updates: Partial<WheelAction>) => {
     const updatedActions = [...actions];
@@ -210,22 +308,6 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
     setSelectedActionIndex(0);
   };
 
-  const handleApplyShortcut = (sc: string) => {
-    setShortcutText(sc);
-    const updated = {
-      ...currentConfig,
-      settings: {
-        ...currentConfig.settings,
-        activation_shortcut: sc,
-      },
-    };
-    setCurrentConfig(updated);
-    invoke<string>("register_activation_shortcut", { shortcutStr: sc })
-      .then(() => setShortcutStatus("ACTIVATED"))
-      .catch(() => setShortcutStatus("ERROR"));
-    setTimeout(() => setShortcutStatus(null), 2500);
-  };
-
   const handleSave = () => {
     onSaveConfig(currentConfig);
     if (shortcutText) {
@@ -269,10 +351,11 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
         {/* Tab Buttons */}
         <div className="flex flex-col gap-1.5 flex-1">
           <button
+            type="button"
             onClick={() => setActiveTab("profiles")}
-            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-xs transition-all ${
+            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-xs transition-all cursor-pointer select-none ${
               activeTab === "profiles"
-                ? "bg-white/[0.1] text-white border border-white/10 shadow-sm"
+                ? "bg-white/[0.1] text-white border border-white/10 shadow-sm font-bold"
                 : "text-neutral-400 hover:text-white hover:bg-white/[0.04]"
             }`}
           >
@@ -281,10 +364,11 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveTab("appearance")}
-            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-xs transition-all ${
+            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-xs transition-all cursor-pointer select-none ${
               activeTab === "appearance"
-                ? "bg-white/[0.1] text-white border border-white/10 shadow-sm"
+                ? "bg-white/[0.1] text-white border border-white/10 shadow-sm font-bold"
                 : "text-neutral-400 hover:text-white hover:bg-white/[0.04]"
             }`}
           >
@@ -293,10 +377,11 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveTab("hardware")}
-            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-xs transition-all ${
+            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-xs transition-all cursor-pointer select-none ${
               activeTab === "hardware"
-                ? "bg-white/[0.1] text-white border border-white/10 shadow-sm"
+                ? "bg-white/[0.1] text-white border border-white/10 shadow-sm font-bold"
                 : "text-neutral-400 hover:text-white hover:bg-white/[0.04]"
             }`}
           >
@@ -349,38 +434,38 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
           </div>
         </div>
 
-        {/* First-time Non-Hardware User Notice Banner */}
-        {showShortcutBanner && (
-          <div className="mx-6 mt-4 p-3.5 rounded-xl bg-white/[0.04] border border-white/10 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-white text-black">
-                <Keyboard className="w-4 h-4" />
-              </div>
-              <div>
-                <div className="font-ndot text-xs text-white tracking-widest">
-                  GLOBAL ACTIVATION SHORTCUT // {shortcutText}
-                </div>
-                <div className="font-ndot text-[10px] text-neutral-400 tracking-wider mt-0.5">
-                  No CMF Buds dial case? Open the radial HUD using this shortcut anywhere. The dial is 100% keyboard navigable (Arrow keys to cycle, Enter/Space to select, Esc to close).
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                onClick={() => {
-                  setShowShortcutBanner(false);
-                  localStorage.setItem("dial_shortcut_banner_dismissed", "true");
-                }}
-                className="px-3 py-1.5 rounded-lg bg-white/[0.08] hover:bg-white/15 text-white font-ndot text-[10px] tracking-wider uppercase transition-all"
-              >
-                GOT IT
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Tab 1: Profiles & Slices Editor */}
-        {activeTab === "profiles" && (
+        <div className={`flex-1 flex flex-col overflow-hidden ${activeTab === "profiles" ? "" : "hidden"}`}>
+          {showShortcutBanner && (
+            <div className="mx-6 mt-4 p-3.5 rounded-xl bg-white/[0.04] border border-white/10 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-white text-black">
+                  <Keyboard className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="font-ndot text-xs text-white tracking-widest">
+                    GLOBAL ACTIVATION SHORTCUT // {shortcutText || "NONE"}
+                  </div>
+                  <div className="font-ndot text-[10px] text-neutral-400 tracking-wider mt-0.5">
+                    No CMF Buds dial case? Open the radial HUD using this shortcut anywhere. The dial is 100% keyboard navigable (Arrow keys to cycle, Enter/Space to select, Esc to close).
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowShortcutBanner(false);
+                    localStorage.setItem("dial_shortcut_banner_dismissed", "true");
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-white/[0.08] hover:bg-white/15 text-white font-ndot text-[10px] tracking-wider uppercase transition-all cursor-pointer"
+                >
+                  GOT IT
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="flex-1 flex overflow-x-auto overflow-y-hidden">
             {/* Column 1: Profiles List */}
             <div className="w-64 shrink-0 border-r border-white/[0.08] p-4 flex flex-col gap-2 overflow-y-auto bg-[#0C0D11]/40">
@@ -673,158 +758,231 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
               </div>
             </div>
           </div>
-        )}
+        </div>
 
         {/* Tab 2: Aesthetics */}
-        {activeTab === "appearance" && (
-          <div className="p-8 max-w-lg flex flex-col gap-6">
+        <div className={`flex-1 overflow-y-auto p-8 max-w-xl flex flex-col gap-6 ${activeTab === "appearance" ? "" : "hidden"}`}>
+          <div>
+            <div className="font-ndot text-xs uppercase text-neutral-400 tracking-widest mb-3">
+              ACCENT ILLUMINATION
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { id: "nothing_red", name: "Nothing Red", color: "#E2201F" },
+                { id: "cmf_orange", name: "CMF Orange", color: "#FF5500" },
+                { id: "stealth", name: "Pure Titanium", color: "#FFFFFF" },
+              ].map((th) => (
+                <button
+                  key={th.id}
+                  type="button"
+                  onClick={() =>
+                    setCurrentConfig({
+                      ...currentConfig,
+                      settings: {
+                        ...currentConfig.settings,
+                        theme: th.id as any,
+                      },
+                    })
+                  }
+                  className={`flex items-center gap-2.5 p-3 rounded-xl border text-xs font-ndot uppercase tracking-wider transition-all cursor-pointer ${
+                    currentConfig.settings.theme === th.id
+                      ? "bg-white/10 border-white/30 text-white font-bold"
+                      : "bg-[#111317] border-white/5 text-neutral-400 hover:text-white"
+                  }`}
+                >
+                  <div
+                    className="w-3.5 h-3.5 rounded-full"
+                    style={{ backgroundColor: th.color }}
+                  />
+                  <span>{th.name.toUpperCase()}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <div className="flex justify-between font-ndot text-xs text-neutral-400 mb-2 uppercase tracking-wider">
+              <span>Outer Bezel Radius</span>
+              <span className="font-ndot text-white">{currentConfig.settings.dial_radius} PX</span>
+            </div>
+            <input
+              type="range"
+              min="150"
+              max="240"
+              value={currentConfig.settings.dial_radius}
+              onChange={(e) =>
+                setCurrentConfig({
+                  ...currentConfig,
+                  settings: {
+                    ...currentConfig.settings,
+                    dial_radius: parseInt(e.target.value),
+                  },
+                })
+              }
+              className="w-full accent-white cursor-pointer"
+            />
+          </div>
+
+          <div>
+            <div className="flex justify-between font-ndot text-xs text-neutral-400 mb-2 uppercase tracking-wider">
+              <span>Donut Ring Width</span>
+              <span className="font-ndot text-white">{currentConfig.settings.donut_thickness} PX</span>
+            </div>
+            <input
+              type="range"
+              min="45"
+              max="85"
+              value={currentConfig.settings.donut_thickness}
+              onChange={(e) =>
+                setCurrentConfig({
+                  ...currentConfig,
+                  settings: {
+                    ...currentConfig.settings,
+                    donut_thickness: parseInt(e.target.value),
+                  },
+                })
+              }
+              className="w-full accent-white cursor-pointer"
+            />
+          </div>
+        </div>
+
+        {/* Tab 3: Hardware & Activation Shortcut */}
+        <div className={`flex-1 overflow-y-auto p-8 max-w-xl flex flex-col gap-6 ${activeTab === "hardware" ? "" : "hidden"}`}>
+          {/* Global Shortcut Section */}
+          <div className="p-5 rounded-xl bg-[#111317] border border-white/10 flex flex-col gap-4">
             <div>
-              <div className="font-ndot text-xs uppercase text-neutral-400 tracking-widest mb-3">
-                ACCENT ILLUMINATION
+              <div className="font-ndot text-xs text-white uppercase tracking-widest flex items-center justify-between">
+                <span>GLOBAL ACTIVATION SHORTCUT</span>
+                {shortcutStatus && (
+                  <span className="text-[10px] text-green-400 font-ndot tracking-wider">
+                    {shortcutStatus}
+                  </span>
+                )}
               </div>
-              <div className="grid grid-cols-3 gap-3">
-                {[
-                  { id: "nothing_red", name: "Nothing Red", color: "#E2201F" },
-                  { id: "cmf_orange", name: "CMF Orange", color: "#FF5500" },
-                  { id: "stealth", name: "Pure Titanium", color: "#FFFFFF" },
-                ].map((th) => (
+              <div className="text-[10px] font-ndot text-neutral-400 mt-1 uppercase tracking-wider">
+                Press this shortcut anywhere in your OS to trigger the radial HUD. Perfect for users without hardware dial earbuds.
+              </div>
+            </div>
+
+            {/* Interactive Recording Area */}
+            {isRecording ? (
+              <div className="p-4 rounded-xl bg-white/[0.06] border-2 border-red-500/60 flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping" />
+                    <span className="font-ndot text-xs text-white tracking-widest uppercase font-bold">
+                      RECORDING... PRESS KEYS NOW
+                    </span>
+                  </div>
                   <button
-                    key={th.id}
-                    onClick={() =>
-                      setCurrentConfig({
-                        ...currentConfig,
-                        settings: {
-                          ...currentConfig.settings,
-                          theme: th.id as any,
-                        },
-                      })
-                    }
-                    className={`flex items-center gap-2.5 p-3 rounded-xl border text-xs font-ndot uppercase tracking-wider transition-all ${
-                      currentConfig.settings.theme === th.id
-                        ? "bg-white/10 border-white/30 text-white"
-                        : "bg-[#111317] border-white/5 text-neutral-400 hover:text-white"
+                    type="button"
+                    onClick={() => {
+                      setIsRecording(false);
+                      setPressedModifiers([]);
+                    }}
+                    className="text-neutral-400 hover:text-white text-[10px] font-ndot uppercase tracking-wider cursor-pointer"
+                  >
+                    CANCEL (ESC)
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2 min-h-[38px] p-2 rounded-lg bg-[#0C0D11] border border-white/10 flex-wrap">
+                  {pressedModifiers.length > 0 ? (
+                    pressedModifiers.map((mod, i) => (
+                      <React.Fragment key={i}>
+                        {i > 0 && <span className="text-neutral-400 font-ndot text-xs">+</span>}
+                        <div className="px-3 py-1 rounded bg-red-500/20 border border-red-500/60 text-red-200 font-ndot text-xs tracking-widest">
+                          {mod.toUpperCase()}
+                        </div>
+                      </React.Fragment>
+                    ))
+                  ) : (
+                    <span className="text-neutral-500 font-ndot text-xs tracking-wider">
+                      Press your shortcut keys (e.g. Super + D, Alt + Space)...
+                    </span>
+                  )}
+                </div>
+                <div className="text-[10px] font-ndot text-neutral-400 tracking-wider">
+                  Press ESC to cancel, or Backspace to disable shortcut.
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3 p-4 rounded-xl bg-[#0C0D11] border border-white/10">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {shortcutText ? (
+                      shortcutText.split("+").map((keyPart, i) => (
+                        <React.Fragment key={i}>
+                          {i > 0 && <span className="text-neutral-500 font-ndot text-xs">+</span>}
+                          <div className="px-3 py-1.5 rounded-lg bg-[#181B22] border border-white/20 text-white font-ndot text-xs tracking-widest shadow-inner">
+                            {keyPart.toUpperCase()}
+                          </div>
+                        </React.Fragment>
+                      ))
+                    ) : (
+                      <span className="text-neutral-500 font-ndot text-xs tracking-wider">
+                        NO SHORTCUT CONFIGURED
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsRecording(true);
+                        setPressedModifiers([]);
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white hover:bg-neutral-200 text-black font-ndot text-xs tracking-wider uppercase transition-all font-bold cursor-pointer"
+                    >
+                      <Keyboard className="w-3.5 h-3.5 text-black" />
+                      <span>RECORD SHORTCUT</span>
+                    </button>
+                    {shortcutText && (
+                      <button
+                        type="button"
+                        onClick={() => handleSaveShortcut("")}
+                        className="px-3 py-2 rounded-lg bg-white/[0.06] hover:bg-white/15 text-neutral-400 hover:text-white font-ndot text-xs tracking-wider uppercase transition-all cursor-pointer"
+                        title="Remove shortcut"
+                      >
+                        CLEAR
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Quick Presets */}
+            <div>
+              <div className="font-ndot text-[10px] text-neutral-500 uppercase tracking-widest mb-2">
+                QUICK PRESETS:
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { label: "SUPER + SHIFT + D", val: "Super+Shift+D" },
+                  { label: "SUPER + BACKSLASH (\\)", val: "Super+Backslash" },
+                  { label: "ALT + SPACE", val: "Alt+Space" },
+                  { label: "SUPER + K", val: "Super+K" },
+                  { label: "CTRL + SHIFT + D", val: "Ctrl+Shift+D" },
+                ].map((p) => (
+                  <button
+                    key={p.val}
+                    type="button"
+                    onClick={() => handleSaveShortcut(p.val)}
+                    className={`px-3 py-1.5 rounded-md border text-[10px] font-ndot tracking-wider uppercase transition-all cursor-pointer ${
+                      shortcutText === p.val
+                        ? "bg-white/[0.15] border-white/40 text-white font-bold"
+                        : "bg-white/[0.03] border-white/5 text-neutral-400 hover:text-white hover:bg-white/[0.08]"
                     }`}
                   >
-                    <div
-                      className="w-3.5 h-3.5 rounded-full"
-                      style={{ backgroundColor: th.color }}
-                    />
-                    <span>{th.name.toUpperCase()}</span>
+                    {p.label}
                   </button>
                 ))}
               </div>
             </div>
-
-            <div>
-              <div className="flex justify-between font-ndot text-xs text-neutral-400 mb-2 uppercase tracking-wider">
-                <span>Outer Bezel Radius</span>
-                <span className="font-ndot text-white">{currentConfig.settings.dial_radius} PX</span>
-              </div>
-              <input
-                type="range"
-                min="150"
-                max="240"
-                value={currentConfig.settings.dial_radius}
-                onChange={(e) =>
-                  setCurrentConfig({
-                    ...currentConfig,
-                    settings: {
-                      ...currentConfig.settings,
-                      dial_radius: parseInt(e.target.value),
-                    },
-                  })
-                }
-                className="w-full accent-white"
-              />
-            </div>
-
-            <div>
-              <div className="flex justify-between font-ndot text-xs text-neutral-400 mb-2 uppercase tracking-wider">
-                <span>Donut Ring Width</span>
-                <span className="font-ndot text-white">{currentConfig.settings.donut_thickness} PX</span>
-              </div>
-              <input
-                type="range"
-                min="45"
-                max="85"
-                value={currentConfig.settings.donut_thickness}
-                onChange={(e) =>
-                  setCurrentConfig({
-                    ...currentConfig,
-                    settings: {
-                      ...currentConfig.settings,
-                      donut_thickness: parseInt(e.target.value),
-                    },
-                  })
-                }
-                className="w-full accent-white"
-              />
-            </div>
           </div>
-        )}
-
-        {/* Tab 3: Hardware & Activation Shortcut */}
-        {activeTab === "hardware" && (
-          <div className="p-8 max-w-xl flex flex-col gap-6 overflow-y-auto">
-            {/* Global Shortcut Section */}
-            <div className="p-5 rounded-xl bg-[#111317] border border-white/10 flex flex-col gap-4">
-              <div>
-                <div className="font-ndot text-xs text-white uppercase tracking-widest flex items-center justify-between">
-                  <span>GLOBAL ACTIVATION SHORTCUT</span>
-                  {shortcutStatus && (
-                    <span className="text-[10px] text-green-400 font-ndot tracking-wider">
-                      {shortcutStatus}
-                    </span>
-                  )}
-                </div>
-                <div className="text-[10px] font-ndot text-neutral-400 mt-1 uppercase tracking-wider">
-                  Press this shortcut anywhere in your OS to trigger the radial HUD. Perfect for users without hardware dial earbuds.
-                </div>
-              </div>
-
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={shortcutText}
-                  onChange={(e) => setShortcutText(e.target.value)}
-                  placeholder="Super+Shift+D"
-                  className="flex-1 px-3.5 py-2.5 rounded-lg bg-[#0C0D11] border border-white/10 text-xs text-white font-ndot tracking-widest focus:outline-none focus:border-white"
-                />
-                <button
-                  onClick={() => handleApplyShortcut(shortcutText)}
-                  className="px-4 py-2.5 rounded-lg bg-white text-black font-ndot text-xs tracking-wider uppercase hover:bg-neutral-200 transition-all font-bold"
-                >
-                  TEST & BIND
-                </button>
-              </div>
-
-              {/* Quick Presets */}
-              <div>
-                <div className="font-ndot text-[10px] text-neutral-500 uppercase tracking-widest mb-2">
-                  RECOMMENDED PRESETS (NON-COLLIDING):
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    { label: "SUPER + SHIFT + D", val: "Super+Shift+D" },
-                    { label: "SUPER + GRAVE (~)", val: "Super+Grave" },
-                    { label: "SUPER + BACKSLASH (\\)", val: "Super+Backslash" },
-                    { label: "ALT + SPACE", val: "Alt+Space" },
-                  ].map((p) => (
-                    <button
-                      key={p.val}
-                      onClick={() => handleApplyShortcut(p.val)}
-                      className={`px-3 py-1.5 rounded-md border text-[10px] font-ndot tracking-wider uppercase transition-all ${
-                        shortcutText === p.val
-                          ? "bg-white/[0.12] border-white/30 text-white"
-                          : "bg-white/[0.03] border-white/5 text-neutral-400 hover:text-white"
-                      }`}
-                    >
-                      {p.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
 
             <div className="flex items-center justify-between p-4 rounded-xl bg-[#111317] border border-white/10">
               <div>
@@ -876,8 +1034,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
               />
             </div>
           </div>
-        )}
-      </div>
+        </div>
 
       {/* ── Modal: Create New Custom Dial ──────────────────────────────────── */}
       {isNewDialOpen && (

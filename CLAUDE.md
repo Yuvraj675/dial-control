@@ -133,10 +133,13 @@ dial-control/
   - Keep `~/.local/share/applications/dial-control.desktop` and icons under `~/.local/share/icons/hicolor/` synchronized with `assets/dial-control.png`.
   - In `src-tauri/icons/icon.png`, ensure PNGs retain a 32-bit RGBA channel (`RGBA`) to prevent image decoding panics in Tauri's icon compiler.
 
-### ⌨️ Global Shortcuts & Non-Hardware Access
-- **Conflict-Free Defaults**:
-  - For keyboard-driven operation without CMF Buds hardware, use `Super+Shift+D` by default via `tauri-plugin-global-shortcut`.
-  - Dynamically rebind shortcuts via the `register_activation_shortcut` Tauri command when users change hotkeys in Settings.
+### ⌨️ Global Shortcuts & Wayland IPC
+- **Wayland Security & IPC Socket**:
+  - On Linux Wayland (GNOME/KDE/Sway), security policies prevent client windows from intercepting unfocused global shortcuts.
+  - Dial Control solves this with high-speed local IPC: `main.rs` intercepts `--toggle` and writes to `/tmp/dial-control.sock` in < 2ms, triggering the HUD immediately.
+  - GNOME compositor keybindings (`org.gnome.settings-daemon.plugins.media-keys.custom-keybinding`) are synchronized automatically whenever shortcuts are recorded in Settings.
+- **Interactive Shortcut Recording**:
+  - The UI uses hardware `keydown`/`keyup` event capture rather than manual text input, detecting modifiers (`Super`, `Ctrl`, `Alt`, `Shift`) and normal keys. Presets like `Super+Shift+D` and `Super+Backslash` are provided out-of-the-box.
 
 ### Standard Step-by-Step Cycle
 1. **Research First**: Search web/docs for established cross-platform patterns before writing platform code.
