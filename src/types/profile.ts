@@ -1,4 +1,4 @@
-export type ActionType = "mode" | "hotkey" | "key" | "command" | "mute" | "home" | "profile";
+export type ActionType = "mode" | "hotkey" | "key" | "command" | "mute" | "home" | "profile" | "close";
 
 export interface WheelAction {
   id: string;

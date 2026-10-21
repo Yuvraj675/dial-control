@@ -108,6 +108,7 @@ fn show_settings(app: AppHandle) {
 
 #[tauri::command]
 fn execute_action(
+    app: AppHandle,
     state: tauri::State<AppState>,
     action: serde_json::Value,
 ) {
@@ -117,23 +118,33 @@ fn execute_action(
 
     println!("[Action] Executing action: {} (type: {}, action: {})", action_id, action_type, action_key);
 
+    // Close / Dismiss HUD
+    if action_id == "close_hud" || action_type == "close" {
+        hide_hud(app, state);
+        return;
+    }
+
     if action_id == "mute_toggle" || action_type == "mute" || action_id == "video_mute" {
         state.platform.audio().toggle_mute();
+        hide_hud(app, state);
         return;
     }
 
     if action_id == "media_playpause" || action_key == "playpause" {
         state.platform.media().play_pause();
+        hide_hud(app, state);
         return;
     }
 
     if action_id == "media_next" || action_key == "next" {
         state.platform.media().next_track();
+        hide_hud(app, state);
         return;
     }
 
     if action_id == "media_prev" || action_key == "prev" {
         state.platform.media().prev_track();
+        hide_hud(app, state);
         return;
     }
 
@@ -144,12 +155,22 @@ fn execute_action(
                     .iter()
                     .filter_map(|v| v.as_str().map(|s| s.to_string()))
                     .collect();
-                println!("[Action] Emitting hotkeys: {:?}", keys);
-                state.platform.input().emit_hotkey(&keys);
+
+                // 1. Hide HUD immediately so the compositor can return focus to the target window
+                hide_hud(app, state.clone());
+
+                // 2. Micro-sleep in background thread to guarantee target window focus settles before typing
+                let platform = state.platform.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(120));
+                    println!("[Action] Emitting hotkeys to foreground window: {:?}", keys);
+                    platform.input().emit_hotkey(&keys);
+                });
             }
         }
         "command" => {
             if let Some(cmd) = action.get("cmd").and_then(|v| v.as_str()) {
+                hide_hud(app, state);
                 println!("[Action] Spawning command: {}", cmd);
                 let _ = std::process::Command::new("sh")
                     .arg("-c")

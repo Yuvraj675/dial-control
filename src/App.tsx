@@ -22,7 +22,7 @@ export function App() {
         cfg = DEFAULT_CONFIG;
       }
     }
-    // Ensure every profile has the HOME dial option
+    // Ensure every profile has the HOME dial and CLOSE dial options
     for (const prof of Object.values(cfg.profiles)) {
       if (!prof.actions.some((a) => a.id === "home_dial" || a.type === "home")) {
         prof.actions.push({
@@ -31,6 +31,15 @@ export function App() {
           icon: "home",
           type: "home",
           desc: "Choose Dial Menu",
+        });
+      }
+      if (!prof.actions.some((a) => a.id === "close_hud" || a.type === "close")) {
+        prof.actions.push({
+          id: "close_hud",
+          label: "CLOSE",
+          icon: "close",
+          type: "close",
+          desc: "Dismiss HUD",
         });
       }
     }
@@ -56,19 +65,27 @@ export function App() {
   const activeProfile: DialProfile = (() => {
     if (activeProfileId === "home") {
       const profileEntries = Object.entries(config.profiles).filter(([id]) => id !== "home");
+      const actions: WheelAction[] = profileEntries.map(([id, prof]) => ({
+        id: `profile_${id}`,
+        label: prof.name.toUpperCase(),
+        icon: prof.icon || "sliders",
+        type: "profile" as const,
+        action: id,
+        desc: `Switch to ${prof.name} dial`,
+      }));
+      actions.push({
+        id: "close_hud",
+        label: "CLOSE",
+        icon: "close",
+        type: "close" as const,
+        desc: "Dismiss HUD",
+      });
       return {
         id: "home",
         name: "Home",
         icon: "home",
         match_patterns: [],
-        actions: profileEntries.map(([id, prof]) => ({
-          id: `profile_${id}`,
-          label: prof.name.toUpperCase(),
-          icon: prof.icon || "sliders",
-          type: "profile" as const,
-          action: id,
-          desc: `Switch to ${prof.name} dial`,
-        })),
+        actions,
       };
     }
     return config.profiles[activeProfileId] || config.profiles.default;
@@ -123,7 +140,17 @@ export function App() {
       return;
     }
 
-    // 3. Continuous Mode switches (Volume / Brightness)
+    // 3. Close / Dismiss HUD
+    if (action.type === "close" || action.id === "close_hud") {
+      setCurrentMode("menu");
+      setIsHudOpen(false);
+      if (isTauri) {
+        invoke("hide_hud").catch(console.error);
+      }
+      return;
+    }
+
+    // 4. Continuous Mode switches (Volume / Brightness)
     if (action.type === "mode") {
       const mode = action.id === "volume_mode" ? "volume" : "brightness";
       setCurrentMode(mode);
@@ -155,7 +182,6 @@ export function App() {
     } else {
       if (isTauri) {
         invoke("execute_action", { action }).catch(console.error);
-        invoke("hide_hud").catch(console.error);
       }
       setIsHudOpen(false);
     }

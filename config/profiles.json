@@ -67,6 +67,13 @@
           "icon": "🏠",
           "type": "home",
           "desc": "Choose Dial Menu"
+        },
+        {
+          "id": "close_hud",
+          "label": "Close",
+          "icon": "❌",
+          "type": "close",
+          "desc": "Dismiss HUD"
         }
       ]
     },
@@ -129,6 +136,13 @@
           "icon": "🏠",
           "type": "home",
           "desc": "Choose Dial Menu"
+        },
+        {
+          "id": "close_hud",
+          "label": "Close",
+          "icon": "❌",
+          "type": "close",
+          "desc": "Dismiss HUD"
         }
       ]
     },
@@ -190,6 +204,13 @@
           "icon": "🏠",
           "type": "home",
           "desc": "Choose Dial Menu"
+        },
+        {
+          "id": "close_hud",
+          "label": "Close",
+          "icon": "❌",
+          "type": "close",
+          "desc": "Dismiss HUD"
         }
       ]
     },
@@ -252,6 +273,13 @@
           "icon": "🏠",
           "type": "home",
           "desc": "Choose Dial Menu"
+        },
+        {
+          "id": "close_hud",
+          "label": "Close",
+          "icon": "❌",
+          "type": "close",
+          "desc": "Dismiss HUD"
         }
       ]
     }

@@ -24,6 +24,7 @@ export const DEFAULT_CONFIG: ProfilesConfig = {
         { id: "media_prev", label: "PREV TRACK", icon: "prev", type: "key", action: "prev" },
         { id: "mute_toggle", label: "MUTE", icon: "mute", type: "mute" },
         { id: "home_dial", label: "HOME", icon: "home", type: "home", desc: "Choose Dial Menu" },
+        { id: "close_hud", label: "CLOSE", icon: "close", type: "close", desc: "Dismiss HUD" },
       ],
     },
     media_video: {
@@ -39,6 +40,7 @@ export const DEFAULT_CONFIG: ProfilesConfig = {
         { id: "video_mute", label: "MUTE", icon: "mute", type: "hotkey", keys: ["KEY_M"] },
         { id: "volume_mode", label: "VOLUME", icon: "volume", type: "mode" },
         { id: "home_dial", label: "HOME", icon: "home", type: "home", desc: "Choose Dial Menu" },
+        { id: "close_hud", label: "CLOSE", icon: "close", type: "close", desc: "Dismiss HUD" },
       ],
     },
     code_editor: {
@@ -54,6 +56,7 @@ export const DEFAULT_CONFIG: ProfilesConfig = {
         { id: "code_terminal", label: "TERMINAL", icon: "terminal", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_GRAVE"] },
         { id: "code_git", label: "GIT DIFF", icon: "git", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_G"] },
         { id: "home_dial", label: "HOME", icon: "home", type: "home", desc: "Choose Dial Menu" },
+        { id: "close_hud", label: "CLOSE", icon: "close", type: "close", desc: "Dismiss HUD" },
       ],
     },
     file_manager: {
@@ -69,6 +72,7 @@ export const DEFAULT_CONFIG: ProfilesConfig = {
         { id: "file_rename", label: "RENAME", icon: "rename", type: "hotkey", keys: ["KEY_F2"] },
         { id: "file_terminal", label: "TERMINAL", icon: "terminal", type: "command", cmd: "gnome-terminal || xterm" },
         { id: "home_dial", label: "HOME", icon: "home", type: "home", desc: "Choose Dial Menu" },
+        { id: "close_hud", label: "CLOSE", icon: "close", type: "close", desc: "Dismiss HUD" },
       ],
     },
     browser_nav: {
@@ -84,6 +88,7 @@ export const DEFAULT_CONFIG: ProfilesConfig = {
         { id: "nav_close_tab", label: "CLOSE TAB", icon: "close_tab", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_W"] },
         { id: "nav_reopen_tab", label: "RESTORE TAB", icon: "reopen_tab", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_T"] },
         { id: "home_dial", label: "HOME", icon: "home", type: "home", desc: "Choose Dial Menu" },
+        { id: "close_hud", label: "CLOSE", icon: "close", type: "close", desc: "Dismiss HUD" },
       ],
     },
     creative_design: {
@@ -99,6 +104,7 @@ export const DEFAULT_CONFIG: ProfilesConfig = {
         { id: "draw_hand", label: "PAN", icon: "pan", type: "hotkey", keys: ["KEY_H"] },
         { id: "draw_select", label: "SELECT", icon: "select", type: "hotkey", keys: ["KEY_V"] },
         { id: "home_dial", label: "HOME", icon: "home", type: "home", desc: "Choose Dial Menu" },
+        { id: "close_hud", label: "CLOSE", icon: "close", type: "close", desc: "Dismiss HUD" },
       ],
     },
   },
