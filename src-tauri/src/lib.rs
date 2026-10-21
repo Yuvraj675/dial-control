@@ -38,13 +38,17 @@ fn get_backlight_info() -> Option<BacklightInfo> {
         .output()
         .ok()?;
 
+    if !out.status.success() {
+        return None;
+    }
+
     let text = String::from_utf8_lossy(&out.stdout);
     let parts: Vec<&str> = text.split_whitespace().collect();
     let mut serial: u32 = 4;
     let mut connector = "eDP-1".to_string();
-    let mut min: i32 = 10;
-    let mut max: i32 = 210;
-    let mut value: i32 = 100;
+    let mut min: Option<i32> = None;
+    let mut max: Option<i32> = None;
+    let mut value: Option<i32> = None;
 
     if let Some(s_idx) = parts.iter().position(|&p| p == "(uaa{sv})") {
         if let Some(s) = parts.get(s_idx + 1).and_then(|p| p.parse::<u32>().ok()) {
@@ -56,26 +60,30 @@ fn get_backlight_info() -> Option<BacklightInfo> {
             connector = parts[i + 2].trim_matches('"').to_string();
         } else if p == "\"min\"" && i + 2 < parts.len() {
             if let Ok(v) = parts[i + 2].parse::<i32>() {
-                min = v;
+                min = Some(v);
             }
         } else if p == "\"max\"" && i + 2 < parts.len() {
             if let Ok(v) = parts[i + 2].parse::<i32>() {
-                max = v;
+                max = Some(v);
             }
         } else if p == "\"value\"" && i + 2 < parts.len() {
             if let Ok(v) = parts[i + 2].parse::<i32>() {
-                value = v;
+                value = Some(v);
             }
         }
     }
 
-    Some(BacklightInfo {
-        serial,
-        connector,
-        min,
-        max,
-        value,
-    })
+    if let (Some(min), Some(max), Some(value)) = (min, max, value) {
+        Some(BacklightInfo {
+            serial,
+            connector,
+            min,
+            max,
+            value,
+        })
+    } else {
+        None
+    }
 }
 
 fn get_sysfs_backlight() -> Option<i32> {
@@ -96,13 +104,15 @@ fn get_sysfs_backlight() -> Option<i32> {
 
 #[tauri::command]
 fn get_system_brightness() -> i32 {
-    if let Some(pct) = get_sysfs_backlight() {
-        return pct;
-    }
+    // 1. Try GNOME Mutter DisplayConfig first (True native system slider & OSD level)
     if let Some(b) = get_backlight_info() {
         let range = (b.max - b.min).max(1);
-        let pct = ((b.value - b.min) * 100) / range;
+        let pct = (((b.value - b.min) as f64 / range as f64) * 100.0).round() as i32;
         return pct.clamp(0, 100);
+    }
+    // 2. Fallback to sysfs
+    if let Some(pct) = get_sysfs_backlight() {
+        return pct;
     }
     50
 }
@@ -116,7 +126,10 @@ fn step_brightness(state: tauri::State<AppState>, direction: i32) -> i32 {
         state.vk.emit_brightness_down();
         println!("[Brightness] Emitted KEY_BRIGHTNESSDOWN (Fn+F5)");
     }
-    get_system_brightness()
+    std::thread::sleep(std::time::Duration::from_millis(40));
+    let pct = get_system_brightness();
+    println!("[Brightness] Current GNOME system brightness: {}%", pct);
+    pct
 }
 
 #[tauri::command]
@@ -334,9 +347,8 @@ fn adjust_gauge(
     delta: i32,
 ) {
     if mode == "brightness" {
-        let curr = get_system_brightness();
-        let next_val = (curr + delta).clamp(0, 100);
-        set_system_brightness(state, next_val);
+        let dir = if delta > 0 { 1 } else { -1 };
+        step_brightness(state, dir);
     } else if mode == "volume" {
         let curr = get_system_volume();
         let next_val = (curr + delta).clamp(0, 100);
