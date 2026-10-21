@@ -348,9 +348,6 @@ export function App() {
         }
         setCurrentMode("menu");
         setIsHudOpen(false);
-      } else if (e.key === " " && view === "hud") {
-        e.preventDefault();
-        setIsHudOpen((prev) => !prev);
       } else if (e.key === "ArrowRight" || e.key === "ArrowDown") {
         e.preventDefault();
         if (currentMode === "menu") {
@@ -397,7 +394,7 @@ export function App() {
             return next;
           });
         }
-      } else if (e.key === "Enter") {
+      } else if (e.key === "Enter" || e.key === " " || e.code === "Space") {
         e.preventDefault();
         const { currentMode, selectedIndex, activeProfile } = stateRef.current;
         if (currentMode !== "menu") {

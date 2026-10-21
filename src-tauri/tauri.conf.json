@@ -39,10 +39,6 @@
         "url": "index.html?view=settings"
       }
     ],
-    "trayIcon": {
-      "iconPath": "icons/icon.png",
-      "tooltip": "Dial Control — Active"
-    },
     "security": {
       "csp": null
     }
