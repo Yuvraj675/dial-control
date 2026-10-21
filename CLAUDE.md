@@ -88,10 +88,30 @@ dial-control/
 
 ---
 
-## 5. Development Workflow
+## 5. Development & Build Workflow
 
+### ⚠️ CRITICAL: Production Frontend Bundling
+- **NEVER use raw `cargo build --release` to generate production binaries.**
+  - **Why**: Raw `cargo build` does NOT bundle frontend assets. It leaves the binary expecting an active Vite dev server (`http://localhost:1420`), causing windows like Settings or HUD to fail with `"Could not connect to localhost"`.
+  - **Mandatory Production Build Command**:
+    ```bash
+    # 1. Build using Tauri CLI (compiles frontend + inlines assets into binary):
+    npx @tauri-apps/cli build --no-bundle
+    # (or `pnpm tauri build --no-bundle`)
+
+    # 2. Update local launcher binary:
+    cp src-tauri/target/release/dial-control bin/dial-control
+    ```
+  - This guarantees:
+    1. `beforeBuildCommand` (`npm run build`) runs `tsc && vite build` into `dist/`.
+    2. Tauri embeds `frontendDist: "../dist"` directly inside the executable.
+    3. The application runs completely standalone without any web server or localhost dependency.
+
+### Standard Step-by-Step Cycle
 1. **Research First**: Search web/docs for established cross-platform patterns before writing platform code.
 2. **Modularize Platforms**: Use Rust conditional compilation (`#[cfg(target_os = "...")]`) or trait abstractions.
-3. **Verify Locally**: Ensure `cargo check` and `pnpm build` pass with zero errors.
-4. **Update `README.md`**: Ensure documentation matches actual code state.
-5. **Commit**: Use specified author name with no co-author annotations.
+3. **Frontend Verification**: Run `npm run build` to catch TypeScript/JSX compilation issues early.
+4. **Backend Verification**: Run `cargo check --manifest-path src-tauri/Cargo.toml` to verify Rust code.
+5. **Production Release**: Run `npx @tauri-apps/cli build --no-bundle` and copy binary to `bin/dial-control`.
+6. **Update `README.md`**: Ensure documentation matches actual code state.
+7. **Commit**: Use specified author name (`Yuvraj675 <yuviyg675@gmail.com>`) with NO co-authors.

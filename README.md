@@ -98,8 +98,12 @@ pnpm install
 # 2. Run in development mode (hot reloading UI + Rust backend)
 pnpm tauri dev
 
-# 3. Build standalone production binary / installer
-pnpm tauri build
+# 3. Build standalone production binary (embeds frontend into binary)
+pnpm tauri build --no-bundle
+# (or: npx @tauri-apps/cli build --no-bundle)
+
+# 4. Copy to launcher bin/ (optional for desktop integration)
+cp src-tauri/target/release/dial-control bin/dial-control
 ```
 
 ---
