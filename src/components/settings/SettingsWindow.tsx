@@ -49,6 +49,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
   const [isRecording, setIsRecording] = useState(false);
   const [stagedCombo, setStagedCombo] = useState<string>("");
   const stagedComboRef = React.useRef<string>("");
+  const heldModifiersRef = React.useRef<Set<string>>(new Set());
   const [showShortcutBanner, setShowShortcutBanner] = useState(() => {
     return !localStorage.getItem("dial_shortcut_banner_dismissed");
   });
@@ -75,36 +76,42 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
   };
 
   // Helper functions for bulletproof keyboard combination detection
-  const isModifier = (e: KeyboardEvent) => {
+  const getModifierFromKey = (e: KeyboardEvent): "Super" | "Ctrl" | "Alt" | "Shift" | null => {
     const code = (e.code || "").toLowerCase();
     const key = (e.key || "").toLowerCase();
-    if (code.startsWith("meta") || code.startsWith("os") || code.startsWith("control") || code.startsWith("alt") || code.startsWith("shift")) {
-      return true;
+
+    if (
+      code.startsWith("meta") ||
+      code.startsWith("os") ||
+      key.includes("super") ||
+      key.includes("meta") ||
+      key === "os"
+    ) {
+      return "Super";
     }
-    if (key.includes("meta") || key.includes("super") || key.includes("ctrl") || key.includes("control") || key.includes("alt") || key.includes("shift") || key === "os") {
-      return true;
+    if (code.startsWith("control") || key.includes("ctrl") || key.includes("control")) {
+      return "Ctrl";
     }
-    return false;
+    if (code.startsWith("alt") || key.includes("alt")) {
+      return "Alt";
+    }
+    if (code.startsWith("shift") || key.includes("shift")) {
+      return "Shift";
+    }
+    return null;
   };
 
-  const getModifiers = (e: KeyboardEvent) => {
-    const mods: string[] = [];
-    const code = (e.code || "").toLowerCase();
-    const key = (e.key || "").toLowerCase();
+  const isModifier = (e: KeyboardEvent): boolean => {
+    return getModifierFromKey(e) !== null;
+  };
 
-    if (e.metaKey || code.startsWith("meta") || code.startsWith("os") || key.includes("super") || key.includes("meta")) {
-      mods.push("Super");
-    }
-    if (e.ctrlKey || code.startsWith("control") || key.includes("ctrl") || key.includes("control")) {
-      mods.push("Ctrl");
-    }
-    if (e.altKey || code.startsWith("alt") || key.includes("alt")) {
-      mods.push("Alt");
-    }
-    if (e.shiftKey || code.startsWith("shift") || key.includes("shift")) {
-      mods.push("Shift");
-    }
-    return mods;
+  const getActiveModifiers = (): string[] => {
+    const active: string[] = [];
+    if (heldModifiersRef.current.has("Super")) active.push("Super");
+    if (heldModifiersRef.current.has("Ctrl")) active.push("Ctrl");
+    if (heldModifiersRef.current.has("Alt")) active.push("Alt");
+    if (heldModifiersRef.current.has("Shift")) active.push("Shift");
+    return active;
   };
 
   const getMainKey = (e: KeyboardEvent): string | null => {
@@ -132,9 +139,13 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
     return null;
   };
 
-  // Keyboard shortcut recorder listener (tracks combinations without premature stops)
+  // Keyboard shortcut recorder listener (tracks multiple modifiers simultaneously)
   React.useEffect(() => {
     if (!isRecording) return;
+
+    heldModifiersRef.current.clear();
+    setStagedCombo("");
+    stagedComboRef.current = "";
 
     const onKeyDown = (e: KeyboardEvent) => {
       e.preventDefault();
@@ -142,20 +153,39 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
 
       if (e.key === "Escape") {
         setIsRecording(false);
+        heldModifiersRef.current.clear();
         setStagedCombo("");
         stagedComboRef.current = "";
         return;
       }
 
-      if (e.key === "Backspace" && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey) {
+      if (
+        e.key === "Backspace" &&
+        !e.ctrlKey &&
+        !e.altKey &&
+        !e.shiftKey &&
+        !e.metaKey &&
+        heldModifiersRef.current.size === 0
+      ) {
         handleSaveShortcut("");
         setIsRecording(false);
+        heldModifiersRef.current.clear();
         setStagedCombo("");
         stagedComboRef.current = "";
         return;
       }
 
-      const mods = getModifiers(e);
+      // Add modifier from key identity or event flags
+      const mod = getModifierFromKey(e);
+      if (mod) {
+        heldModifiersRef.current.add(mod);
+      }
+      if (e.metaKey) heldModifiersRef.current.add("Super");
+      if (e.ctrlKey) heldModifiersRef.current.add("Ctrl");
+      if (e.altKey) heldModifiersRef.current.add("Alt");
+      if (e.shiftKey) heldModifiersRef.current.add("Shift");
+
+      const mods = getActiveModifiers();
       const mainKey = getMainKey(e);
 
       if (mainKey) {
@@ -187,27 +217,46 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
         if (hasMainKey) {
           handleSaveShortcut(combo);
           setIsRecording(false);
+          heldModifiersRef.current.clear();
           setStagedCombo("");
           stagedComboRef.current = "";
-        } else {
-          const remainingMods = getModifiers(e);
-          if (remainingMods.length === 0) {
-            setStagedCombo("");
-            stagedComboRef.current = "";
-          } else {
-            const remainingCombo = remainingMods.join("+");
-            setStagedCombo(remainingCombo);
-            stagedComboRef.current = remainingCombo;
-          }
+          return;
         }
       }
+
+      // If only modifiers were held and one was released
+      const mod = getModifierFromKey(e);
+      if (mod) {
+        heldModifiersRef.current.delete(mod);
+      }
+      if (!e.ctrlKey) heldModifiersRef.current.delete("Ctrl");
+      if (!e.altKey) heldModifiersRef.current.delete("Alt");
+      if (!e.shiftKey) heldModifiersRef.current.delete("Shift");
+
+      const remainingMods = getActiveModifiers();
+      if (remainingMods.length === 0) {
+        setStagedCombo("");
+        stagedComboRef.current = "";
+      } else {
+        const remainingCombo = remainingMods.join("+");
+        setStagedCombo(remainingCombo);
+        stagedComboRef.current = remainingCombo;
+      }
+    };
+
+    const onBlur = () => {
+      heldModifiersRef.current.clear();
+      setStagedCombo("");
+      stagedComboRef.current = "";
     };
 
     window.addEventListener("keydown", onKeyDown, true);
     window.addEventListener("keyup", onKeyUp, true);
+    window.addEventListener("blur", onBlur);
     return () => {
       window.removeEventListener("keydown", onKeyDown, true);
       window.removeEventListener("keyup", onKeyUp, true);
+      window.removeEventListener("blur", onBlur);
     };
   }, [isRecording, currentConfig]);
 
@@ -953,6 +1002,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                         onClick={() => {
                           handleSaveShortcut(stagedCombo);
                           setIsRecording(false);
+                          heldModifiersRef.current.clear();
                           setStagedCombo("");
                           stagedComboRef.current = "";
                         }}
@@ -965,6 +1015,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                       type="button"
                       onClick={() => {
                         setIsRecording(false);
+                        heldModifiersRef.current.clear();
                         setStagedCombo("");
                         stagedComboRef.current = "";
                       }}
@@ -1031,6 +1082,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                       type="button"
                       onClick={() => {
                         setIsRecording(true);
+                        heldModifiersRef.current.clear();
                         setStagedCombo("");
                         stagedComboRef.current = "";
                       }}

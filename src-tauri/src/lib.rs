@@ -97,8 +97,8 @@ fn show_settings(app: AppHandle) {
             tauri::WebviewUrl::App("index.html?view=settings".into()),
         )
         .title("Dial Control — Preferences")
-        .inner_size(1080.0, 680.0)
-        .min_inner_size(900.0, 550.0)
+        .inner_size(1180.0, 780.0)
+        .min_inner_size(980.0, 620.0)
         .resizable(true)
         .decorations(true)
         .center();
@@ -221,7 +221,7 @@ fn convert_to_gnome_binding(shortcut: &str) -> String {
     if key.is_empty() {
         return String::new();
     }
-    let gnome_key = match key.as_str() {
+    let gnome_key = match key.to_lowercase().as_str() {
         "space" => "space".to_string(),
         "backslash" => "backslash".to_string(),
         "slash" => "slash".to_string(),
@@ -231,7 +231,7 @@ fn convert_to_gnome_binding(shortcut: &str) -> String {
         "bracketleft" | "[" => "bracketleft".to_string(),
         "bracketright" | "]" => "bracketright".to_string(),
         "tab" => "Tab".to_string(),
-        k => k.to_string(),
+        k => k.to_lowercase(),
     };
     format!("{}{}", parts.join(""), gnome_key)
 }
