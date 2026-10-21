@@ -218,6 +218,9 @@ fn convert_to_gnome_binding(shortcut: &str) -> String {
             other => key = other.to_string(),
         }
     }
+    if key.is_empty() {
+        return String::new();
+    }
     let gnome_key = match key.as_str() {
         "space" => "space".to_string(),
         "backslash" => "backslash".to_string(),
@@ -246,6 +249,9 @@ fn sync_gnome_keybinding(shortcut: &str) {
     }
 
     let gnome_binding = convert_to_gnome_binding(shortcut);
+    if gnome_binding.is_empty() {
+        return;
+    }
     println!("[Shortcut] Synchronizing GNOME compositor keybinding: {}", gnome_binding);
 
     let _ = std::process::Command::new("gsettings")

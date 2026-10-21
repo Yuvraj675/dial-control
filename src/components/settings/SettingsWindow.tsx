@@ -100,7 +100,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
       if (e.altKey || e.key === "Alt") mods.push("Alt");
       if (e.shiftKey || e.key === "Shift") mods.push("Shift");
 
-      const isModifier = ["Control", "Alt", "Shift", "Meta"].includes(e.key);
+      const isModifier = ["Control", "Alt", "Shift", "Meta", "Super", "OS", "AltGraph"].includes(e.key);
       if (!isModifier) {
         let keyName = e.key.toUpperCase();
         if (e.code.startsWith("Key")) {
@@ -117,6 +117,12 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
           keyName = "Grave";
         } else if (e.code === "Tab") {
           keyName = "Tab";
+        }
+
+        const ignored = ["SUPER", "META", "CONTROL", "CTRL", "ALT", "SHIFT", "OS", "ALTGRAPH"];
+        if (ignored.includes(keyName)) {
+          setPressedModifiers(mods);
+          return;
         }
 
         const comboParts = [...mods];
