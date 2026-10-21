@@ -75,7 +75,18 @@ export function App() {
       if (isTauri) {
         invoke("set_mode", { mode }).catch(console.error);
         if (mode === "brightness") {
-          setGaugeValue(brightnessLevel);
+          invoke<number>("get_system_brightness")
+            .then((b) => {
+              console.log("[Brightness] Loaded initial system brightness:", b);
+              if (typeof b === "number" && !isNaN(b)) {
+                setBrightnessLevel(b);
+                setGaugeValue(b);
+                localStorage.setItem("dial_brightness_level", String(b));
+              } else {
+                setGaugeValue(brightnessLevel);
+              }
+            })
+            .catch(() => setGaugeValue(brightnessLevel));
         } else {
           invoke<number>("get_system_volume")
             .then((v) => setGaugeValue(v))
@@ -183,6 +194,15 @@ export function App() {
           setCurrentMode("menu");
           if (isTauri) {
             invoke("set_mode", { mode: "menu" }).catch(console.error);
+            // Pre-fetch actual system brightness from GNOME Mutter so it is ready
+            invoke<number>("get_system_brightness")
+              .then((b) => {
+                if (typeof b === "number" && !isNaN(b)) {
+                  setBrightnessLevel(b);
+                  localStorage.setItem("dial_brightness_level", String(b));
+                }
+              })
+              .catch(console.error);
           }
         }
       });

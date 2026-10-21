@@ -102,15 +102,51 @@ fn get_sysfs_backlight() -> Option<i32> {
     }
 }
 
+fn get_mutter_resources_brightness() -> Option<i32> {
+    let out = std::process::Command::new("busctl")
+        .args([
+            "--user",
+            "call",
+            "org.gnome.Mutter.DisplayConfig",
+            "/org/gnome/Mutter/DisplayConfig",
+            "org.gnome.Mutter.DisplayConfig",
+            "GetResources",
+        ])
+        .output()
+        .ok()?;
+
+    if !out.status.success() {
+        return None;
+    }
+
+    let text = String::from_utf8_lossy(&out.stdout);
+    let parts: Vec<&str> = text.split_whitespace().collect();
+    for (i, &p) in parts.iter().enumerate() {
+        if p == "\"backlight\"" && i + 2 < parts.len() {
+            if let Ok(val) = parts[i + 2].parse::<i32>() {
+                if val >= 0 {
+                    return Some(val.clamp(0, 100));
+                }
+            }
+        }
+    }
+    None
+}
+
 #[tauri::command]
 fn get_system_brightness() -> i32 {
-    // 1. Try GNOME Mutter DisplayConfig first (True native system slider & OSD level)
+    // 1. Try GNOME Mutter GetResources (direct native brightness percentage 0-100%)
+    if let Some(pct) = get_mutter_resources_brightness() {
+        println!("[Brightness] Read from Mutter GetResources: {}%", pct);
+        return pct;
+    }
+    // 2. Try Mutter Backlight property
     if let Some(b) = get_backlight_info() {
         let range = (b.max - b.min).max(1);
         let pct = (((b.value - b.min) as f64 / range as f64) * 100.0).round() as i32;
         return pct.clamp(0, 100);
     }
-    // 2. Fallback to sysfs
+    // 3. Fallback to sysfs
     if let Some(pct) = get_sysfs_backlight() {
         return pct;
     }
