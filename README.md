@@ -1,13 +1,13 @@
 # CMF Buds Pro 2 — Smart Dial Control System
 
-Turn your **CMF Buds Pro 2** smart dial case into a context-aware, beautifully animated radial controller for Linux, Windows, and macOS — inspired by **[KnifeLemon/Filee](https://github.com/KnifeLemon/Filee)**.
+Turn your **CMF Buds Pro 2** smart dial case into a context-aware, beautifully animated radial controller for **Linux, macOS, and Windows** — inspired by **[KnifeLemon/Filee](https://github.com/KnifeLemon/Filee)** and the Nothing OS aesthetic.
 
 - **100% Dual-Pairing Preserved**: Keeps your phone connection and the Nothing X app active simultaneously.
 - **Click the Dial**: An animated, glowing Donut Radial HUD pops up on screen with options tailored to your currently focused application.
 - **Rotate the Dial**: Smoothly cycles options with audio beeps in your earbuds while your media volume remains locked.
 - **Click Again**: Executes the action (e.g. `Copy`/`Paste` in Files, `Seek`/`Fullscreen` in YouTube, `Format` in VS Code, or opens the Volume/Brightness gauge).
-- **System Tray Daemon**: Runs quietly in your top panel with quick controls, profile switching, and settings launcher.
-- **Applications Menu Integration**: Launch directly from GNOME "Show Applications" just like any native desktop app.
+- **System Tray Daemon**: Runs quietly in your system tray / top panel with quick controls, radial toggles, and settings customizer.
+- **Built with Tauri v2 + Rust + React**: Native performance, minimal memory footprint, and cross-platform architecture.
 
 ---
 
@@ -15,26 +15,36 @@ Turn your **CMF Buds Pro 2** smart dial case into a context-aware, beautifully a
 
 ```
 dial-control/
-├── assets/
-│   └── dial-control.png        # Application desktop & tray icon
-├── bin/
-│   └── dial-control            # Main application launcher
-├── config/
-│   └── profiles.json           # Declarative JSON schema for wheel slices & app profiles
-├── docs/
-│   ├── CROSS_PLATFORM_SPEC.md  # Multi-OS architecture specification (Rust + Tauri v2)
-│   ├── DEVELOPMENT_GUIDE.md    # Developer guide
-│   └── PROTOCOL_SPEC.md        # Reverse-engineered Bluetooth wire protocol
-├── scripts/
-│   └── setup_udev.sh           # One-time udev rule setup for non-root dial access
-├── tools/
-│   ├── context_detector.py     # Sub-millisecond active window tracker (At-Spi / Win32 / macOS)
-│   ├── donut_dial.py           # Filee-inspired animated Donut Radial HUD
-│   ├── settings_gui.py         # Visual wheel customizer & preferences app
-│   ├── tray_app.py             # System tray daemon (AppIndicator)
-│   └── avrcp_dial.py           # Core dual-pairing Bluetooth daemon & hardware grabber
-└── dial_app.py                 # Master unified desktop application
+├── assets/                 # Desktop & system tray icons
+├── config/                 # Declarative profiles.json configuration
+├── docs/                   # Protocol & architectural specifications
+├── public/                 # Typography (NType82, Ndot57) & assets
+├── scripts/                # Platform helper scripts (e.g. udev rules)
+├── src/                    # Frontend UI (React 18, TypeScript, Tailwind CSS)
+│   ├── components/
+│   │   ├── hud/            # DonutRadialHUD (Framer Motion circular wheel)
+│   │   └── settings/       # SettingsWindow (Slice editor & profile manager)
+│   ├── data/               # Default wheel slices & actions
+│   └── types/              # TypeScript profile schemas
+├── src-tauri/              # Backend Daemon (Rust + Tauri v2)
+│   ├── Cargo.toml          # Native dependencies & conditional targets
+│   └── src/
+│       ├── lib.rs          # System tray, IPC commands & app coordinator
+│       ├── dial_backend.rs # Hardware dial listener & rotary tracker
+│       ├── virtual_input.rs# Cross-platform hotkey & media key dispatcher
+│       └── context_detector.rs # Active foreground window tracking
+└── temp/                   # [Gitignored] Reference prototypes & scripts
 ```
+
+---
+
+## Cross-Platform Roadmap & Status
+
+| Platform | Dial / AVRCP Interception | Volume Control | Brightness Control | Context Detection | Status |
+|---|---|---|---|---|---|
+| **Linux (X11 / Wayland)** | BlueZ D-Bus + `evdev` grabber | WirePlumber (`wpctl`) / PulseAudio | `/sys/class/backlight` + GNOME Mutter D-Bus | AT-SPI2 / X11 EWMH | **Fully Functional** |
+| **Windows** | Win32 RawInput / AVRCP | WASAPI (`IAudioEndpointVolume`) | WMI / Win32 Monitor API | Win32 `GetForegroundWindow` | **In Development** |
+| **macOS** | CoreBluetooth / IOHIDManager | CoreAudio HAL | DisplayServices / IOKit | Cocoa `NSWorkspace` | **In Development** |
 
 ---
 
@@ -51,29 +61,23 @@ The dial automatically detects your active foreground application and adapts its
 
 ---
 
-## Launching & Usage
+## Getting Started
 
-### Option 1: Applications Menu (Recommended)
-Press `Super` (Windows Key) and search for **Dial Control**, or find it in your App Drawer.
-- Starts the background hardware listener.
-- Places an icon in your top panel system tray.
-- Opens the Settings & Customizer window.
+### Prerequisites
 
-### Option 2: Command Line
-```bash
-# Run the unified desktop application
-./bin/dial-control
+- **Node.js** (v18+) and **pnpm** (or npm/yarn)
+- **Rust** (stable toolchain)
+- **Linux Packages** (if running on Linux):
+  ```bash
+  # Debian/Ubuntu
+  sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+  # Arch Linux
+  sudo pacman -S webkit2gtk-4.1 base-devel curl wget file openssl libappindicator-gtk3 librsvg
+  # Fedora
+  sudo dnf install webkit2gtk4.1-devel openssl-devel libappindicator-gtk3-devel librsvg2-devel
+  ```
 
-# Or run the settings customizer directly
-python3 tools/settings_gui.py
-
-# Or preview the animated Donut HUD without hardware
-python3 tools/donut_dial.py
-```
-
----
-
-## One-Time Permissions Setup (Non-Root Execution)
+### Permissions Setup (Linux Non-Root Execution)
 
 To allow Dial Control to intercept dial clicks and emulate keys without requiring `sudo`:
 
@@ -85,13 +89,26 @@ This installs `/etc/udev/rules.d/99-cmf-dial.rules` and grants your user account
 
 ---
 
-## Customizing the Wheel
+## Development & Building
 
-Open the customizer via the tray icon or by running:
 ```bash
-python3 tools/settings_gui.py
+# 1. Install dependencies
+pnpm install
+
+# 2. Run in development mode (hot reloading UI + Rust backend)
+pnpm tauri dev
+
+# 3. Build standalone production binary / installer
+pnpm tauri build
 ```
+
+---
+
+## Customizing Profiles
+
+Profiles and wheel slices can be customized via the **Settings Window** (accessible from the system tray menu) or by editing `config/profiles.json`:
+
 - Reorder, add, or delete wheel slices.
-- Assign custom hotkeys (`Ctrl+C`, `Shift+Alt+F`), media keys, or shell commands.
-- Tweak dial outer radius, donut thickness, and haptic feedback.
-- Changes saved to `config/profiles.json` take effect immediately on the live dial without restarting!
+- Assign custom hotkeys (`Ctrl+C`, `Shift+Alt+F`), media keys, or terminal commands.
+- Modify inner and outer radius, slice colors, and animation speed.
+- Changes saved to `config/profiles.json` take effect immediately on the live radial dial without restarting.
