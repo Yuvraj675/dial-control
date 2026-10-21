@@ -90,6 +90,7 @@ export function App() {
   };
 
   const lastDialClickRef = useRef<number>(0);
+  const brightnessReconcileTimerRef = useRef<NodeJS.Timeout | number | null>(null);
 
   // Tauri Event Listeners (Hardware Dial & Context Detection) - Strictly HUD window
   useEffect(() => {
@@ -116,18 +117,30 @@ export function App() {
             setGaugeValue(event.payload.volume_pct);
           }
         } else if (currentMode === "brightness") {
-          // Emulate hardware Fn+F5 / Fn+F6 keys via uinput!
-          // GNOME adjusts brightness, updates system slider, and displays native OSD
+          // Emulate hardware Fn+F5 / Fn+F6 keys via uinput (5% per step matching GNOME's native scale)
+          const step = dir * 5;
+          setGaugeValue((prev) => Math.max(0, Math.min(100, prev + step)));
+
           if (isTauri) {
-            invoke<number>("step_brightness", { direction: dir })
-              .then((newPct) => {
-                if (typeof newPct === "number") {
-                  setGaugeValue(newPct);
-                }
-              })
-              .catch(console.error);
+            invoke("step_brightness", { direction: dir }).catch(console.error);
+
+            // Debounced reconciliation with GNOME Mutter after user pauses rotation
+            if (brightnessReconcileTimerRef.current) {
+              clearTimeout(brightnessReconcileTimerRef.current as any);
+            }
+            brightnessReconcileTimerRef.current = setTimeout(() => {
+              if (stateRef.current.currentMode === "brightness") {
+                invoke<number>("get_system_brightness")
+                  .then((b) => {
+                    console.log("[Brightness] Reconciled with GNOME:", b);
+                    if (typeof b === "number" && !isNaN(b)) {
+                      setGaugeValue(b);
+                    }
+                  })
+                  .catch(console.error);
+              }
+            }, 300);
           }
-          setGaugeValue((prev) => Math.max(0, Math.min(100, prev + dir * 5)));
         }
       });
       unlistenList.push(unlistenRotate);
