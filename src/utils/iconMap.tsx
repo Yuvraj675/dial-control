@@ -82,6 +82,8 @@ export const ICON_MAP: Record<string, React.FC<{ className?: string; size?: numb
   reload: RotateCw,
   new_tab: Plus,
   close_tab: X,
+  close: X,
+  dismiss: X,
   reopen_tab: Undo2,
   globe: Globe,
 
