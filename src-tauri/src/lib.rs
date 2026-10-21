@@ -96,15 +96,27 @@ fn get_sysfs_backlight() -> Option<i32> {
 
 #[tauri::command]
 fn get_system_brightness() -> i32 {
+    if let Some(pct) = get_sysfs_backlight() {
+        return pct;
+    }
     if let Some(b) = get_backlight_info() {
         let range = (b.max - b.min).max(1);
         let pct = ((b.value - b.min) * 100) / range;
         return pct.clamp(0, 100);
     }
-    if let Some(pct) = get_sysfs_backlight() {
-        return pct;
-    }
     50
+}
+
+#[tauri::command]
+fn step_brightness(state: tauri::State<AppState>, direction: i32) -> i32 {
+    if direction > 0 {
+        state.vk.emit_brightness_up();
+        println!("[Brightness] Emitted KEY_BRIGHTNESSUP (Fn+F6)");
+    } else if direction < 0 {
+        state.vk.emit_brightness_down();
+        println!("[Brightness] Emitted KEY_BRIGHTNESSDOWN (Fn+F5)");
+    }
+    get_system_brightness()
 }
 
 #[tauri::command]
@@ -179,8 +191,13 @@ fn set_system_volume(pct: i32) -> i32 {
 
 #[tauri::command]
 fn set_mode(state: tauri::State<AppState>, mode: String) {
-    state.locked_vol.store(50, Ordering::SeqCst);
-    println!("[HUD] Switched to mode: {} (lock maintained at 50 for continuous rotation)", mode);
+    if mode == "volume" {
+        state.locked_vol.store(0, Ordering::SeqCst);
+        println!("[HUD] Switched to volume mode (lock released for natural hardware volume control)");
+    } else {
+        state.locked_vol.store(50, Ordering::SeqCst);
+        println!("[HUD] Switched to mode: {} (volume locked at 50 for navigation)", mode);
+    }
 }
 
 fn control_mpris_or_fallback(method: &str, fallback_vk: impl FnOnce()) {
@@ -264,11 +281,7 @@ fn execute_action(
         let _ = std::process::Command::new("wpctl")
             .args(["set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"])
             .status();
-        let _ = std::process::Command::new("pactl")
-            .args(["set-sink-mute", "@DEFAULT_SINK@", "toggle"])
-            .status();
-        state.vk.emit_key(evdev::Key::KEY_MUTE);
-        println!("[Audio] Toggled sink mute via wpctl, pactl and virtual key.");
+        println!("[Audio] Toggled sink mute via wpctl.");
         return;
     }
 
@@ -392,6 +405,7 @@ pub fn run() {
             adjust_gauge,
             get_system_brightness,
             set_system_brightness,
+            step_brightness,
             get_system_volume,
             set_system_volume,
             set_mode
