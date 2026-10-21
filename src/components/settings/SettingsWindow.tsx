@@ -116,7 +116,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
   return (
     <div className="flex h-screen w-screen bg-[#07080A] text-white font-sans overflow-hidden select-none">
       {/* ── Left Sidebar Navigation ────────────────────────────────────────── */}
-      <div className="w-60 flex flex-col border-r border-white/[0.08] bg-[#0C0D11] p-4">
+      <div className="w-52 shrink-0 flex flex-col border-r border-white/[0.08] bg-[#0C0D11] p-4">
         {/* App Title in Ndot57 */}
         <div className="flex items-center gap-2.5 px-2 py-3 mb-6 border-b border-white/[0.06] pb-5">
           <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-black shadow-md">
@@ -206,9 +206,9 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
 
         {/* Tab 1: Profiles & Slices Editor */}
         {activeTab === "profiles" && (
-          <div className="flex-1 flex overflow-hidden">
+          <div className="flex-1 flex overflow-x-auto overflow-y-hidden">
             {/* Column 1: Profiles List */}
-            <div className="w-64 border-r border-white/[0.08] p-4 flex flex-col gap-2 overflow-y-auto bg-[#0C0D11]/40">
+            <div className="w-60 shrink-0 border-r border-white/[0.08] p-4 flex flex-col gap-2 overflow-y-auto bg-[#0C0D11]/40">
               <div className="font-ndot text-[10px] uppercase text-neutral-500 tracking-widest mb-2">
                 ACTIVE PROFILES ({Object.keys(currentConfig.profiles).length})
               </div>
@@ -239,7 +239,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
             </div>
 
             {/* Column 2: Slices List */}
-            <div className="w-72 border-r border-white/[0.08] p-4 flex flex-col overflow-y-auto">
+            <div className="w-64 shrink-0 border-r border-white/[0.08] p-4 flex flex-col overflow-y-auto">
               <div className="flex items-center justify-between mb-3">
                 <div className="font-ndot text-[10px] uppercase text-neutral-500 tracking-widest">
                   WHEEL ORDER
@@ -304,7 +304,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
             </div>
 
             {/* Column 3: Slice Inspector */}
-            <div className="flex-1 p-6 overflow-y-auto">
+            <div className="flex-1 min-w-[300px] p-6 overflow-y-auto">
               {selectedAction && (
                 <div className="max-w-md flex flex-col gap-5">
                   <div className="font-ndot text-xs uppercase text-neutral-500 tracking-widest">

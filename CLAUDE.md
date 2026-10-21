@@ -107,6 +107,23 @@ dial-control/
     2. Tauri embeds `frontendDist: "../dist"` directly inside the executable.
     3. The application runs completely standalone without any web server or localhost dependency.
 
+### 🪟 Window Lifecycle & Geometry Guidelines
+- **Hide on Close (Prevent Window Destroy)**:
+  - Desktop utility windows (e.g. `settings`, `hud`) opened from the tray must **never be destroyed** when the user clicks the `X` close button.
+  - Intercept `tauri::WindowEvent::CloseRequested` in `.on_window_event()` on the Tauri Builder:
+    ```rust
+    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+        if window.label() == "settings" || window.label() == "hud" {
+            let _ = window.hide();
+            api.prevent_close();
+        }
+    }
+    ```
+  - In `show_settings`, always call `window.show()`, `window.unminimize()`, and `window.set_focus()`. Provide a fallback to dynamically recreate the window if it was ever destroyed.
+- **Window Dimensions & Layout Hygiene**:
+  - The settings window displays a 3-column layout (Profiles list + Wheel slices + Slice inspector) plus a left sidebar. Configure initial size to `1080x680` with `minWidth: 900`, `minHeight: 550`.
+  - Column containers in `SettingsWindow.tsx` must use `shrink-0` on sidebar/navigation columns and `overflow-x-auto` on the content wrapper so that right-hand controls are never cut off on scaled laptop screens (125%-150% DPI).
+
 ### Standard Step-by-Step Cycle
 1. **Research First**: Search web/docs for established cross-platform patterns before writing platform code.
 2. **Modularize Platforms**: Use Rust conditional compilation (`#[cfg(target_os = "...")]`) or trait abstractions.

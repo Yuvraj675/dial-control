@@ -27,8 +27,10 @@
       {
         "title": "Dial Control — Preferences",
         "label": "settings",
-        "width": 780,
-        "height": 560,
+        "width": 1080,
+        "height": 680,
+        "minWidth": 900,
+        "minHeight": 550,
         "resizable": true,
         "transparent": false,
         "decorations": true,

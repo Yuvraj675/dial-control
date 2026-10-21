@@ -307,7 +307,22 @@ fn toggle_hud(app: AppHandle, state: tauri::State<AppState>) {
 fn show_settings(app: AppHandle) {
     if let Some(window) = app.get_webview_window("settings") {
         let _ = window.show();
+        let _ = window.unminimize();
         let _ = window.set_focus();
+    } else {
+        // Fallback: Recreate settings window if ever closed/destroyed
+        let _ = tauri::WebviewWindowBuilder::new(
+            &app,
+            "settings",
+            tauri::WebviewUrl::App("index.html?view=settings".into()),
+        )
+        .title("Dial Control — Preferences")
+        .inner_size(1080.0, 680.0)
+        .min_inner_size(900.0, 550.0)
+        .resizable(true)
+        .decorations(true)
+        .center()
+        .build();
     }
 }
 
@@ -401,6 +416,14 @@ pub fn run() {
 
     tauri::Builder::default()
         .manage(app_state)
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "settings" || window.label() == "hud" {
+                    let _ = window.hide();
+                    api.prevent_close();
+                }
+            }
+        })
         .setup(move |app| {
             // Build Tray Menu
             let toggle_i = MenuItem::with_id(app, "toggle_hud", "🔘 Show / Hide Radial HUD", true, None::<&str>)?;
