@@ -1,0 +1,18 @@
+# Maintainer: Yuvraj Gupta <yuviyg675@gmail.com>
+pkgname=dial-control-bin
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Context-Aware Radial Dial Controller for CMF Buds Pro 2"
+arch=('x86_64')
+url="https://github.com/Yuvraj675/dial-control"
+license=('MIT')
+depends=('webkit2gtk-4.1' 'gtk3' 'libayatana-appindicator')
+provides=('dial-control')
+conflicts=('dial-control')
+
+package() {
+    install -Dm755 "${srcdir}/usr/bin/dial-control" "${pkgdir}/usr/bin/dial-control"
+    install -Dm644 "${srcdir}/usr/share/applications/dial-control.desktop" "${pkgdir}/usr/share/applications/dial-control.desktop"
+    install -Dm644 "${srcdir}/usr/share/icons/hicolor/512x512/apps/dial-control.png" "${pkgdir}/usr/share/icons/hicolor/512x512/apps/dial-control.png"
+    install -Dm644 "${srcdir}/usr/lib/udev/rules.d/99-dial-control.rules" "${pkgdir}/usr/lib/udev/rules.d/99-dial-control.rules"
+}

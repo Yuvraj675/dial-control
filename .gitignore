@@ -44,6 +44,10 @@ bin/
 backups/
 dist/
 src-tauri/target/
+dist-packages/*.deb
+dist-packages/*.rpm
+dist-packages/*.AppImage
+dist-packages/*.pkg.tar.zst
 
 # Local reference and prototype storage
 temp/
