@@ -91,7 +91,7 @@ fn show_settings(app: AppHandle) {
         let _ = window.unminimize();
         let _ = window.set_focus();
     } else {
-        let _ = tauri::WebviewWindowBuilder::new(
+        let builder = tauri::WebviewWindowBuilder::new(
             &app,
             "settings",
             tauri::WebviewUrl::App("index.html?view=settings".into()),
@@ -101,8 +101,13 @@ fn show_settings(app: AppHandle) {
         .min_inner_size(900.0, 550.0)
         .resizable(true)
         .decorations(true)
-        .center()
-        .build();
+        .center();
+
+        if let Ok(w) = builder.build() {
+            if let Some(icon) = app.default_window_icon() {
+                let _ = w.set_icon(icon.clone());
+            }
+        }
     }
 }
 
@@ -198,6 +203,39 @@ fn adjust_gauge(
     }
 }
 
+#[tauri::command]
+fn register_activation_shortcut(app: AppHandle, shortcut_str: String) -> Result<String, String> {
+    use std::str::FromStr;
+    use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
+
+    let global_shortcut = app.global_shortcut();
+    let _ = global_shortcut.unregister_all();
+
+    let clean = shortcut_str.trim();
+    if clean.is_empty() {
+        return Ok("Disabled".to_string());
+    }
+
+    match Shortcut::from_str(clean) {
+        Ok(s) => match global_shortcut.register(s) {
+            Ok(_) => {
+                println!("[Shortcut] Successfully registered global activation shortcut: {}", clean);
+                Ok(clean.to_string())
+            }
+            Err(e) => {
+                let err = format!("Failed to register '{}': {:?}", clean, e);
+                eprintln!("[Shortcut] {}", err);
+                Err(err)
+            }
+        },
+        Err(e) => {
+            let err = format!("Invalid shortcut format '{}': {:?}", clean, e);
+            eprintln!("[Shortcut] {}", err);
+            Err(err)
+        }
+    }
+}
+
 pub fn run() {
     let is_hud_open = Arc::new(AtomicBool::new(false));
     let locked_vol = Arc::new(AtomicI32::new(0));
@@ -210,6 +248,16 @@ pub fn run() {
     };
 
     tauri::Builder::default()
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, _shortcut, event| {
+                    if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
+                        let state: tauri::State<AppState> = app.state();
+                        toggle_hud(app.clone(), state);
+                    }
+                })
+                .build(),
+        )
         .manage(app_state)
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -220,12 +268,33 @@ pub fn run() {
             }
         })
         .setup(move |app| {
-            // Build Tray Menu
-            let toggle_i = MenuItem::with_id(app, "toggle_hud", "🔘 Show / Hide Radial HUD", true, None::<&str>)?;
-            let settings_i = MenuItem::with_id(app, "open_settings", "⚙️ Settings & Customizer...", true, None::<&str>)?;
-            let quit_i = MenuItem::with_id(app, "quit", "❌ Quit Dial Control", true, None::<&str>)?;
+            // Build Tray Menu (Clean typography without emojis)
+            let toggle_i = MenuItem::with_id(app, "toggle_hud", "Toggle Radial HUD", true, None::<&str>)?;
+            let settings_i = MenuItem::with_id(app, "open_settings", "Settings & Customizer...", true, None::<&str>)?;
+            let quit_i = MenuItem::with_id(app, "quit", "Quit Dial Control", true, None::<&str>)?;
 
             let menu = Menu::with_items(app, &[&toggle_i, &settings_i, &quit_i])?;
+
+            // Register default global activation shortcut (Super+Shift+D) for users without dial hardware
+            use std::str::FromStr;
+            use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
+            if let Ok(default_shortcut) = Shortcut::from_str("Super+Shift+D") {
+                if let Err(e) = app.global_shortcut().register(default_shortcut) {
+                    eprintln!("[Shortcut] Could not register default shortcut Super+Shift+D: {:?}", e);
+                } else {
+                    println!("[Shortcut] Registered default global shortcut: Super+Shift+D");
+                }
+            }
+
+            // Set app window icons on taskbar/dock
+            if let Some(icon) = app.default_window_icon() {
+                if let Some(settings_w) = app.get_webview_window("settings") {
+                    let _ = settings_w.set_icon(icon.clone());
+                }
+                if let Some(hud_w) = app.get_webview_window("hud") {
+                    let _ = hud_w.set_icon(icon.clone());
+                }
+            }
 
             // Build Tray Icon
             let _tray = TrayIconBuilder::new()
@@ -265,7 +334,8 @@ pub fn run() {
             step_brightness,
             get_system_volume,
             set_system_volume,
-            set_mode
+            set_mode,
+            register_activation_shortcut
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

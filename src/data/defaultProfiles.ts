@@ -9,6 +9,7 @@ export const DEFAULT_CONFIG: ProfilesConfig = {
     haptic_beep: true,
     start_in_tray: true,
     auto_close_seconds: 6,
+    activation_shortcut: "Super+Shift+D",
   },
   profiles: {
     default: {

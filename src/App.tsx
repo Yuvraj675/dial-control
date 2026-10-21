@@ -98,6 +98,15 @@ export function App() {
     localStorage.setItem(CURRENT_CONFIG_KEY, JSON.stringify(updated));
   };
 
+  // Register activation shortcut on startup if running under Tauri
+  useEffect(() => {
+    if (isTauri && config.settings?.activation_shortcut) {
+      invoke("register_activation_shortcut", {
+        shortcutStr: config.settings.activation_shortcut,
+      }).catch((e) => console.error("[Shortcut] Startup registration failed:", e));
+    }
+  }, [isTauri]);
+
   // Keep references for event listener callbacks without stale closures
   const stateRef = useRef({
     currentMode,

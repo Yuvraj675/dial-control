@@ -127,6 +127,17 @@ dial-control/
   - The settings window displays a 3-column layout (Profiles list + Wheel slices + Slice inspector) plus a left sidebar. Configure initial size to `1080x680` with `minWidth: 900`, `minHeight: 550`.
   - Column containers in `SettingsWindow.tsx` must use `shrink-0` on sidebar/navigation columns and `overflow-x-auto` on the content wrapper so that right-hand controls are never cut off on scaled laptop screens (125%-150% DPI).
 
+### 🎨 Taskbar & Window Icon Synchronization
+- **Desktop Entry & WM Class Alignment**:
+  - GNOME/Wayland taskbars match running windows to desktop icons using the application's WM_CLASS or App ID (`StartupWMClass=dial-control`).
+  - Keep `~/.local/share/applications/dial-control.desktop` and icons under `~/.local/share/icons/hicolor/` synchronized with `assets/dial-control.png`.
+  - In `src-tauri/icons/icon.png`, ensure PNGs retain a 32-bit RGBA channel (`RGBA`) to prevent image decoding panics in Tauri's icon compiler.
+
+### ⌨️ Global Shortcuts & Non-Hardware Access
+- **Conflict-Free Defaults**:
+  - For keyboard-driven operation without CMF Buds hardware, use `Super+Shift+D` by default via `tauri-plugin-global-shortcut`.
+  - Dynamically rebind shortcuts via the `register_activation_shortcut` Tauri command when users change hotkeys in Settings.
+
 ### Standard Step-by-Step Cycle
 1. **Research First**: Search web/docs for established cross-platform patterns before writing platform code.
 2. **Modularize Platforms**: Use Rust conditional compilation (`#[cfg(target_os = "...")]`) or trait abstractions.

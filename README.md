@@ -3,11 +3,16 @@
 Turn your **CMF Buds Pro 2** smart dial case into a context-aware, beautifully animated radial controller for **Linux, macOS, and Windows** — inspired by **[KnifeLemon/Filee](https://github.com/KnifeLemon/Filee)** and the Nothing OS aesthetic.
 
 - **100% Dual-Pairing Preserved**: Keeps your phone connection and the Nothing X app active simultaneously.
-- **Click the Dial**: An animated, glowing Donut Radial HUD pops up on screen with options tailored to your currently focused application.
+- **Direct Launch & System Tray Docking**: Launches directly into the Settings & Customizer window on startup. Closing the window minimizes seamlessly to the system tray background daemon.
+- **Nothing OS Typography**: Fully styled with authentic Nothing OS dot-matrix typography (`Ndot57`) across all HUD dials, settings panels, slice inspectors, and configuration cards.
+- **Custom Dials Creator**: Create custom dial profiles from scratch with custom shortcut triggers, import actions across any dial, and configure dynamic window title/class pattern matching.
+- **Global Activation Shortcut**: Full keyboard-only radial control for users without CMF Buds hardware. Equipped with a conflict-free default (`Super+Shift+D`) and an in-app interactive shortcut rebinder.
+- **Custom Nothing App Icon**: Distinctive dot-matrix circular emblem integrated into taskbars, window decorations, system notifications, and system tray.
+- **Click the Dial / Press Shortcut**: An animated, glowing Donut Radial HUD pops up on screen with options tailored to your currently focused application.
 - **Home Dial Option**: Every dial menu features a `HOME` option that opens the interactive Home Dial switcher where you can manually choose between any dial menu (System, Media, Code, Files, Browser, Design, or custom profiles).
-- **Rotate the Dial**: Smoothly cycles options with audio beeps in your earbuds while your media volume remains locked.
-- **Click Again**: Executes the action (e.g. `Copy`/`Paste` in Files, `Seek`/`Fullscreen` in YouTube, `Format` in VS Code, or opens the Volume/Brightness gauge).
-- **System Tray Daemon**: Runs quietly in your system tray / top panel with quick controls, radial toggles, and settings customizer.
+- **Rotate the Dial / Arrow Keys**: Smoothly cycles options with audio feedback while your media volume remains locked.
+- **Click Again / Enter**: Executes the action (e.g. `Copy`/`Paste` in Files, `Seek`/`Fullscreen` in YouTube, `Format` in VS Code, or opens the Volume/Brightness gauge).
+- **System Tray Daemon**: Runs quietly in your system tray / top panel with clean, emoji-free controls, radial toggles, and settings customizer.
 - **Built with Tauri v2 + Rust + React**: Native performance, minimal memory footprint, and cross-platform architecture.
 
 ---
@@ -113,11 +118,13 @@ cp src-tauri/target/release/dial-control bin/dial-control
 
 ---
 
-## Customizing Profiles
+## Customizing Profiles & Global Shortcuts
 
-Profiles and wheel slices can be customized via the **Settings Window** (accessible from the system tray menu) or by editing `config/profiles.json`:
+Profiles, wheel slices, and activation triggers can be customized via the **Settings Window** (which opens on launch or via the system tray menu) or by editing `config/profiles.json`:
 
-- Reorder, add, or delete wheel slices.
-- Assign custom hotkeys (`Ctrl+C`, `Shift+Alt+F`), media keys, or terminal commands.
-- Modify inner and outer radius, slice colors, and animation speed.
-- Changes saved to `config/profiles.json` take effect immediately on the live radial dial without restarting.
+- **Create Custom Dials**: Add dedicated radial profiles tailored to any application or workflow with custom icons and title/WM_CLASS window matching rules.
+- **Import Slices**: Pick and reuse actions from any existing dial (e.g. VS Code shortcuts or media controls) directly into your custom dial with a single click.
+- **Reorder & Edit Slices**: Adjust wheel slice order, customize labels, reassign key combinations (`Ctrl+C`, `Shift+Alt+F`), media keys, or arbitrary shell commands.
+- **Global Activation Shortcut**: Configure a system-wide hotkey (default: `Super+Shift+D`, or presets like `Super+Backslash`, `Alt+Space`) to toggle the radial dial on any computer even without CMF Buds hardware.
+- **Radial Geometry & Aesthetics**: Modify inner/outer radius, donut thickness, accent glow colors, and rotation animations.
+- **Instant Hot-Reload**: Changes saved in Settings take effect immediately on the live radial dial without restarting the daemon.

@@ -27,6 +27,7 @@ export interface AppSettings {
   haptic_beep: boolean;
   start_in_tray: boolean;
   auto_close_seconds: number;
+  activation_shortcut?: string;
 }
 
 export interface ProfilesConfig {

@@ -34,7 +34,7 @@
         "resizable": true,
         "transparent": false,
         "decorations": true,
-        "visible": false,
+        "visible": true,
         "center": true,
         "url": "index.html?view=settings"
       }
