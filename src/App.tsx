@@ -34,6 +34,10 @@ export function App() {
   const [isHudOpen, setIsHudOpen] = useState<boolean>(true);
   const [currentMode, setCurrentMode] = useState<"menu" | "volume" | "brightness">("menu");
   const [gaugeValue, setGaugeValue] = useState<number>(50);
+  const [brightnessLevel, setBrightnessLevel] = useState<number>(() => {
+    const saved = localStorage.getItem("dial_brightness_level");
+    return saved !== null ? Number(saved) : 55;
+  });
 
   const activeProfile = config.profiles[activeProfileId] || config.profiles.default;
   const actionsCount = activeProfile.actions.length;
@@ -71,13 +75,15 @@ export function App() {
       if (isTauri) {
         invoke("set_mode", { mode }).catch(console.error);
         if (mode === "brightness") {
-          invoke<number>("get_system_brightness")
-            .then((b) => setGaugeValue(b))
-            .catch(console.error);
+          setGaugeValue(brightnessLevel);
         } else {
           invoke<number>("get_system_volume")
             .then((v) => setGaugeValue(v))
             .catch(console.error);
+        }
+      } else {
+        if (mode === "brightness") {
+          setGaugeValue(brightnessLevel);
         }
       }
     } else {
@@ -90,7 +96,6 @@ export function App() {
   };
 
   const lastDialClickRef = useRef<number>(0);
-  const brightnessReconcileTimerRef = useRef<NodeJS.Timeout | number | null>(null);
 
   // Tauri Event Listeners (Hardware Dial & Context Detection) - Strictly HUD window
   useEffect(() => {
@@ -119,27 +124,15 @@ export function App() {
         } else if (currentMode === "brightness") {
           // Emulate hardware Fn+F5 / Fn+F6 keys via uinput (5% per step matching GNOME's native scale)
           const step = dir * 5;
-          setGaugeValue((prev) => Math.max(0, Math.min(100, prev + step)));
+          setBrightnessLevel((prev) => {
+            const next = Math.max(0, Math.min(100, prev + step));
+            setGaugeValue(next);
+            localStorage.setItem("dial_brightness_level", String(next));
+            return next;
+          });
 
           if (isTauri) {
             invoke("step_brightness", { direction: dir }).catch(console.error);
-
-            // Debounced reconciliation with GNOME Mutter after user pauses rotation
-            if (brightnessReconcileTimerRef.current) {
-              clearTimeout(brightnessReconcileTimerRef.current as any);
-            }
-            brightnessReconcileTimerRef.current = setTimeout(() => {
-              if (stateRef.current.currentMode === "brightness") {
-                invoke<number>("get_system_brightness")
-                  .then((b) => {
-                    console.log("[Brightness] Reconciled with GNOME:", b);
-                    if (typeof b === "number" && !isNaN(b)) {
-                      setGaugeValue(b);
-                    }
-                  })
-                  .catch(console.error);
-              }
-            }, 300);
           }
         }
       });
@@ -190,10 +183,6 @@ export function App() {
           setCurrentMode("menu");
           if (isTauri) {
             invoke("set_mode", { mode: "menu" }).catch(console.error);
-            // Pre-fetch actual system levels so gauges are instantly accurate
-            invoke<number>("get_system_brightness")
-              .then((b) => setGaugeValue(b))
-              .catch(console.error);
           }
         }
       });
@@ -224,15 +213,21 @@ export function App() {
         e.preventDefault();
         if (currentMode === "menu") {
           setSelectedIndex((prev) => (prev + 1) % actionsCount);
-        } else {
+        } else if (currentMode === "brightness") {
+          setBrightnessLevel((prev) => {
+            const next = Math.min(100, prev + 5);
+            setGaugeValue(next);
+            localStorage.setItem("dial_brightness_level", String(next));
+            return next;
+          });
+          if (isTauri) {
+            invoke("step_brightness", { direction: 1 }).catch(console.error);
+          }
+        } else if (currentMode === "volume") {
           setGaugeValue((prev) => {
             const next = Math.min(100, prev + 5);
             if (isTauri) {
-              if (currentMode === "brightness") {
-                invoke("step_brightness", { direction: 1 }).catch(console.error);
-              } else if (currentMode === "volume") {
-                invoke("set_system_volume", { pct: next }).catch(console.error);
-              }
+              invoke("set_system_volume", { pct: next }).catch(console.error);
             }
             return next;
           });
@@ -241,15 +236,21 @@ export function App() {
         e.preventDefault();
         if (currentMode === "menu") {
           setSelectedIndex((prev) => (prev - 1 + actionsCount) % actionsCount);
-        } else {
+        } else if (currentMode === "brightness") {
+          setBrightnessLevel((prev) => {
+            const next = Math.max(0, prev - 5);
+            setGaugeValue(next);
+            localStorage.setItem("dial_brightness_level", String(next));
+            return next;
+          });
+          if (isTauri) {
+            invoke("step_brightness", { direction: -1 }).catch(console.error);
+          }
+        } else if (currentMode === "volume") {
           setGaugeValue((prev) => {
             const next = Math.max(0, prev - 5);
             if (isTauri) {
-              if (currentMode === "brightness") {
-                invoke("step_brightness", { direction: -1 }).catch(console.error);
-              } else if (currentMode === "volume") {
-                invoke("set_system_volume", { pct: next }).catch(console.error);
-              }
+              invoke("set_system_volume", { pct: next }).catch(console.error);
             }
             return next;
           });
@@ -278,12 +279,28 @@ export function App() {
       if (e.deltaY > 0) {
         if (currentMode === "menu") {
           setSelectedIndex((prev) => (prev + 1) % actionsCount);
+        } else if (currentMode === "brightness") {
+          setBrightnessLevel((prev) => {
+            const next = Math.min(100, prev + 5);
+            setGaugeValue(next);
+            localStorage.setItem("dial_brightness_level", String(next));
+            return next;
+          });
+          if (isTauri) invoke("step_brightness", { direction: 1 }).catch(console.error);
         } else {
           setGaugeValue((prev) => Math.min(100, prev + 3));
         }
       } else {
         if (currentMode === "menu") {
           setSelectedIndex((prev) => (prev - 1 + actionsCount) % actionsCount);
+        } else if (currentMode === "brightness") {
+          setBrightnessLevel((prev) => {
+            const next = Math.max(0, prev - 5);
+            setGaugeValue(next);
+            localStorage.setItem("dial_brightness_level", String(next));
+            return next;
+          });
+          if (isTauri) invoke("step_brightness", { direction: -1 }).catch(console.error);
         } else {
           setGaugeValue((prev) => Math.max(0, prev - 3));
         }
