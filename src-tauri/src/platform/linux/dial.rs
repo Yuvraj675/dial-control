@@ -1,3 +1,5 @@
+use crate::platform::traits::DialBackend;
+use futures_lite::stream::StreamExt;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
@@ -5,20 +7,24 @@ use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
-use futures_lite::stream::StreamExt;
 use tauri::{AppHandle, Emitter, Manager};
 use zbus::zvariant;
 
-// CMF Buds Pro 2 Bluetooth MAC format in BlueZ D-Bus paths
 const CMF_MAC_FORMATTED: &str = "2C_BE_EE_31_11_77";
 
-// Key codes emitted by CMF case button
 const KEY_PLAYPAUSE: u16 = 164;
 const KEY_PLAYCD: u16 = 200;
 const KEY_PAUSECD: u16 = 201;
 const KEY_VOICECOMMAND: u16 = 582;
 
-/// Locate the /dev/input/event* device path for CMF Buds Pro 2
+pub struct LinuxDial;
+
+impl LinuxDial {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
 pub fn find_cmf_input_device() -> Option<PathBuf> {
     if let Ok(contents) = fs::read_to_string("/proc/bus/input/devices") {
         let entries: Vec<&str> = contents.split("\n\n").collect();
@@ -54,8 +60,7 @@ pub fn find_cmf_input_device() -> Option<PathBuf> {
     None
 }
 
-/// Spawns the exclusive input grabber thread to intercept center dial clicks
-pub fn start_input_grabber(
+fn start_input_grabber(
     app: AppHandle,
     is_hud_open: Arc<AtomicBool>,
     locked_vol: Arc<AtomicI32>,
@@ -72,7 +77,7 @@ pub fn start_input_grabber(
                 }
             };
 
-            println!("[+] Attaching input grabber to {:?}", dev_path);
+            println!("[+] Attaching Linux input grabber to {:?}", dev_path);
             let mut device = match evdev::Device::open(&dev_path) {
                 Ok(d) => d,
                 Err(e) => {
@@ -82,7 +87,6 @@ pub fn start_input_grabber(
                 }
             };
 
-            // Exclusively grab the device to block default OS play/pause
             if let Err(e) = device.grab() {
                 eprintln!("[!] Warning: Could not grab device exclusively: {:?}", e);
             } else {
@@ -139,8 +143,7 @@ pub fn start_input_grabber(
     });
 }
 
-/// Spawns the BlueZ D-Bus listener for rotary wheel turns (Absolute Volume delta)
-pub fn start_bluez_listener(
+fn start_bluez_listener(
     app: AppHandle,
     is_hud_open: Arc<AtomicBool>,
     locked_vol: Arc<AtomicI32>,
@@ -168,7 +171,6 @@ pub fn start_bluez_listener(
 
             println!("[+] Connected to System D-Bus for BlueZ AVRCP volume tracking.");
 
-            // Match PropertiesChanged signals from org.bluez
             let rule = match zbus::MatchRule::builder()
                 .msg_type(zbus::message::Type::Signal)
                 .sender("org.bluez")
@@ -210,7 +212,6 @@ pub fn start_bluez_listener(
                         continue;
                     }
 
-                    // PropertiesChanged args: (interface_name, changed_properties, invalidated_properties)
                     if let Ok((iface, changed, _)) =
                         msg.body().deserialize::<(String, HashMap<String, zvariant::OwnedValue>, Vec<String>)>()
                     {
@@ -227,7 +228,6 @@ pub fn start_bluez_listener(
                                 Err(_) => continue,
                             };
 
-                            // Echo suppression when restoring locked volume
                             if let Some(ignore_v) = ignore_restore_vol {
                                 if (new_vol - ignore_v).abs() <= 2 {
                                     ignore_restore_vol = None;
@@ -251,7 +251,6 @@ pub fn start_bluez_listener(
 
                             let direction = if delta > 0 { 1 } else { -1 };
                             let dir_name = if delta > 0 { "CW (+)" } else { "CCW (-)" };
-                            // BlueZ AVRCP volume range is [0..127] mapped to [0..100]%
                             let mapped_pct = ((new_vol as f64 / 127.0) * 100.0)
                                 .round()
                                 .clamp(0.0, 100.0) as i32;
@@ -272,7 +271,6 @@ pub fn start_bluez_listener(
                                 );
                             }
 
-                            // If HUD is open, restore hardware volume to keep audio volume locked!
                             let hud_open = is_hud_open.load(Ordering::SeqCst);
                             let locked_v = locked_vol.load(Ordering::SeqCst);
 
@@ -302,4 +300,16 @@ pub fn start_bluez_listener(
             }
         });
     });
+}
+
+impl DialBackend for LinuxDial {
+    fn start_listeners(
+        &self,
+        app: AppHandle,
+        is_hud_open: Arc<AtomicBool>,
+        locked_vol: Arc<AtomicI32>,
+    ) {
+        start_input_grabber(app.clone(), is_hud_open.clone(), locked_vol.clone());
+        start_bluez_listener(app, is_hud_open, locked_vol);
+    }
 }

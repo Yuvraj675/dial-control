@@ -30,9 +30,12 @@ dial-control/
 │   ├── Cargo.toml          # Native dependencies & conditional targets
 │   └── src/
 │       ├── lib.rs          # System tray, IPC commands & app coordinator
-│       ├── dial_backend.rs # Hardware dial listener & rotary tracker
-│       ├── virtual_input.rs# Cross-platform hotkey & media key dispatcher
-│       └── context_detector.rs # Active foreground window tracking
+│       └── platform/       # Modular OS Abstractions (Linux, Windows, macOS)
+│           ├── mod.rs      # Unified provider switcher
+│           ├── traits.rs   # Core platform traits
+│           ├── linux/      # WirePlumber, Mutter, uinput, BlueZ & evdev
+│           ├── windows/    # WASAPI, Win32 & RawInput stubs
+│           └── macos/      # CoreAudio, IOKit & Cocoa stubs
 └── temp/                   # [Gitignored] Reference prototypes & scripts
 ```
 

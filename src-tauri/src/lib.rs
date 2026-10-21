@@ -1,7 +1,6 @@
-pub mod virtual_input;
-pub mod dial_backend;
-pub mod context_detector;
+pub mod platform;
 
+use platform::{Platform, PlatformProvider};
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::Arc;
 use tauri::{
@@ -9,229 +8,36 @@ use tauri::{
     tray::TrayIconBuilder,
     AppHandle, Emitter, Manager,
 };
-use virtual_input::VirtualKeyboard;
 
 pub struct AppState {
-    pub vk: VirtualKeyboard,
+    pub platform: Arc<Platform>,
     pub is_hud_open: Arc<AtomicBool>,
     pub locked_vol: Arc<AtomicI32>,
 }
 
-struct BacklightInfo {
-    serial: u32,
-    connector: String,
-    min: i32,
-    max: i32,
-    value: i32,
-}
-
-fn get_backlight_info() -> Option<BacklightInfo> {
-    let out = std::process::Command::new("busctl")
-        .args([
-            "--user",
-            "get-property",
-            "org.gnome.Mutter.DisplayConfig",
-            "/org/gnome/Mutter/DisplayConfig",
-            "org.gnome.Mutter.DisplayConfig",
-            "Backlight",
-        ])
-        .output()
-        .ok()?;
-
-    if !out.status.success() {
-        return None;
-    }
-
-    let text = String::from_utf8_lossy(&out.stdout);
-    let parts: Vec<&str> = text.split_whitespace().collect();
-    let mut serial: u32 = 4;
-    let mut connector = "eDP-1".to_string();
-    let mut min: Option<i32> = None;
-    let mut max: Option<i32> = None;
-    let mut value: Option<i32> = None;
-
-    if let Some(s_idx) = parts.iter().position(|&p| p == "(uaa{sv})") {
-        if let Some(s) = parts.get(s_idx + 1).and_then(|p| p.parse::<u32>().ok()) {
-            serial = s;
-        }
-    }
-    for (i, &p) in parts.iter().enumerate() {
-        if p == "\"connector\"" && i + 2 < parts.len() {
-            connector = parts[i + 2].trim_matches('"').to_string();
-        } else if p == "\"min\"" && i + 2 < parts.len() {
-            if let Ok(v) = parts[i + 2].parse::<i32>() {
-                min = Some(v);
-            }
-        } else if p == "\"max\"" && i + 2 < parts.len() {
-            if let Ok(v) = parts[i + 2].parse::<i32>() {
-                max = Some(v);
-            }
-        } else if p == "\"value\"" && i + 2 < parts.len() {
-            if let Ok(v) = parts[i + 2].parse::<i32>() {
-                value = Some(v);
-            }
-        }
-    }
-
-    if let (Some(min), Some(max), Some(value)) = (min, max, value) {
-        Some(BacklightInfo {
-            serial,
-            connector,
-            min,
-            max,
-            value,
-        })
-    } else {
-        None
-    }
-}
-
-fn get_sysfs_backlight() -> Option<i32> {
-    let actual_str = std::fs::read_to_string("/sys/class/backlight/intel_backlight/actual_brightness")
-        .or_else(|_| std::fs::read_to_string("/sys/class/backlight/amdgpu_bl0/actual_brightness"))
-        .ok()?;
-    let max_str = std::fs::read_to_string("/sys/class/backlight/intel_backlight/max_brightness")
-        .or_else(|_| std::fs::read_to_string("/sys/class/backlight/amdgpu_bl0/max_brightness"))
-        .ok()?;
-    let actual: f64 = actual_str.trim().parse().ok()?;
-    let max: f64 = max_str.trim().parse().ok()?;
-    if max > 0.0 {
-        Some(((actual / max) * 100.0).round().clamp(0.0, 100.0) as i32)
-    } else {
-        None
-    }
-}
-
-fn get_mutter_resources_brightness() -> Option<i32> {
-    let out = std::process::Command::new("busctl")
-        .args([
-            "--user",
-            "call",
-            "org.gnome.Mutter.DisplayConfig",
-            "/org/gnome/Mutter/DisplayConfig",
-            "org.gnome.Mutter.DisplayConfig",
-            "GetResources",
-        ])
-        .output()
-        .ok()?;
-
-    if !out.status.success() {
-        return None;
-    }
-
-    let text = String::from_utf8_lossy(&out.stdout);
-    let parts: Vec<&str> = text.split_whitespace().collect();
-    for (i, &p) in parts.iter().enumerate() {
-        if p == "\"backlight\"" && i + 2 < parts.len() {
-            if let Ok(val) = parts[i + 2].parse::<i32>() {
-                if val >= 0 {
-                    return Some(val.clamp(0, 100));
-                }
-            }
-        }
-    }
-    None
+#[tauri::command]
+fn get_system_brightness(state: tauri::State<AppState>) -> i32 {
+    state.platform.brightness().get_brightness()
 }
 
 #[tauri::command]
-fn get_system_brightness() -> i32 {
-    // 1. Try GNOME Mutter GetResources (direct native brightness percentage 0-100%)
-    if let Some(pct) = get_mutter_resources_brightness() {
-        println!("[Brightness] Read from Mutter GetResources: {}%", pct);
-        return pct;
-    }
-    // 2. Try Mutter Backlight property
-    if let Some(b) = get_backlight_info() {
-        let range = (b.max - b.min).max(1);
-        let pct = (((b.value - b.min) as f64 / range as f64) * 100.0).round() as i32;
-        return pct.clamp(0, 100);
-    }
-    // 3. Fallback to sysfs
-    if let Some(pct) = get_sysfs_backlight() {
-        return pct;
-    }
-    50
+fn set_system_brightness(state: tauri::State<AppState>, pct: i32) -> i32 {
+    state.platform.brightness().set_brightness(pct)
 }
 
 #[tauri::command]
 fn step_brightness(state: tauri::State<AppState>, direction: i32) {
-    if direction > 0 {
-        state.vk.emit_brightness_up();
-        println!("[Brightness] Emitted KEY_BRIGHTNESSUP (Fn+F6)");
-    } else if direction < 0 {
-        state.vk.emit_brightness_down();
-        println!("[Brightness] Emitted KEY_BRIGHTNESSDOWN (Fn+F5)");
-    }
+    state.platform.brightness().step_brightness(direction);
 }
 
 #[tauri::command]
-fn set_system_brightness(_state: tauri::State<AppState>, pct: i32) -> i32 {
-    let pct = pct.clamp(0, 100);
-    if let Some(b) = get_backlight_info() {
-        let range = b.max - b.min;
-        let raw = b.min + (pct * range) / 100;
-        let _ = std::process::Command::new("busctl")
-            .args([
-                "--user",
-                "call",
-                "org.gnome.Mutter.DisplayConfig",
-                "/org/gnome/Mutter/DisplayConfig",
-                "org.gnome.Mutter.DisplayConfig",
-                "SetBacklight",
-                "usi",
-                &b.serial.to_string(),
-                &b.connector,
-                &raw.to_string(),
-            ])
-            .status();
-        println!("[Brightness] Set to {}% (raw: {}/{}) on {}", pct, raw, b.max, b.connector);
-    }
-    pct
+fn get_system_volume(state: tauri::State<AppState>) -> i32 {
+    state.platform.audio().get_volume()
 }
 
 #[tauri::command]
-fn get_system_volume() -> i32 {
-    // 1. Try wpctl (native WirePlumber)
-    if let Ok(output) = std::process::Command::new("wpctl")
-        .args(["get-volume", "@DEFAULT_AUDIO_SINK@"])
-        .output()
-    {
-        let text = String::from_utf8_lossy(&output.stdout);
-        for part in text.split_whitespace() {
-            if let Ok(val) = part.parse::<f64>() {
-                return ((val * 100.0).round() as i32).clamp(0, 100);
-            }
-        }
-    }
-    // 2. Fallback to pactl
-    if let Ok(output) = std::process::Command::new("pactl")
-        .args(["get-sink-volume", "@DEFAULT_SINK@"])
-        .output()
-    {
-        let text = String::from_utf8_lossy(&output.stdout);
-        for part in text.split_whitespace() {
-            if part.ends_with('%') {
-                if let Ok(v) = part.trim_end_matches('%').parse::<i32>() {
-                    return v.clamp(0, 100);
-                }
-            }
-        }
-    }
-    50
-}
-
-#[tauri::command]
-fn set_system_volume(pct: i32) -> i32 {
-    let pct = pct.clamp(0, 100);
-    let frac = format!("{:.2}", (pct as f64) / 100.0);
-    let _ = std::process::Command::new("wpctl")
-        .args(["set-volume", "-l", "1.0", "@DEFAULT_AUDIO_SINK@", &frac])
-        .status();
-    let _ = std::process::Command::new("pactl")
-        .args(["set-sink-volume", "@DEFAULT_SINK@", &format!("{}%", pct)])
-        .status();
-    println!("[Volume] Set to {}% (wpctl: {})", pct, frac);
-    pct
+fn set_system_volume(state: tauri::State<AppState>, pct: i32) -> i32 {
+    state.platform.audio().set_volume(pct)
 }
 
 #[tauri::command]
@@ -242,31 +48,6 @@ fn set_mode(state: tauri::State<AppState>, mode: String) {
     } else {
         state.locked_vol.store(50, Ordering::SeqCst);
         println!("[HUD] Switched to mode: {} (volume locked at 50 for navigation)", mode);
-    }
-}
-
-fn control_mpris_or_fallback(method: &str, fallback_vk: impl FnOnce()) {
-    let script = format!(
-        r#"
-for p in $(busctl --user list 2>/dev/null | awk '/org\.mpris\.MediaPlayer2/ {{print $1}}'); do
-    if busctl --user call "$p" /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player "{}" 2>/dev/null; then
-        exit 0
-    fi
-done
-exit 1
-"#,
-        method
-    );
-    let success = std::process::Command::new("sh")
-        .arg("-c")
-        .arg(script)
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false);
-
-    if !success {
-        println!("[Media] MPRIS player not reachable, invoking virtual keyboard fallback");
-        fallback_vk();
     }
 }
 
@@ -310,7 +91,6 @@ fn show_settings(app: AppHandle) {
         let _ = window.unminimize();
         let _ = window.set_focus();
     } else {
-        // Fallback: Recreate settings window if ever closed/destroyed
         let _ = tauri::WebviewWindowBuilder::new(
             &app,
             "settings",
@@ -338,28 +118,22 @@ fn execute_action(
     println!("[Action] Executing action: {} (type: {}, action: {})", action_id, action_type, action_key);
 
     if action_id == "mute_toggle" || action_type == "mute" || action_id == "video_mute" {
-        let _ = std::process::Command::new("wpctl")
-            .args(["set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"])
-            .status();
-        println!("[Audio] Toggled sink mute via wpctl.");
+        state.platform.audio().toggle_mute();
         return;
     }
 
     if action_id == "media_playpause" || action_key == "playpause" {
-        println!("[Action] Play/Pause: sending MPRIS or fallback");
-        control_mpris_or_fallback("PlayPause", || state.vk.emit_play_pause());
+        state.platform.media().play_pause();
         return;
     }
 
     if action_id == "media_next" || action_key == "next" {
-        println!("[Action] Next track: sending MPRIS or fallback");
-        control_mpris_or_fallback("Next", || state.vk.emit_next_track());
+        state.platform.media().next_track();
         return;
     }
 
     if action_id == "media_prev" || action_key == "prev" {
-        println!("[Action] Previous track: sending MPRIS or fallback");
-        control_mpris_or_fallback("Previous", || state.vk.emit_prev_track());
+        state.platform.media().prev_track();
         return;
     }
 
@@ -371,7 +145,7 @@ fn execute_action(
                     .filter_map(|v| v.as_str().map(|s| s.to_string()))
                     .collect();
                 println!("[Action] Emitting hotkeys: {:?}", keys);
-                state.vk.emit_key_combination(&keys);
+                state.platform.input().emit_hotkey(&keys);
             }
         }
         "command" => {
@@ -395,21 +169,21 @@ fn adjust_gauge(
 ) {
     if mode == "brightness" {
         let dir = if delta > 0 { 1 } else { -1 };
-        step_brightness(state, dir);
+        state.platform.brightness().step_brightness(dir);
     } else if mode == "volume" {
-        let curr = get_system_volume();
+        let curr = state.platform.audio().get_volume();
         let next_val = (curr + delta).clamp(0, 100);
-        set_system_volume(next_val);
+        state.platform.audio().set_volume(next_val);
     }
 }
 
 pub fn run() {
     let is_hud_open = Arc::new(AtomicBool::new(false));
     let locked_vol = Arc::new(AtomicI32::new(0));
-    let vk = VirtualKeyboard::new();
+    let platform = Arc::new(Platform::new());
 
     let app_state = AppState {
-        vk,
+        platform: platform.clone(),
         is_hud_open: is_hud_open.clone(),
         locked_vol: locked_vol.clone(),
     };
@@ -451,16 +225,11 @@ pub fn run() {
                 })
                 .build(app)?;
 
-            // Start hardware background threads
-            let handle_grabber = app.handle().clone();
-            let handle_bluez = app.handle().clone();
-            let handle_context = app.handle().clone();
+            // Start hardware background threads via unified platform abstractions
+            platform.dial().start_listeners(app.handle().clone(), is_hud_open.clone(), locked_vol.clone());
+            platform.context().start(app.handle().clone());
 
-            dial_backend::start_input_grabber(handle_grabber, is_hud_open.clone(), locked_vol.clone());
-            dial_backend::start_bluez_listener(handle_bluez, is_hud_open.clone(), locked_vol.clone());
-            context_detector::start_context_detector(handle_context);
-
-            println!("[+] Dial Control Tauri v2 Daemon initialized with BlueZ & evdev bridge.");
+            println!("[+] Dial Control Daemon initialized with modular platform provider.");
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
