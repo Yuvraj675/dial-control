@@ -114,11 +114,13 @@ pub fn start_input_grabber(
                                                 let _ = window.unminimize();
                                                 let _ = window.set_focus();
                                                 let _ = window.set_always_on_top(true);
+                                                let _ = window.emit("hud:visibility", true);
                                             }
-                                            let _ = app.emit("hud:visibility", true);
                                         } else {
                                             println!(">> [NATIVE DIAL CLICK] -> Dispatched action select to HUD");
-                                            let _ = app.emit("dial:click", ());
+                                            if let Some(window) = app.get_webview_window("hud") {
+                                                let _ = window.emit("dial:click", ());
+                                            }
                                         }
                                     }
                                 }
@@ -249,8 +251,8 @@ pub fn start_bluez_listener(
 
                             let direction = if delta > 0 { 1 } else { -1 };
                             let dir_name = if delta > 0 { "CW (+)" } else { "CCW (-)" };
-                            // CMF Buds Pro 2 AVRCP volume range is [15..79] mapped to [0..100]%
-                            let mapped_pct = (((new_vol - 15) as f64 / (79.0 - 15.0)) * 100.0)
+                            // BlueZ AVRCP volume range is [0..127] mapped to [0..100]%
+                            let mapped_pct = ((new_vol as f64 / 127.0) * 100.0)
                                 .round()
                                 .clamp(0.0, 100.0) as i32;
                             println!(
@@ -258,15 +260,17 @@ pub fn start_bluez_listener(
                                 dir_name, new_vol, mapped_pct
                             );
 
-                            let _ = app.emit(
-                                "dial:rotate",
-                                serde_json::json!({
-                                    "direction": direction,
-                                    "delta": delta,
-                                    "volume": new_vol,
-                                    "volume_pct": mapped_pct
-                                }),
-                            );
+                            if let Some(window) = app.get_webview_window("hud") {
+                                let _ = window.emit(
+                                    "dial:rotate",
+                                    serde_json::json!({
+                                        "direction": direction,
+                                        "delta": delta,
+                                        "volume": new_vol,
+                                        "volume_pct": mapped_pct
+                                    }),
+                                );
+                            }
 
                             // If HUD is open, restore hardware volume to keep audio volume locked!
                             let hud_open = is_hud_open.load(Ordering::SeqCst);

@@ -7,7 +7,7 @@ import { Disc, Layers, Sliders, Eye, EyeOff } from "lucide-react";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 
-const CURRENT_CONFIG_KEY = "dial_config_v3";
+const CURRENT_CONFIG_KEY = "dial_config_v4";
 
 export function App() {
   const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -91,9 +91,9 @@ export function App() {
 
   const lastDialClickRef = useRef<number>(0);
 
-  // Tauri Event Listeners (Hardware Dial & Context Detection)
+  // Tauri Event Listeners (Hardware Dial & Context Detection) - Strictly HUD window
   useEffect(() => {
-    if (!isTauri) return;
+    if (!isTauri || view !== "hud") return;
 
     let unlistenList: UnlistenFn[] = [];
 
@@ -110,25 +110,24 @@ export function App() {
             return next % actionsCount;
           });
         } else if (currentMode === "volume") {
-          // Continuous 4% steps reaching exact 0% and 100% on both HUD and system sink
-          const step = dir * 4;
-          setGaugeValue((prev) => {
-            const next = Math.max(0, Math.min(100, prev + step));
-            if (isTauri) {
-              invoke("set_system_volume", { pct: next }).catch(console.error);
-            }
-            return next;
-          });
+          // In volume mode, BlueZ & PipeWire update hardware volume naturally.
+          // Update our HUD gauge directly from volume_pct WITHOUT calling set_system_volume!
+          if (event.payload.volume_pct !== undefined) {
+            setGaugeValue(event.payload.volume_pct);
+          }
         } else if (currentMode === "brightness") {
-          // Step by 5% to cleanly match GNOME's 20-step intervals
-          const step = dir * 5;
-          setGaugeValue((prev) => {
-            const next = Math.max(0, Math.min(100, prev + step));
-            if (isTauri) {
-              invoke("set_system_brightness", { pct: next }).catch(console.error);
-            }
-            return next;
-          });
+          // Emulate hardware Fn+F5 / Fn+F6 keys via uinput!
+          // GNOME adjusts brightness, updates system slider, and displays native OSD
+          if (isTauri) {
+            invoke<number>("step_brightness", { direction: dir })
+              .then((newPct) => {
+                if (typeof newPct === "number") {
+                  setGaugeValue(newPct);
+                }
+              })
+              .catch(console.error);
+          }
+          setGaugeValue((prev) => Math.max(0, Math.min(100, prev + dir * 5)));
         }
       });
       unlistenList.push(unlistenRotate);
@@ -136,7 +135,7 @@ export function App() {
       // 2. Dial Center Click (Triggered when HUD is already open)
       const unlistenClick = await listen("dial:click", () => {
         const now = Date.now();
-        if (now - lastDialClickRef.current < 450) {
+        if (now - lastDialClickRef.current < 500) {
           return; // Ignore hardware bounce / duplicate events
         }
         lastDialClickRef.current = now;
@@ -193,7 +192,7 @@ export function App() {
     return () => {
       unlistenList.forEach((unsub) => unsub());
     };
-  }, [isTauri]);
+  }, [isTauri, view]);
 
   // Keyboard navigation & mouse wheel (for Desktop browser preview or fallback)
   useEffect(() => {
@@ -217,7 +216,7 @@ export function App() {
             const next = Math.min(100, prev + 5);
             if (isTauri) {
               if (currentMode === "brightness") {
-                invoke("set_system_brightness", { pct: next }).catch(console.error);
+                invoke("step_brightness", { direction: 1 }).catch(console.error);
               } else if (currentMode === "volume") {
                 invoke("set_system_volume", { pct: next }).catch(console.error);
               }
@@ -234,7 +233,7 @@ export function App() {
             const next = Math.max(0, prev - 5);
             if (isTauri) {
               if (currentMode === "brightness") {
-                invoke("set_system_brightness", { pct: next }).catch(console.error);
+                invoke("step_brightness", { direction: -1 }).catch(console.error);
               } else if (currentMode === "volume") {
                 invoke("set_system_volume", { pct: next }).catch(console.error);
               }
