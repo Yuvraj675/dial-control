@@ -118,7 +118,7 @@ fn get_system_brightness() -> i32 {
 }
 
 #[tauri::command]
-fn step_brightness(state: tauri::State<AppState>, direction: i32) -> i32 {
+fn step_brightness(state: tauri::State<AppState>, direction: i32) {
     if direction > 0 {
         state.vk.emit_brightness_up();
         println!("[Brightness] Emitted KEY_BRIGHTNESSUP (Fn+F6)");
@@ -126,10 +126,6 @@ fn step_brightness(state: tauri::State<AppState>, direction: i32) -> i32 {
         state.vk.emit_brightness_down();
         println!("[Brightness] Emitted KEY_BRIGHTNESSDOWN (Fn+F5)");
     }
-    std::thread::sleep(std::time::Duration::from_millis(40));
-    let pct = get_system_brightness();
-    println!("[Brightness] Current GNOME system brightness: {}%", pct);
-    pct
 }
 
 #[tauri::command]
