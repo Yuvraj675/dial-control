@@ -1,17 +1,17 @@
+use crate::platform::traits::VirtualInput;
 use evdev::uinput::{VirtualDevice, VirtualDeviceBuilder};
 use evdev::{AttributeSet, BusType, EventType, InputEvent, InputId, Key};
 use std::sync::Mutex;
 use std::thread::sleep;
 use std::time::Duration;
 
-pub struct VirtualKeyboard {
+pub struct LinuxInput {
     device: Mutex<Option<VirtualDevice>>,
 }
 
-impl VirtualKeyboard {
+impl LinuxInput {
     pub fn new() -> Self {
         let mut keys = AttributeSet::<Key>::new();
-        // Support keys from 1 to 255 for standard, media, navigation, and function keys
         for code in 1..255 {
             keys.insert(Key::new(code));
         }
@@ -32,7 +32,7 @@ impl VirtualKeyboard {
             .ok();
 
         if dev.is_some() {
-            println!("[+] Virtual Keyboard initialized via Linux uinput (CMF Buds Pro 2 Virtual Keyboard).");
+            println!("[+] Linux Virtual Keyboard initialized via uinput (CMF Buds Pro 2 Virtual Keyboard).");
         }
 
         Self {
@@ -73,8 +73,10 @@ impl VirtualKeyboard {
     pub fn emit_prev_track(&self) {
         self.emit_key(Key::KEY_PREVIOUSSONG);
     }
+}
 
-    pub fn emit_key_combination(&self, key_names: &[String]) {
+impl VirtualInput for LinuxInput {
+    fn emit_hotkey(&self, key_names: &[String]) {
         if let Ok(mut guard) = self.device.lock() {
             if let Some(ref mut dev) = *guard {
                 let mut resolved_keys = Vec::new();
@@ -112,43 +114,49 @@ impl VirtualKeyboard {
 }
 
 fn parse_key_name(name: &str) -> Option<Key> {
-    match name.to_uppercase().as_str() {
-        "KEY_LEFTCTRL" | "CTRL" => Some(Key::KEY_LEFTCTRL),
-        "KEY_RIGHTCTRL" => Some(Key::KEY_RIGHTCTRL),
-        "KEY_LEFTSHIFT" | "SHIFT" => Some(Key::KEY_LEFTSHIFT),
-        "KEY_RIGHTSHIFT" => Some(Key::KEY_RIGHTSHIFT),
-        "KEY_LEFTALT" | "ALT" => Some(Key::KEY_LEFTALT),
-        "KEY_RIGHTALT" => Some(Key::KEY_RIGHTALT),
-        "KEY_LEFTMETA" | "SUPER" | "META" => Some(Key::KEY_LEFTMETA),
-        "KEY_C" => Some(Key::KEY_C),
-        "KEY_V" => Some(Key::KEY_V),
-        "KEY_X" => Some(Key::KEY_X),
-        "KEY_Z" => Some(Key::KEY_Z),
-        "KEY_Y" => Some(Key::KEY_Y),
-        "KEY_S" => Some(Key::KEY_S),
-        "KEY_T" => Some(Key::KEY_T),
-        "KEY_W" => Some(Key::KEY_W),
-        "KEY_R" => Some(Key::KEY_R),
-        "KEY_F" => Some(Key::KEY_F),
-        "KEY_H" => Some(Key::KEY_H),
-        "KEY_N" => Some(Key::KEY_N),
-        "KEY_P" => Some(Key::KEY_P),
-        "KEY_F2" => Some(Key::KEY_F2),
-        "KEY_F5" => Some(Key::KEY_F5),
-        "KEY_F6" => Some(Key::KEY_F6),
+    let clean = name.trim().to_uppercase();
+    match clean.as_str() {
+        "KEY_LEFTCTRL" | "CTRL" | "LCTRL" => Some(Key::KEY_LEFTCTRL),
+        "KEY_RIGHTCTRL" | "RCTRL" => Some(Key::KEY_RIGHTCTRL),
+        "KEY_LEFTSHIFT" | "SHIFT" | "LSHIFT" => Some(Key::KEY_LEFTSHIFT),
+        "KEY_RIGHTSHIFT" | "RSHIFT" => Some(Key::KEY_RIGHTSHIFT),
+        "KEY_LEFTALT" | "ALT" | "LALT" => Some(Key::KEY_LEFTALT),
+        "KEY_RIGHTALT" | "RALT" => Some(Key::KEY_RIGHTALT),
+        "KEY_LEFTMETA" | "SUPER" | "WIN" => Some(Key::KEY_LEFTMETA),
+        "KEY_C" | "C" => Some(Key::KEY_C),
+        "KEY_V" | "V" => Some(Key::KEY_V),
+        "KEY_X" | "X" => Some(Key::KEY_X),
+        "KEY_Z" | "Z" => Some(Key::KEY_Z),
+        "KEY_Y" | "Y" => Some(Key::KEY_Y),
+        "KEY_A" | "A" => Some(Key::KEY_A),
+        "KEY_S" | "S" => Some(Key::KEY_S),
+        "KEY_F" | "F" => Some(Key::KEY_F),
+        "KEY_M" | "M" => Some(Key::KEY_M),
+        "KEY_N" | "N" => Some(Key::KEY_N),
+        "KEY_T" | "T" => Some(Key::KEY_T),
+        "KEY_W" | "W" => Some(Key::KEY_W),
+        "KEY_Q" | "Q" => Some(Key::KEY_Q),
+        "KEY_R" | "R" => Some(Key::KEY_R),
         "KEY_DELETE" | "DEL" => Some(Key::KEY_DELETE),
-        "KEY_EQUAL" | "=" => Some(Key::KEY_EQUAL),
-        "KEY_MINUS" | "-" => Some(Key::KEY_MINUS),
+        "KEY_BACKSPACE" => Some(Key::KEY_BACKSPACE),
+        "KEY_ENTER" | "RETURN" => Some(Key::KEY_ENTER),
+        "KEY_ESC" | "ESCAPE" => Some(Key::KEY_ESC),
+        "KEY_SPACE" => Some(Key::KEY_SPACE),
+        "KEY_TAB" => Some(Key::KEY_TAB),
         "KEY_LEFT" => Some(Key::KEY_LEFT),
         "KEY_RIGHT" => Some(Key::KEY_RIGHT),
         "KEY_UP" => Some(Key::KEY_UP),
         "KEY_DOWN" => Some(Key::KEY_DOWN),
+        "KEY_F2" => Some(Key::KEY_F2),
+        "KEY_F5" => Some(Key::KEY_F5),
+        "KEY_F6" => Some(Key::KEY_F6),
+        "KEY_GRAVE" => Some(Key::KEY_GRAVE),
+        "KEY_SLASH" => Some(Key::KEY_SLASH),
+        "KEY_BRIGHTNESSUP" => Some(Key::KEY_BRIGHTNESSUP),
+        "KEY_BRIGHTNESSDOWN" => Some(Key::KEY_BRIGHTNESSDOWN),
         "KEY_PLAYPAUSE" => Some(Key::KEY_PLAYPAUSE),
         "KEY_NEXTSONG" => Some(Key::KEY_NEXTSONG),
         "KEY_PREVIOUSSONG" => Some(Key::KEY_PREVIOUSSONG),
-        "KEY_MUTE" => Some(Key::KEY_MUTE),
-        "KEY_VOLUMEUP" => Some(Key::KEY_VOLUMEUP),
-        "KEY_VOLUMEDOWN" => Some(Key::KEY_VOLUMEDOWN),
         _ => None,
     }
 }

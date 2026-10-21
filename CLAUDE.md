@@ -70,9 +70,12 @@ dial-control/
 │   ├── Cargo.toml          # Rust dependencies with conditional platform targets
 │   └── src/
 │       ├── lib.rs          # App bootstrap, Tauri commands & tray manager
-│       ├── dial_backend.rs # Rotary wheel & click event interceptor
-│       ├── virtual_input.rs# Cross-platform keyboard / hotkey emulation
-│       └── context_detector.rs # Active foreground window tracking
+│       └── platform/       # Modular OS Abstractions
+│           ├── mod.rs      # OS platform switcher & factory
+│           ├── traits.rs   # Unified traits (Audio, Brightness, Media, Input, Dial, Context)
+│           ├── linux/      # Linux backend (WirePlumber, Mutter, uinput, BlueZ, evdev)
+│           ├── windows/    # Windows backend & stubs (WASAPI, Win32, RawInput)
+│           └── macos/      # macOS backend & stubs (CoreAudio, IOKit, Cocoa)
 └── temp/                   # [GITIGNORED] Legacy python prototypes & backups
 ```
 
