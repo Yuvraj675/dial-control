@@ -258,8 +258,10 @@ fn sync_gnome_keybinding(shortcut: &str) {
         .args(["set", &schema, "name", "Dial Control Radial HUD"])
         .status();
 
-    let home = std::env::var("HOME").unwrap_or_else(|_| "/home/yuvraj".to_string());
-    let exec_cmd = format!("{}/Documents/Code_Projects/dial-control/bin/dial-control --toggle", home);
+    let exe_path = std::env::current_exe()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|_| "dial-control".to_string());
+    let exec_cmd = format!("{} --toggle", exe_path);
     let _ = std::process::Command::new("gsettings")
         .args(["set", &schema, "command", &exec_cmd])
         .status();

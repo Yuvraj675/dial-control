@@ -10,8 +10,6 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 use zbus::zvariant;
 
-const CMF_MAC_FORMATTED: &str = "2C_BE_EE_31_11_77";
-
 const KEY_PLAYPAUSE: u16 = 164;
 const KEY_PLAYCD: u16 = 200;
 const KEY_PAUSECD: u16 = 201;
@@ -208,7 +206,7 @@ fn start_bluez_listener(
             while let Some(msg) = stream.next().await {
                 if let Ok(msg) = msg {
                     let path = msg.header().path().map(|p| p.to_string()).unwrap_or_default();
-                    if !path.contains(CMF_MAC_FORMATTED) && !path.contains("sep") {
+                    if !path.contains("dev_") && !path.contains("sep") {
                         continue;
                     }
 
