@@ -22,6 +22,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
 interface SettingsWindowProps {
   config: ProfilesConfig;
@@ -79,6 +80,45 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
   const activeProfile = currentConfig.profiles[selectedProfileId] || currentConfig.profiles.default;
   const actions = activeProfile?.actions || [];
   const selectedAction = actions[selectedActionIndex] || actions[0];
+
+  // Raw Tokens manual input state for selected action
+  const [rawTokensInput, setRawTokensInput] = useState<string>("");
+
+  React.useEffect(() => {
+    if (selectedAction?.keys && selectedAction.keys.length > 0) {
+      setRawTokensInput(selectedAction.keys.join(", "));
+    } else {
+      setRawTokensInput("");
+    }
+  }, [selectedActionIndex, selectedProfileId, selectedAction?.keys]);
+
+  // Synchronize shortcut recording state with Tauri backend to prevent CloseRequested / Alt+F4 closures
+  React.useEffect(() => {
+    const active = isRecording || isRecordingSliceHotkey;
+    invoke("set_recording_shortcut", { recording: active }).catch(console.error);
+  }, [isRecording, isRecordingSliceHotkey]);
+
+  // Listen for system close requests (like Alt+F4) captured by backend during recording
+  React.useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    listen("recording:system_close_pressed", () => {
+      if (isRecording) {
+        handleSaveShortcut("Alt+F4");
+        setIsRecording(false);
+        invoke("set_recording_shortcut", { recording: false }).catch(console.error);
+      } else if (isRecordingSliceHotkey) {
+        handleUpdateAction({ keys: ["KEY_LEFTALT", "KEY_F4"] });
+        setIsRecordingSliceHotkey(false);
+        invoke("set_recording_shortcut", { recording: false }).catch(console.error);
+      }
+    }).then((u) => {
+      unlisten = u;
+    });
+
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, [isRecording, isRecordingSliceHotkey, actions, activeProfile]);
 
   const handleSaveShortcut = (sc: string) => {
     setShortcutText(sc);
@@ -140,23 +180,37 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
     if (isModifier(e)) return null;
 
     const code = e.code || "";
+    const key = e.key || "";
+
+    if (/^F\d+$/i.test(code) || /^F\d+$/i.test(key)) {
+      return (code || key).toUpperCase();
+    }
     if (code.startsWith("Key")) return code.replace("Key", "").toUpperCase();
     if (code.startsWith("Digit")) return code.replace("Digit", "");
     if (code.startsWith("Numpad")) return code.replace("Numpad", "");
-    if (code === "Space") return "Space";
-    if (code === "Backslash") return "Backslash";
-    if (code === "Slash") return "Slash";
-    if (code === "Backquote") return "Grave";
-    if (code === "Minus") return "Minus";
-    if (code === "Equal") return "Equal";
-    if (code === "BracketLeft") return "BracketLeft";
-    if (code === "BracketRight") return "BracketRight";
-    if (code === "Tab") return "Tab";
+    if (code === "Space" || key === " ") return "Space";
+    if (code === "Enter" || key === "Enter") return "Enter";
+    if (code === "Tab" || key === "Tab") return "Tab";
+    if (code === "Backslash" || key === "\\") return "Backslash";
+    if (code === "Slash" || key === "/") return "Slash";
+    if (code === "Backquote" || key === "`") return "Grave";
+    if (code === "Minus" || key === "-") return "Minus";
+    if (code === "Equal" || key === "=") return "Equal";
+    if (code === "BracketLeft" || key === "[") return "BracketLeft";
+    if (code === "BracketRight" || key === "]") return "BracketRight";
+    if (code === "ArrowLeft" || key === "ArrowLeft") return "Left";
+    if (code === "ArrowRight" || key === "ArrowRight") return "Right";
+    if (code === "ArrowUp" || key === "ArrowUp") return "Up";
+    if (code === "ArrowDown" || key === "ArrowDown") return "Down";
+    if (code === "Delete" || key === "Delete") return "Delete";
+    if (code === "Insert" || key === "Insert") return "Insert";
+    if (code === "Home" || key === "Home") return "Home";
+    if (code === "End" || key === "End") return "End";
+    if (code === "PageUp" || key === "PageUp") return "PageUp";
+    if (code === "PageDown" || key === "PageDown") return "PageDown";
 
-    if (/^F\d+$/i.test(code)) return code.toUpperCase();
-
-    if (e.key && e.key.length === 1 && !isModifier(e)) {
-      return e.key.toUpperCase();
+    if (key && key.length === 1 && !isModifier(e)) {
+      return key.toUpperCase();
     }
     return null;
   };
@@ -267,6 +321,19 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
     };
 
     const onBlur = () => {
+      const combo = stagedComboRef.current;
+      if (combo) {
+        const parts = combo.split("+");
+        const hasMainKey = parts.some((p) => !["Super", "Ctrl", "Alt", "Shift"].includes(p));
+        if (hasMainKey) {
+          handleSaveShortcut(combo);
+          setIsRecording(false);
+          heldModifiersRef.current.clear();
+          setStagedCombo("");
+          stagedComboRef.current = "";
+          return;
+        }
+      }
       heldModifiersRef.current.clear();
       setStagedCombo("");
       stagedComboRef.current = "";
@@ -303,10 +370,10 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
   const comboToTokens = (combo: string): string[] => {
     return combo.split("+").map((p) => {
       const clean = p.trim().toUpperCase();
-      if (clean === "CTRL") return "KEY_LEFTCTRL";
+      if (clean === "CTRL" || clean === "CONTROL") return "KEY_LEFTCTRL";
       if (clean === "SHIFT") return "KEY_LEFTSHIFT";
       if (clean === "ALT") return "KEY_LEFTALT";
-      if (clean === "SUPER") return "KEY_LEFTMETA";
+      if (clean === "SUPER" || clean === "META" || clean === "WIN") return "KEY_LEFTMETA";
       if (clean === "SPACE") return "KEY_SPACE";
       if (clean === "ENTER") return "KEY_ENTER";
       if (clean === "TAB") return "KEY_TAB";
@@ -320,11 +387,35 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
       if (clean === "RIGHT") return "KEY_RIGHT";
       if (clean === "UP") return "KEY_UP";
       if (clean === "DOWN") return "KEY_DOWN";
+      if (clean === "DELETE" || clean === "DEL") return "KEY_DELETE";
+      if (clean === "INSERT" || clean === "INS") return "KEY_INSERT";
+      if (clean === "HOME") return "KEY_HOME";
+      if (clean === "END") return "KEY_END";
+      if (clean === "PAGEUP" || clean === "PGUP") return "KEY_PAGEUP";
+      if (clean === "PAGEDOWN" || clean === "PGDN") return "KEY_PAGEDOWN";
+      if (/^F\d+$/.test(clean)) return `KEY_${clean}`;
       if (clean.length === 1 && clean >= "A" && clean <= "Z") return `KEY_${clean}`;
       if (clean.length === 1 && clean >= "0" && clean <= "9") return `KEY_${clean}`;
       if (clean.startsWith("KEY_")) return clean;
       return `KEY_${clean}`;
     });
+  };
+
+  const handleRawTokensChange = (val: string) => {
+    setRawTokensInput(val);
+    const parts = val
+      .split(/[,+]/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const tokens = parts.map((p) => {
+      const clean = p.toUpperCase();
+      if (clean.startsWith("KEY_")) return clean;
+      const converted = comboToTokens(clean);
+      return converted[0] || `KEY_${clean}`;
+    });
+
+    handleUpdateAction({ keys: tokens });
   };
 
   const formatTokenForDisplay = (token: string): string => {
@@ -444,6 +535,20 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
     };
 
     const onBlur = () => {
+      const combo = stagedSliceComboRef.current;
+      if (combo) {
+        const parts = combo.split("+");
+        const hasMainKey = parts.some((p) => !["Super", "Ctrl", "Alt", "Shift"].includes(p));
+        if (hasMainKey) {
+          const tokens = comboToTokens(combo);
+          handleUpdateAction({ keys: tokens });
+          setIsRecordingSliceHotkey(false);
+          heldSliceModifiersRef.current.clear();
+          setStagedSliceCombo("");
+          stagedSliceComboRef.current = "";
+          return;
+        }
+      }
       heldSliceModifiersRef.current.clear();
       setStagedSliceCombo("");
       stagedSliceComboRef.current = "";
@@ -1380,8 +1485,22 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                                 )}
                               </div>
                             </div>
-                            <div className="text-[10px] font-ndot text-neutral-500 uppercase tracking-wider">
-                              RAW TOKENS: {selectedAction.keys?.join(", ") || "NONE"}
+                            <div className="flex flex-col gap-1.5 pt-2 border-t border-white/5">
+                              <div className="flex items-center justify-between">
+                                <label className="font-ndot text-[10px] text-neutral-400 uppercase tracking-wider">
+                                  RAW TOKENS / DIRECT EDIT
+                                </label>
+                                <span className="font-ndot text-[9px] text-neutral-500 uppercase tracking-wider">
+                                  e.g. KEY_LEFTALT, KEY_F4 or Alt+F4
+                                </span>
+                              </div>
+                              <input
+                                type="text"
+                                value={rawTokensInput}
+                                onChange={(e) => handleRawTokensChange(e.target.value)}
+                                placeholder="KEY_LEFTCTRL, KEY_C or Ctrl+C"
+                                className="w-full px-3 py-1.5 rounded-lg bg-[#0E1015] border border-white/10 text-xs text-neutral-200 font-ndot tracking-wider focus:outline-none focus:border-white focus:text-white uppercase transition-all"
+                              />
                             </div>
                           </div>
                         )}
@@ -1673,6 +1792,19 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                       </button>
                     )}
                   </div>
+                </div>
+
+                <div className="w-full flex items-center gap-3 pt-3 border-t border-white/5">
+                  <span className="font-ndot text-[11px] text-neutral-400 uppercase tracking-wider whitespace-nowrap">
+                    EDIT DIRECTLY:
+                  </span>
+                  <input
+                    type="text"
+                    value={shortcutText}
+                    onChange={(e) => handleSaveShortcut(e.target.value)}
+                    placeholder="e.g. Super+Shift+D, Alt+F4, Ctrl+Space"
+                    className="flex-1 px-3.5 py-1.5 rounded-lg bg-[#111317] border border-white/10 text-xs text-white font-ndot uppercase tracking-wider focus:outline-none focus:border-white"
+                  />
                 </div>
               </div>
             )}

@@ -13,6 +13,7 @@ pub struct AppState {
     pub platform: Arc<Platform>,
     pub is_hud_open: Arc<AtomicBool>,
     pub locked_vol: Arc<AtomicI32>,
+    pub is_recording_shortcut: Arc<AtomicBool>,
 }
 
 #[tauri::command]
@@ -421,15 +422,23 @@ fn register_activation_shortcut(app: AppHandle, shortcut_str: String) -> Result<
     }
 }
 
+#[tauri::command]
+fn set_recording_shortcut(state: tauri::State<AppState>, recording: bool) {
+    state.is_recording_shortcut.store(recording, Ordering::SeqCst);
+    println!("[Shortcut] Recording shortcut active state: {}", recording);
+}
+
 pub fn run() {
     let is_hud_open = Arc::new(AtomicBool::new(false));
     let locked_vol = Arc::new(AtomicI32::new(0));
+    let is_recording_shortcut = Arc::new(AtomicBool::new(false));
     let platform = Arc::new(Platform::new());
 
     let app_state = AppState {
         platform: platform.clone(),
         is_hud_open: is_hud_open.clone(),
         locked_vol: locked_vol.clone(),
+        is_recording_shortcut: is_recording_shortcut.clone(),
     };
 
     tauri::Builder::default()
@@ -447,6 +456,13 @@ pub fn run() {
         .on_window_event(|window, event| {
             match event {
                 tauri::WindowEvent::CloseRequested { api, .. } => {
+                    let state: tauri::State<AppState> = window.state();
+                    if state.is_recording_shortcut.load(Ordering::SeqCst) {
+                        println!("[Window] CloseRequested suppressed because shortcut recording is in progress");
+                        api.prevent_close();
+                        let _ = window.emit("recording:system_close_pressed", ());
+                        return;
+                    }
                     if window.label() == "settings" || window.label() == "hud" {
                         let _ = window.hide();
                         api.prevent_close();
@@ -589,6 +605,7 @@ pub fn run() {
             set_system_volume,
             set_mode,
             register_activation_shortcut,
+            set_recording_shortcut,
             load_config,
             save_config
         ])
