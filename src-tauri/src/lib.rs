@@ -274,9 +274,20 @@ fn sync_gnome_keybinding(shortcut: &str) {
         .args(["get", "org.gnome.settings-daemon.plugins.media-keys", "custom-keybindings"])
         .output()
     {
-        let current_list = String::from_utf8_lossy(&out.stdout);
+        let current_list = String::from_utf8_lossy(&out.stdout).trim().to_string();
         if !current_list.contains(path) {
-            let list_val = format!("['{}']", path);
+            let list_val = if current_list.is_empty() || current_list == "@as []" || current_list == "[]" {
+                format!("['{}']", path)
+            } else if current_list.ends_with(']') {
+                let trimmed = current_list.trim_end_matches(']').trim();
+                if trimmed.ends_with('[') {
+                    format!("['{}']", path)
+                } else {
+                    format!("{}, '{}']", trimmed, path)
+                }
+            } else {
+                format!("['{}']", path)
+            };
             let _ = std::process::Command::new("gsettings")
                 .args(["set", "org.gnome.settings-daemon.plugins.media-keys", "custom-keybindings", &list_val])
                 .status();
