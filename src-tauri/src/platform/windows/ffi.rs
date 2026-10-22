@@ -117,7 +117,9 @@ pub type HOOKPROC = Option<unsafe extern "system" fn(code: i32, wparam: WPARAM, 
 #[link(name = "user32")]
 extern "system" {
     pub fn GetForegroundWindow() -> HWND;
+    pub fn SetForegroundWindow(hWnd: HWND) -> BOOL;
     pub fn GetWindowTextW(hWnd: HWND, lpString: *mut u16, nMaxCount: i32) -> i32;
+    pub fn GetClassNameW(hWnd: HWND, lpClassName: *mut u16, nMaxCount: i32) -> i32;
     pub fn GetWindowThreadProcessId(hWnd: HWND, lpdwProcessId: *mut DWORD) -> DWORD;
     pub fn SetWindowsHookExW(idHook: i32, lpfn: HOOKPROC, hmod: HINSTANCE, dwThreadId: DWORD) -> HHOOK;
     pub fn UnhookWindowsHookEx(hhk: HHOOK) -> BOOL;

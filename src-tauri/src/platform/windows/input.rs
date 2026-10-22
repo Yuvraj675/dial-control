@@ -1,4 +1,5 @@
 use crate::platform::traits::VirtualInput;
+use crate::platform::windows::context::get_last_target_hwnd;
 use crate::platform::windows::ffi::*;
 use std::mem::size_of;
 use std::thread;
@@ -13,26 +14,40 @@ impl WindowsInput {
 }
 
 fn parse_vk(key_name: &str) -> Option<u16> {
-    let clean = key_name.trim().to_lowercase();
-    match clean.as_str() {
-        "ctrl" | "control" => Some(VK_CONTROL),
-        "shift" => Some(VK_SHIFT),
-        "alt" | "menu" => Some(VK_MENU),
-        "super" | "win" | "meta" | "command" => Some(VK_LWIN),
+    let raw = key_name.trim().to_lowercase();
+    let clean = raw.strip_prefix("key_").unwrap_or(&raw);
+
+    match clean {
+        "ctrl" | "control" | "leftctrl" | "rightctrl" => Some(VK_CONTROL),
+        "shift" | "leftshift" | "rightshift" => Some(VK_SHIFT),
+        "alt" | "menu" | "leftalt" | "rightalt" => Some(VK_MENU),
+        "super" | "win" | "meta" | "command" | "leftmeta" | "rightmeta" => Some(VK_LWIN),
         "enter" | "return" => Some(VK_RETURN),
         "space" | "spacebar" => Some(VK_SPACE),
         "tab" => Some(VK_TAB),
-        "backspace" => Some(VK_BACK),
+        "backspace" | "back" => Some(VK_BACK),
         "delete" | "del" => Some(VK_DELETE),
         "escape" | "esc" => Some(VK_ESCAPE),
         "left" => Some(VK_LEFT),
         "right" => Some(VK_RIGHT),
         "up" => Some(VK_UP),
         "down" => Some(VK_DOWN),
-        "pageup" => Some(VK_PRIOR),
-        "pagedown" => Some(VK_NEXT),
+        "pageup" | "page_up" => Some(VK_PRIOR),
+        "pagedown" | "page_down" => Some(VK_NEXT),
         "home" => Some(VK_HOME),
         "end" => Some(VK_END),
+        "insert" => Some(VK_INSERT),
+        "slash" => Some(0xBF), // VK_OEM_2
+        "backslash" => Some(0xDC), // VK_OEM_5
+        "grave" | "backtick" => Some(0xC0), // VK_OEM_3
+        "minus" => Some(0xBD), // VK_OEM_MINUS
+        "equal" | "plus" => Some(0xBB), // VK_OEM_PLUS
+        "leftbrace" | "bracketleft" => Some(0xDB), // VK_OEM_4
+        "rightbrace" | "bracketright" => Some(0xDD), // VK_OEM_6
+        "semicolon" => Some(0xBA), // VK_OEM_1
+        "apostrophe" | "quote" => Some(0xDE), // VK_OEM_7
+        "comma" => Some(0xBC), // VK_OEM_COMMA
+        "dot" | "period" => Some(0xBE), // VK_OEM_PERIOD
         "f1" => Some(0x70),
         "f2" => Some(0x71),
         "f3" => Some(0x72),
@@ -121,6 +136,13 @@ impl VirtualInput for WindowsInput {
         println!("[Windows Input] Emitting hotkey: {:?} -> VKs: {:?}", keys, vks);
 
         unsafe {
+            // Restore foreground focus to previous target window if known
+            let target_hwnd = get_last_target_hwnd();
+            if !target_hwnd.is_null() {
+                SetForegroundWindow(target_hwnd);
+                thread::sleep(Duration::from_millis(60));
+            }
+
             // 1. Press all keys down in order
             let mut down_inputs: Vec<INPUT> = vks.iter().map(|&vk| make_key_input(vk, false)).collect();
             SendInput(
@@ -129,8 +151,8 @@ impl VirtualInput for WindowsInput {
                 size_of::<INPUT>() as i32,
             );
 
-            // Small delay to allow Windows message loop to register key down
-            thread::sleep(Duration::from_millis(15));
+            // Small delay to allow target window to register key down
+            thread::sleep(Duration::from_millis(25));
 
             // 2. Release all keys in reverse order
             let mut up_inputs: Vec<INPUT> = vks.iter().rev().map(|&vk| make_key_input(vk, true)).collect();
