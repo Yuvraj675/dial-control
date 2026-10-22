@@ -90,6 +90,16 @@ impl ContextDetector for WindowsContext {
                         CloseHandle(h_process);
                     }
 
+                    // Distinguish actual File Explorer folder windows from the Windows Desktop and Taskbar
+                    if app_name == "explorer" {
+                        if class_name != "CabinetWClass" && class_name != "ExploreWClass" {
+                            // Desktop icons (Progman), background (WorkerW), or Taskbar (Shell_TrayWnd) -> System profile
+                            app_name = "desktop".to_string();
+                        }
+                    } else if class_name == "Progman" || class_name == "WorkerW" || class_name.starts_with("Shell_") || title == "Program Manager" {
+                        app_name = "desktop".to_string();
+                    }
+
                     // Fallback heuristics using class name if process path was unreadable
                     if app_name.is_empty() {
                         if class_name.contains("Chrome_WidgetWin") {

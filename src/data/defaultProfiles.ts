@@ -71,7 +71,7 @@ export const DEFAULT_CONFIG: ProfilesConfig = {
         { id: "file_trash", label: "DELETE", icon: "trash", type: "hotkey", keys: ["KEY_DELETE"] },
         { id: "file_new_folder", label: "NEW FOLDER", icon: "new_folder", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_N"] },
         { id: "file_rename", label: "RENAME", icon: "rename", type: "hotkey", keys: ["KEY_F2"] },
-        { id: "file_terminal", label: "TERMINAL", icon: "terminal", type: "command", cmd: "gnome-terminal || xterm" },
+        { id: "file_terminal", label: "TERMINAL", icon: "terminal", type: "command", cmd: "x-terminal-emulator || ptyxis || gnome-terminal || kgx || konsole || alacritty || kitty || xterm" },
         { id: "home_dial", label: "HOME", icon: "home", type: "home", desc: "Choose Dial Menu" },
         { id: "close_hud", label: "CLOSE", icon: "close", type: "close", desc: "Dismiss HUD" },
       ],

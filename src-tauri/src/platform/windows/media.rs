@@ -18,7 +18,7 @@ impl WindowsMedia {
                 wScan: 0,
                 dwFlags: KEYEVENTF_EXTENDEDKEY,
                 time: 0,
-                dwExtraInfo: 0,
+                dwExtraInfo: SYNTHETIC_INPUT_TAG,
             };
             let mut down = INPUT {
                 type_: INPUT_KEYBOARD,
@@ -33,7 +33,7 @@ impl WindowsMedia {
                 wScan: 0,
                 dwFlags: KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP,
                 time: 0,
-                dwExtraInfo: 0,
+                dwExtraInfo: SYNTHETIC_INPUT_TAG,
             };
             let mut up = INPUT {
                 type_: INPUT_KEYBOARD,

@@ -113,11 +113,57 @@ pub struct INPUT {
 }
 
 pub type HOOKPROC = Option<unsafe extern "system" fn(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT>;
+pub type HRESULT = i32;
+pub type HMONITOR = *mut c_void;
+pub type HDC = *mut c_void;
+
+pub const SYNTHETIC_INPUT_TAG: usize = 0x4449414C; // "DIAL" in ASCII
+pub const SW_RESTORE: i32 = 9;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct GUID {
+    pub data1: u32,
+    pub data2: u16,
+    pub data3: u16,
+    pub data4: [u8; 8],
+}
+
+pub const CLSID_MMDEVICE_ENUMERATOR: GUID = GUID {
+    data1: 0xBCDE0395,
+    data2: 0xE52F,
+    data3: 0x467C,
+    data4: [0x8E, 0x3D, 0xC4, 0x57, 0x92, 0x91, 0x69, 0x2E],
+};
+
+pub const IID_IMMDEVICE_ENUMERATOR: GUID = GUID {
+    data1: 0xA95664D2,
+    data2: 0x9614,
+    data3: 0x4F35,
+    data4: [0xA7, 0x46, 0xDE, 0x8D, 0xB6, 0x36, 0x17, 0xE6],
+};
+
+pub const IID_IAUDIO_ENDPOINT_VOLUME: GUID = GUID {
+    data1: 0x5CDF2C82,
+    data2: 0x841E,
+    data3: 0x4546,
+    data4: [0x97, 0x22, 0x0C, 0xF7, 0x40, 0x78, 0x22, 0x9A],
+};
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct PHYSICAL_MONITOR {
+    pub hPhysicalMonitor: HANDLE,
+    pub szPhysicalMonitorDescription: [u16; 128],
+}
+
+pub type MONITORENUMPROC = Option<unsafe extern "system" fn(hMonitor: HMONITOR, hdcMonitor: HDC, lprcMonitor: *mut c_void, dwData: LPARAM) -> BOOL>;
 
 #[link(name = "user32")]
 extern "system" {
     pub fn GetForegroundWindow() -> HWND;
     pub fn SetForegroundWindow(hWnd: HWND) -> BOOL;
+    pub fn ShowWindow(hWnd: HWND, nCmdShow: i32) -> BOOL;
     pub fn GetWindowTextW(hWnd: HWND, lpString: *mut u16, nMaxCount: i32) -> i32;
     pub fn GetClassNameW(hWnd: HWND, lpClassName: *mut u16, nMaxCount: i32) -> i32;
     pub fn GetWindowThreadProcessId(hWnd: HWND, lpdwProcessId: *mut DWORD) -> DWORD;
@@ -129,6 +175,7 @@ extern "system" {
     pub fn DispatchMessageW(lpMsg: *const MSG) -> LRESULT;
     pub fn PostQuitMessage(nExitCode: i32);
     pub fn SendInput(cInputs: u32, pInputs: *const INPUT, cbSize: i32) -> u32;
+    pub fn EnumDisplayMonitors(hdc: HDC, lprcClip: *const c_void, lpfnEnum: MONITORENUMPROC, dwData: LPARAM) -> BOOL;
 }
 
 #[link(name = "kernel32")]
@@ -138,4 +185,26 @@ extern "system" {
     pub fn CloseHandle(hObject: HANDLE) -> BOOL;
     pub fn QueryFullProcessImageNameW(hProcess: HANDLE, dwFlags: DWORD, lpExeName: *mut u16, lpdwSize: *mut DWORD) -> BOOL;
     pub fn GetModuleHandleW(lpModuleName: *const u16) -> HINSTANCE;
+}
+
+#[link(name = "ole32")]
+extern "system" {
+    pub fn CoInitializeEx(pvReserved: *mut c_void, dwCoInit: DWORD) -> HRESULT;
+    pub fn CoUninitialize();
+    pub fn CoCreateInstance(
+        rclsid: *const GUID,
+        pUnkOuter: *mut c_void,
+        dwClsContext: DWORD,
+        riid: *const GUID,
+        ppv: *mut *mut c_void,
+    ) -> HRESULT;
+}
+
+#[link(name = "dxva2")]
+extern "system" {
+    pub fn GetNumberOfPhysicalMonitorsFromHMONITOR(hMonitor: HMONITOR, pdwNumberOfPhysicalMonitors: *mut DWORD) -> BOOL;
+    pub fn GetPhysicalMonitorsFromHMONITOR(hMonitor: HMONITOR, dwPhysicalMonitorArraySize: DWORD, pPhysicalMonitorArray: *mut PHYSICAL_MONITOR) -> BOOL;
+    pub fn DestroyPhysicalMonitors(dwPhysicalMonitorArraySize: DWORD, pPhysicalMonitorArray: *mut PHYSICAL_MONITOR) -> BOOL;
+    pub fn GetMonitorBrightness(hMonitor: HANDLE, pdwMinimumBrightness: *mut DWORD, pdwCurrentBrightness: *mut DWORD, pdwMaximumBrightness: *mut DWORD) -> BOOL;
+    pub fn SetMonitorBrightness(hMonitor: HANDLE, dwNewBrightness: DWORD) -> BOOL;
 }

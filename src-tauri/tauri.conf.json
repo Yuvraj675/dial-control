@@ -23,6 +23,7 @@
         "visible": false,
         "center": true,
         "shadow": false,
+        "skipTaskbar": true,
         "url": "index.html?view=hud"
       },
       {

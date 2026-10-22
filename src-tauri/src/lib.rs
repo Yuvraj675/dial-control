@@ -56,10 +56,20 @@ fn show_hud(app: AppHandle, state: tauri::State<AppState>) {
     state.is_hud_open.store(true, Ordering::SeqCst);
     state.locked_vol.store(50, Ordering::SeqCst);
     if let Some(window) = app.get_webview_window("hud") {
-        let _ = window.show();
         let _ = window.unminimize();
+        let _ = window.show();
         let _ = window.set_focus();
         let _ = window.set_always_on_top(true);
+        #[cfg(target_os = "windows")]
+        {
+            use crate::platform::windows::ffi::*;
+            if let Ok(hwnd) = window.hwnd() {
+                unsafe {
+                    ShowWindow(hwnd.0 as HWND, SW_RESTORE);
+                    SetForegroundWindow(hwnd.0 as HWND);
+                }
+            }
+        }
     }
     let _ = app.emit("hud:visibility", true);
 }
@@ -136,20 +146,32 @@ fn execute_action(
     }
 
     if action_id == "media_playpause" || action_key == "playpause" {
-        state.platform.media().play_pause();
-        hide_hud(app, state);
+        hide_hud(app, state.clone());
+        let platform = state.platform.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(80));
+            platform.media().play_pause();
+        });
         return;
     }
 
     if action_id == "media_next" || action_key == "next" {
-        state.platform.media().next_track();
-        hide_hud(app, state);
+        hide_hud(app, state.clone());
+        let platform = state.platform.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(80));
+            platform.media().next_track();
+        });
         return;
     }
 
     if action_id == "media_prev" || action_key == "prev" {
-        state.platform.media().prev_track();
-        hide_hud(app, state);
+        hide_hud(app, state.clone());
+        let platform = state.platform.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(80));
+            platform.media().prev_track();
+        });
         return;
     }
 
@@ -174,16 +196,29 @@ fn execute_action(
             }
         }
         "command" => {
-            if let Some(cmd) = action.get("cmd").and_then(|v| v.as_str()) {
-                hide_hud(app, state);
+            hide_hud(app, state);
+            if action_id == "file_terminal" {
+                println!("[Action] Spawning default terminal emulator...");
+                #[cfg(target_os = "windows")]
+                {
+                    let _ = std::process::Command::new("cmd")
+                        .args(["/c", "start wt.exe || start powershell.exe || start cmd.exe"])
+                        .spawn();
+                }
+                #[cfg(not(target_os = "windows"))]
+                {
+                    let _ = std::process::Command::new("sh")
+                        .arg("-c")
+                        .arg("x-terminal-emulator || ptyxis || gnome-terminal || kgx || konsole || alacritty || kitty || xfce4-terminal || foot || terminator || xterm")
+                        .spawn();
+                }
+            } else if let Some(cmd) = action.get("cmd").and_then(|v| v.as_str()) {
                 println!("[Action] Spawning command: {}", cmd);
                 #[cfg(target_os = "windows")]
                 {
-                    use std::os::windows::process::CommandExt;
-                    let mut c = std::process::Command::new("cmd");
-                    c.args(["/c", cmd]);
-                    c.creation_flags(0x08000000); // CREATE_NO_WINDOW
-                    let _ = c.spawn();
+                    let _ = std::process::Command::new("cmd")
+                        .args(["/c", "start", cmd])
+                        .spawn();
                 }
                 #[cfg(not(target_os = "windows"))]
                 {
@@ -367,11 +402,21 @@ pub fn run() {
         )
         .manage(app_state)
         .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                if window.label() == "settings" || window.label() == "hud" {
-                    let _ = window.hide();
-                    api.prevent_close();
+            match event {
+                tauri::WindowEvent::CloseRequested { api, .. } => {
+                    if window.label() == "settings" || window.label() == "hud" {
+                        let _ = window.hide();
+                        api.prevent_close();
+                    }
                 }
+                tauri::WindowEvent::Focused(false) => {
+                    if window.label() == "hud" {
+                        let app = window.app_handle().clone();
+                        let state: tauri::State<AppState> = app.state();
+                        hide_hud(app.clone(), state);
+                    }
+                }
+                _ => {}
             }
         })
         .setup(move |app| {

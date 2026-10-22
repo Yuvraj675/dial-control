@@ -128,7 +128,7 @@
           "label": "Terminal",
           "icon": "💻",
           "type": "command",
-          "cmd": "gnome-terminal || xterm",
+          "cmd": "x-terminal-emulator || ptyxis || gnome-terminal || kgx || konsole || alacritty || kitty || xterm",
           "desc": "Open terminal"
         },
         {
