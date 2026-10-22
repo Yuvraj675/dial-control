@@ -39,11 +39,12 @@ fn set_dxva2_brightness(pct: i32) {
                 ];
                 if GetPhysicalMonitorsFromHMONITOR(hmon, count, phys.as_mut_ptr()) != 0 {
                     for p in &phys {
-                        let mut min = 0;
-                        let mut cur = 0;
-                        let mut max = 100;
+                        let mut min: DWORD = 0;
+                        let mut cur: DWORD = 0;
+                        let mut max: DWORD = 100;
                         if GetMonitorBrightness(p.hPhysicalMonitor, &mut min, &mut cur, &mut max) != 0 {
-                            let mapped = (min + (pct * (max - min) as i32) / 100) as DWORD;
+                            let span = (max as i32 - min as i32).max(1);
+                            let mapped = (min as i32 + (pct * span) / 100).clamp(min as i32, max as i32) as DWORD;
                             let _ = SetMonitorBrightness(p.hPhysicalMonitor, mapped);
                         }
                     }
