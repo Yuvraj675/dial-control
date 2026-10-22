@@ -15,4 +15,6 @@ package() {
     install -Dm644 "${srcdir}/usr/share/applications/dial-control.desktop" "${pkgdir}/usr/share/applications/dial-control.desktop"
     install -Dm644 "${srcdir}/usr/share/icons/hicolor/512x512/apps/dial-control.png" "${pkgdir}/usr/share/icons/hicolor/512x512/apps/dial-control.png"
     install -Dm644 "${srcdir}/usr/lib/udev/rules.d/99-dial-control.rules" "${pkgdir}/usr/lib/udev/rules.d/99-dial-control.rules"
+    install -d "${pkgdir}/usr/share/gnome-shell/extensions/focused-window-dbus@flexagoon.com"
+    install -Dm644 "${srcdir}/usr/share/gnome-shell/extensions/focused-window-dbus@flexagoon.com/"* "${pkgdir}/usr/share/gnome-shell/extensions/focused-window-dbus@flexagoon.com/"
 }

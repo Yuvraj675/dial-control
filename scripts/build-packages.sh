@@ -4,7 +4,7 @@ set -e
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$DIR"
 
-echo "==> [1/4] Compiling release frontend and binary..."
+echo "==> [1/5] Compiling release frontend and binary..."
 npx @tauri-apps/cli build --no-bundle
 
 mkdir -p dist-packages temp/pkgconfig
@@ -27,26 +27,25 @@ cp temp/pkgconfig/ayatana-appindicator3-0.1.pc temp/pkgconfig/appindicator3-0.1.
 sed -i 's/ayatana-//g' temp/pkgconfig/appindicator3-0.1.pc
 export PKG_CONFIG_PATH="$DIR/temp/pkgconfig:$PKG_CONFIG_PATH"
 
-echo "==> [2/4] Generating RPM and AppImage packages via Tauri..."
-npx @tauri-apps/cli build --bundles rpm,appimage || true
+echo "==> [2/5] Generating AppImage bundle via Tauri..."
+npx @tauri-apps/cli build --bundles appimage || true
 
-if [ -f "src-tauri/target/release/bundle/rpm/Dial Control-1.0.0-1.x86_64.rpm" ]; then
-    cp "src-tauri/target/release/bundle/rpm/Dial Control-1.0.0-1.x86_64.rpm" dist-packages/dial-control-1.0.0-1.x86_64.rpm
-fi
 if [ -f "src-tauri/target/release/bundle/appimage/Dial Control_1.0.0_amd64.AppImage" ]; then
     cp "src-tauri/target/release/bundle/appimage/Dial Control_1.0.0_amd64.AppImage" dist-packages/Dial-Control-1.0.0-amd64.AppImage
     chmod +x dist-packages/Dial-Control-1.0.0-amd64.AppImage
 fi
 
-echo "==> [3/4] Assembling Debian (.deb) package..."
+echo "==> [3/5] Assembling Debian (.deb) package..."
 mkdir -p temp/deb-build/DEBIAN
 mkdir -p temp/deb-build/usr/bin
 mkdir -p temp/deb-build/usr/share/applications
 mkdir -p temp/deb-build/usr/share/icons/hicolor/512x512/apps
+mkdir -p temp/deb-build/usr/share/gnome-shell/extensions/focused-window-dbus@flexagoon.com
 mkdir -p temp/deb-build/usr/lib/udev/rules.d
 
 cp src-tauri/target/release/dial-control temp/deb-build/usr/bin/dial-control
 chmod +x temp/deb-build/usr/bin/dial-control
+cp -r resources/gnome-extension/focused-window-dbus@flexagoon.com/* temp/deb-build/usr/share/gnome-shell/extensions/focused-window-dbus@flexagoon.com/
 
 cat << 'EOF' > temp/deb-build/usr/share/applications/dial-control.desktop
 [Desktop Entry]
@@ -100,6 +99,9 @@ fi
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then
     gtk-update-icon-cache -q /usr/share/icons/hicolor || true
 fi
+if command -v gnome-extensions >/dev/null 2>&1; then
+    gnome-extensions enable focused-window-dbus@flexagoon.com 2>/dev/null || true
+fi
 exit 0
 EOF
 chmod 755 temp/deb-build/DEBIAN/postinst
@@ -111,7 +113,57 @@ tar --numeric-owner --owner=0 --group=0 -czvf data.tar.gz usr
 ar rcs "$DIR/dist-packages/dial-control_1.0.0_amd64.deb" debian-binary control.tar.gz data.tar.gz
 cd "$DIR"
 
-echo "==> [4/4] Assembling Arch Linux package..."
+echo "==> [4/5] Assembling Red Hat / Fedora (.rpm) package via rpmbuild..."
+mkdir -p temp/rpm-build/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+cp -r temp/deb-build/usr temp/rpm-build/SOURCES/
+
+cat << 'EOF' > temp/rpm-build/SPECS/dial-control.spec
+Name: dial-control
+Version: 1.0.0
+Release: 1
+Summary: Context-Aware Radial Dial Controller for CMF Buds Pro 2
+License: MIT
+AutoReqProv: no
+Requires: webkit2gtk4.1, gtk3, libayatana-appindicator
+
+%description
+Context-Aware Radial Dial Controller for CMF Buds Pro 2
+
+%install
+mkdir -p %{buildroot}
+cp -r %{_sourcedir}/usr %{buildroot}/
+
+%files
+/usr/bin/dial-control
+/usr/share/applications/dial-control.desktop
+/usr/share/icons/hicolor/512x512/apps/dial-control.png
+/usr/share/gnome-shell/extensions/focused-window-dbus@flexagoon.com
+/usr/lib/udev/rules.d/99-dial-control.rules
+
+%post
+if command -v udevadm >/dev/null 2>&1; then
+    udevadm control --reload-rules || true
+    udevadm trigger || true
+fi
+if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database -q /usr/share/applications || true
+fi
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+    gtk-update-icon-cache -q /usr/share/icons/hicolor || true
+fi
+if command -v gnome-extensions >/dev/null 2>&1; then
+    gnome-extensions enable focused-window-dbus@flexagoon.com 2>/dev/null || true
+fi
+
+%changelog
+* $(date +"%a %b %d %Y") Yuvraj Gupta <yuviyg675@gmail.com> - 1.0.0-1
+- Production release with context awareness and udev permissions
+EOF
+
+rpmbuild --define "_topdir $DIR/temp/rpm-build" --define "_tmppath /tmp" -bb temp/rpm-build/SPECS/dial-control.spec
+cp -f temp/rpm-build/RPMS/x86_64/dial-control-1.0.0-1.x86_64.rpm dist-packages/dial-control-1.0.0-1.x86_64.rpm
+
+echo "==> [5/5] Assembling Arch Linux package..."
 mkdir -p temp/arch-build/usr
 cp -r temp/deb-build/usr/* temp/arch-build/usr/
 
@@ -128,13 +180,35 @@ license = MIT
 depend = webkit2gtk-4.1
 depend = gtk3
 depend = libayatana-appindicator
+install = .INSTALL
+EOF
+
+cat << 'EOF' > temp/arch-build/.INSTALL
+post_install() {
+    if command -v udevadm >/dev/null 2>&1; then
+        udevadm control --reload-rules || true
+        udevadm trigger || true
+    fi
+    if command -v update-desktop-database >/dev/null 2>&1; then
+        update-desktop-database -q /usr/share/applications || true
+    fi
+    if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+        gtk-update-icon-cache -q /usr/share/icons/hicolor || true
+    fi
+    if command -v gnome-extensions >/dev/null 2>&1; then
+        gnome-extensions enable focused-window-dbus@flexagoon.com 2>/dev/null || true
+    fi
+}
+post_upgrade() {
+    post_install
+}
 EOF
 
 cd temp/arch-build
-tar --numeric-owner --owner=0 --group=0 -cf - .PKGINFO usr | zstd -19 -T0 -o "$DIR/dist-packages/dial-control-1.0.0-1-x86_64.pkg.tar.zst"
+tar --numeric-owner --owner=0 --group=0 -cf - .PKGINFO .INSTALL usr | zstd -19 -T0 -f -o "$DIR/dist-packages/dial-control-1.0.0-1-x86_64.pkg.tar.zst"
 cd "$DIR"
 
-rm -rf temp/deb-build temp/arch-build temp/pkgconfig
+rm -rf temp/deb-build temp/arch-build temp/rpm-build temp/pkgconfig
 
 echo "==> All packages ready in dist-packages/:"
 ls -lh dist-packages/
