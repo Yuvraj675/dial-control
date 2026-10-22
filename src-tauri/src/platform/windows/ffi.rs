@@ -185,6 +185,9 @@ extern "system" {
     pub fn CloseHandle(hObject: HANDLE) -> BOOL;
     pub fn QueryFullProcessImageNameW(hProcess: HANDLE, dwFlags: DWORD, lpExeName: *mut u16, lpdwSize: *mut DWORD) -> BOOL;
     pub fn GetModuleHandleW(lpModuleName: *const u16) -> HINSTANCE;
+    pub fn LoadLibraryW(lpLibFileName: *const u16) -> HINSTANCE;
+    pub fn GetProcAddress(hModule: HINSTANCE, lpProcName: *const u8) -> *const c_void;
+    pub fn FreeLibrary(hLibModule: HINSTANCE) -> BOOL;
 }
 
 #[link(name = "ole32")]
@@ -200,11 +203,31 @@ extern "system" {
     ) -> HRESULT;
 }
 
-#[link(name = "dxva2")]
-extern "system" {
-    pub fn GetNumberOfPhysicalMonitorsFromHMONITOR(hMonitor: HMONITOR, pdwNumberOfPhysicalMonitors: *mut DWORD) -> BOOL;
-    pub fn GetPhysicalMonitorsFromHMONITOR(hMonitor: HMONITOR, dwPhysicalMonitorArraySize: DWORD, pPhysicalMonitorArray: *mut PHYSICAL_MONITOR) -> BOOL;
-    pub fn DestroyPhysicalMonitors(dwPhysicalMonitorArraySize: DWORD, pPhysicalMonitorArray: *mut PHYSICAL_MONITOR) -> BOOL;
-    pub fn GetMonitorBrightness(hMonitor: HANDLE, pdwMinimumBrightness: *mut DWORD, pdwCurrentBrightness: *mut DWORD, pdwMaximumBrightness: *mut DWORD) -> BOOL;
-    pub fn SetMonitorBrightness(hMonitor: HANDLE, dwNewBrightness: DWORD) -> BOOL;
-}
+// Dynamic function pointer definitions for dxva2.dll (loaded dynamically via LoadLibraryW to prevent startup loader crashes)
+pub type FnGetNumberOfPhysicalMonitorsFromHMONITOR = unsafe extern "system" fn(
+    hMonitor: HMONITOR,
+    pdwNumberOfPhysicalMonitors: *mut DWORD,
+) -> BOOL;
+
+pub type FnGetPhysicalMonitorsFromHMONITOR = unsafe extern "system" fn(
+    hMonitor: HMONITOR,
+    dwPhysicalMonitorArraySize: DWORD,
+    pPhysicalMonitorArray: *mut PHYSICAL_MONITOR,
+) -> BOOL;
+
+pub type FnDestroyPhysicalMonitors = unsafe extern "system" fn(
+    dwPhysicalMonitorArraySize: DWORD,
+    pPhysicalMonitorArray: *mut PHYSICAL_MONITOR,
+) -> BOOL;
+
+pub type FnGetMonitorBrightness = unsafe extern "system" fn(
+    hMonitor: HANDLE,
+    pdwMinimumBrightness: *mut DWORD,
+    pdwCurrentBrightness: *mut DWORD,
+    pdwMaximumBrightness: *mut DWORD,
+) -> BOOL;
+
+pub type FnSetMonitorBrightness = unsafe extern "system" fn(
+    hMonitor: HANDLE,
+    dwNewBrightness: DWORD,
+) -> BOOL;
