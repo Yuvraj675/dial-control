@@ -1,4 +1,5 @@
 pub mod traits;
+pub mod common;
 
 #[cfg(target_os = "linux")]
 pub mod linux;
@@ -15,4 +16,5 @@ pub mod macos;
 #[cfg(target_os = "macos")]
 pub use macos::Platform;
 
+pub use common::*;
 pub use traits::*;

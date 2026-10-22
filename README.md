@@ -52,7 +52,7 @@ dial-control/
 | Platform | Dial / AVRCP Interception | Volume Control | Brightness Control | Context Detection | Status |
 |---|---|---|---|---|---|
 | **Linux (X11 / Wayland)** | BlueZ D-Bus + `evdev` grabber | WirePlumber (`wpctl`) / PulseAudio | `/sys/class/backlight` + GNOME Mutter D-Bus | GNOME FocusedWindow D-Bus + Sway/Hyprland/KDE/X11 | **Fully Functional** |
-| **Windows** | Win32 RawInput / AVRCP | WASAPI (`IAudioEndpointVolume`) | WMI / Win32 Monitor API | Win32 `GetForegroundWindow` | **In Development** |
+| **Windows (10 / 11)** | Low-Level Hook (`WH_KEYBOARD_LL`) + AVRCP | Win32 Master Volume + VK stepping | WMI (`WmiMonitorBrightness`) | Win32 `GetForegroundWindow` + Process Image Query | **Implemented (Ready for Testing)** |
 | **macOS** | CoreBluetooth / IOHIDManager | CoreAudio HAL | DisplayServices / IOKit | Cocoa `NSWorkspace` | **In Development** |
 
 ---
