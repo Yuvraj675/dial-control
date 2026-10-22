@@ -211,7 +211,8 @@ export function App() {
     async function setupTauriListeners() {
       // 1. Dial Rotation
       const unlistenRotate = await listen<{ direction: number; delta: number; volume?: number; volume_pct?: number }>("dial:rotate", (event) => {
-        const { currentMode, actionsCount } = stateRef.current;
+        const { currentMode, actionsCount, isHudOpen } = stateRef.current;
+        if (!isHudOpen) return;
         const dir = event.payload.direction ?? event.payload.delta ?? 1;
 
         if (currentMode === "menu") {
@@ -316,6 +317,7 @@ export function App() {
         setIsHudOpen(event.payload);
         if (event.payload) {
           setCurrentMode("menu");
+          setSelectedIndex(0);
           if (isTauri) {
             invoke("set_mode", { mode: "menu" }).catch(console.error);
 
