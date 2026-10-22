@@ -390,8 +390,8 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
     // Default template actions if none selected
     if (imported.length === 0) {
       imported.push(
-        { id: `vol_${Date.now()}`, label: "VOLUME", icon: "volume", type: "mode" },
-        { id: `media_${Date.now()}`, label: "PLAY / PAUSE", icon: "playpause", type: "key", action: "playpause" }
+        { id: `vol_${Date.now()}`, label: "VOLUME", icon: "volume", type: "mode", action: "volume", desc: "Rotate to adjust volume" },
+        { id: `media_${Date.now()}`, label: "PLAY / PAUSE", icon: "playpause", type: "key", action: "playpause", desc: "Toggle media playback" }
       );
     }
 
@@ -852,9 +852,24 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                       </label>
                       <select
                         value={selectedAction.type}
-                        onChange={(e) =>
-                          handleUpdateAction({ type: e.target.value as ActionType })
-                        }
+                        onChange={(e) => {
+                          const newType = e.target.value as ActionType;
+                          const updates: Partial<WheelAction> = { type: newType };
+                          if (newType === "mode") {
+                            updates.action = "volume";
+                            updates.icon = "volume";
+                          } else if (newType === "key") {
+                            updates.action = "playpause";
+                            updates.icon = "playpause";
+                          } else if (newType === "home") {
+                            updates.icon = "home";
+                          } else if (newType === "close") {
+                            updates.icon = "close";
+                          } else if (newType === "mute") {
+                            updates.icon = "mute";
+                          }
+                          handleUpdateAction(updates);
+                        }}
                         className="w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white focus:outline-none focus:border-white font-ndot uppercase tracking-wider"
                       >
                         <option value="hotkey">HOTKEY KEYPRESS</option>
@@ -862,10 +877,95 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                         <option value="key">MEDIA KEY (PLAY/NEXT/PREV)</option>
                         <option value="command">SHELL COMMAND</option>
                         <option value="mute">MUTE AUDIO TOGGLE</option>
+                        <option value="profile">DIAL LINK (SWITCH PROFILE)</option>
                         <option value="home">HOME DIAL LAUNCHER</option>
                         <option value="close">CLOSE / DISMISS HUD</option>
                       </select>
                     </div>
+
+                    {/* Mode Subtype Selector */}
+                    {selectedAction.type === "mode" && (
+                      <div>
+                        <label className="font-ndot text-[11px] text-neutral-400 mb-1.5 block uppercase tracking-wider">
+                          Interactive Mode Target
+                        </label>
+                        <select
+                          value={
+                            selectedAction.action === "brightness" || selectedAction.id?.includes("bright")
+                              ? "brightness"
+                              : "volume"
+                          }
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            handleUpdateAction({
+                              action: val,
+                              icon: val === "brightness" ? "brightness" : "volume",
+                              label: val === "brightness" ? "BRIGHTNESS" : "VOLUME",
+                              desc: val === "brightness" ? "Rotate to adjust brightness" : "Rotate to adjust volume",
+                            });
+                          }}
+                          className="w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white focus:outline-none focus:border-white font-ndot uppercase tracking-wider"
+                        >
+                          <option value="volume">VOLUME GAUGE</option>
+                          <option value="brightness">BRIGHTNESS GAUGE</option>
+                        </select>
+                      </div>
+                    )}
+
+                    {/* Media Key Action Selector */}
+                    {selectedAction.type === "key" && (
+                      <div>
+                        <label className="font-ndot text-[11px] text-neutral-400 mb-1.5 block uppercase tracking-wider">
+                          Media Action
+                        </label>
+                        <select
+                          value={selectedAction.action || "playpause"}
+                          onChange={(e) => {
+                            const act = e.target.value;
+                            const icon = act === "next" ? "next" : act === "prev" ? "prev" : "playpause";
+                            const label =
+                              act === "next"
+                                ? "NEXT TRACK"
+                                : act === "prev"
+                                ? "PREV TRACK"
+                                : "PLAY / PAUSE";
+                            handleUpdateAction({ action: act, icon, label });
+                          }}
+                          className="w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white focus:outline-none focus:border-white font-ndot uppercase tracking-wider"
+                        >
+                          <option value="playpause">PLAY / PAUSE</option>
+                          <option value="next">NEXT TRACK</option>
+                          <option value="prev">PREVIOUS TRACK</option>
+                        </select>
+                      </div>
+                    )}
+
+                    {/* Target Profile Selector */}
+                    {selectedAction.type === "profile" && (
+                      <div>
+                        <label className="font-ndot text-[11px] text-neutral-400 mb-1.5 block uppercase tracking-wider">
+                          Target Profile / Dial
+                        </label>
+                        <select
+                          value={selectedAction.action || "default"}
+                          onChange={(e) =>
+                            handleUpdateAction({
+                              action: e.target.value,
+                              label:
+                                currentConfig.profiles[e.target.value]?.name.toUpperCase() ||
+                                e.target.value.toUpperCase(),
+                            })
+                          }
+                          className="w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white focus:outline-none focus:border-white font-ndot uppercase tracking-wider"
+                        >
+                          {getOrderedProfileIds(currentConfig).map((id) => (
+                            <option key={id} value={id}>
+                              {currentConfig.profiles[id]?.name.toUpperCase() || id.toUpperCase()}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
 
                     {/* Keystrokes */}
                     {selectedAction.type === "hotkey" && (
