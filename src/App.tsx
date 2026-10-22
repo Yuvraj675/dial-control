@@ -203,7 +203,12 @@ export function App() {
 
     // 4. Continuous Mode switches (Volume / Brightness)
     if (action.type === "mode") {
-      const mode = action.id === "volume_mode" ? "volume" : "brightness";
+      const isVolume =
+        action.action === "volume" ||
+        action.id === "volume_mode" ||
+        action.id.startsWith("vol_") ||
+        action.label?.toUpperCase().includes("VOL");
+      const mode = isVolume ? "volume" : "brightness";
       setCurrentMode(mode);
       if (isTauri) {
         invoke("set_mode", { mode }).catch(console.error);
