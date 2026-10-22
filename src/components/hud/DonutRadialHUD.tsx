@@ -11,6 +11,9 @@ interface DonutRadialHUDProps {
   currentMode: "menu" | "volume" | "brightness";
   gaugeValue?: number; // 0-100
   theme?: "nothing_red" | "stealth" | "cmf_orange";
+  dialRadius?: number;
+  donutThickness?: number;
+  isStaticPreview?: boolean;
   onSelectAction?: (action: WheelAction) => void;
   onDismiss?: () => void;
 }
@@ -22,14 +25,18 @@ export const DonutRadialHUD: React.FC<DonutRadialHUDProps> = ({
   currentMode,
   gaugeValue = 50,
   theme = "nothing_red",
+  dialRadius = 188,
+  donutThickness = 68,
+  isStaticPreview = false,
   onSelectAction,
   onDismiss,
 }) => {
-  const size = 450;
+  const rOuter = dialRadius || 188;
+  const thickness = Math.min(donutThickness || 68, rOuter - 50);
+  const rInner = Math.max(50, rOuter - thickness);
+  const size = Math.max(450, (rOuter + 30) * 2);
   const cx = size / 2;
   const cy = size / 2;
-  const rOuter = 188;
-  const rInner = 120;
 
   const actions = profile.actions || [];
   const activeAction = actions[selectedIndex] || actions[0];
@@ -64,41 +71,27 @@ export const DonutRadialHUD: React.FC<DonutRadialHUDProps> = ({
     };
   });
 
-  return (
-    <AnimatePresence>
-      {isOpen && (
-        <div
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              onDismiss?.();
-            }
-          }}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            onDismiss?.();
-          }}
-          className="fixed inset-0 flex items-center justify-center bg-transparent pointer-events-auto"
-        >
-          <motion.div
-            initial={{ scale: 0.65, rotate: -20, opacity: 0, filter: "blur(12px)" }}
-            animate={{ scale: 1, rotate: 0, opacity: 1, filter: "blur(0px)" }}
-            exit={{ scale: 0.8, rotate: 10, opacity: 0, filter: "blur(8px)" }}
-            transition={{
-              type: "spring",
-              stiffness: 420,
-              damping: 26,
-              mass: 0.85,
-            }}
-            className="relative flex items-center justify-center"
-            style={{ width: size, height: size }}
-          >
-            {/* Ambient Dark Obsidian Backing */}
-            <div
-              className="absolute inset-4 rounded-full pointer-events-none transition-all duration-300"
-              style={{
-                boxShadow: `0 0 50px ${glowColor}, inset 0 0 40px rgba(0,0,0,0.85)`,
-              }}
-            />
+  const hudElement = (
+    <motion.div
+      initial={isStaticPreview ? false : { scale: 0.65, rotate: -20, opacity: 0, filter: "blur(12px)" }}
+      animate={{ scale: isStaticPreview ? 0.72 : 1, rotate: 0, opacity: 1, filter: "blur(0px)" }}
+      exit={isStaticPreview ? undefined : { scale: 0.8, rotate: 10, opacity: 0, filter: "blur(8px)" }}
+      transition={{
+        type: "spring",
+        stiffness: 420,
+        damping: 26,
+        mass: 0.85,
+      }}
+      className="relative flex items-center justify-center shrink-0"
+      style={{ width: size, height: size }}
+    >
+      {/* Ambient Dark Obsidian Backing */}
+      <div
+        className="absolute inset-4 rounded-full pointer-events-none transition-all duration-300"
+        style={{
+          boxShadow: `0 0 50px ${glowColor}, inset 0 0 40px rgba(0,0,0,0.85)`,
+        }}
+      />
 
             {/* SVG Layer for Slices, Bezel Ticks, and Gauge */}
             <svg
@@ -293,7 +286,33 @@ export const DonutRadialHUD: React.FC<DonutRadialHUDProps> = ({
                 </div>
               )}
             </motion.div>
-          </motion.div>
+    </motion.div>
+  );
+
+  if (isStaticPreview) {
+    return (
+      <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
+        {hudElement}
+      </div>
+    );
+  }
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              onDismiss?.();
+            }
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            onDismiss?.();
+          }}
+          className="fixed inset-0 flex items-center justify-center bg-transparent pointer-events-auto"
+        >
+          {hudElement}
         </div>
       )}
     </AnimatePresence>
