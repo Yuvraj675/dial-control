@@ -105,7 +105,7 @@ fn make_key_input(vk: u16, key_up: bool) -> INPUT {
         wScan: 0,
         dwFlags: flags,
         time: 0,
-        dwExtraInfo: 0,
+        dwExtraInfo: SYNTHETIC_INPUT_TAG,
     };
 
     INPUT {

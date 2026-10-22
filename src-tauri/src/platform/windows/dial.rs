@@ -79,14 +79,6 @@ unsafe extern "system" fn low_level_keyboard_proc(
                                 let _ = window.set_focus();
                                 let _ = window.set_always_on_top(true);
                                 let _ = window.emit("hud:visibility", true);
-
-                                #[cfg(target_os = "windows")]
-                                {
-                                    if let Ok(hwnd) = window.hwnd() {
-                                        ShowWindow(hwnd.0 as HWND, SW_RESTORE);
-                                        SetForegroundWindow(hwnd.0 as HWND);
-                                    }
-                                }
                             }
                         }
                     }
