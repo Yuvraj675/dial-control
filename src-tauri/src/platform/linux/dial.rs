@@ -212,7 +212,7 @@ fn start_bluez_listener(
             };
 
             let mut last_vol: Option<i32> = None;
-            let mut ignore_restore_vol: Option<i32> = None;
+            let mut ignore_restore: Option<(i32, Instant)> = None;
 
             while let Some(msg) = stream.next().await {
                 if let Ok(msg) = msg {
@@ -237,11 +237,15 @@ fn start_bluez_listener(
                                 Err(_) => continue,
                             };
 
-                            if let Some(ignore_v) = ignore_restore_vol {
-                                if (new_vol - ignore_v).abs() <= 2 {
-                                    ignore_restore_vol = None;
-                                    last_vol = Some(new_vol);
-                                    continue;
+                            if let Some((target_raw, ts)) = ignore_restore {
+                                if ts.elapsed() < Duration::from_millis(600) {
+                                    if (new_vol - target_raw).abs() <= 3 {
+                                        ignore_restore = None;
+                                        last_vol = Some(new_vol);
+                                        continue;
+                                    }
+                                } else {
+                                    ignore_restore = None;
                                 }
                             }
 
@@ -284,7 +288,19 @@ fn start_bluez_listener(
                             let locked_v = locked_vol.load(Ordering::SeqCst);
 
                             if hud_open && locked_v > 0 {
-                                ignore_restore_vol = Some(locked_v);
+                                let expected_raw = ((locked_v as f64 * 127.0) / 100.0)
+                                    .round()
+                                    .clamp(0.0, 127.0) as i32;
+                                ignore_restore = Some((expected_raw, Instant::now()));
+
+                                // 1. Restore system audio sink volume via WirePlumber/PipeWire/PulseAudio
+                                let app_clone = app.clone();
+                                thread::spawn(move || {
+                                    let state: tauri::State<crate::AppState> = app_clone.state();
+                                    state.platform.audio().set_volume(locked_v);
+                                });
+
+                                // 2. Also try setting BlueZ MediaTransport1 Volume directly in 0..127 scale
                                 let proxy = zbus::Proxy::new(
                                     &connection,
                                     "org.bluez",
@@ -294,7 +310,7 @@ fn start_bluez_listener(
                                 .await;
 
                                 if let Ok(proxy) = proxy {
-                                    let val: zvariant::Value = zvariant::Value::U16(locked_v as u16);
+                                    let val: zvariant::Value = zvariant::Value::U16(expected_raw as u16);
                                     let _ = proxy
                                         .call_method(
                                             "Set",

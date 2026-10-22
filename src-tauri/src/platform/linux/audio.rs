@@ -45,13 +45,16 @@ impl SystemAudio for LinuxAudio {
     fn set_volume(&self, pct: i32) -> i32 {
         let pct = pct.clamp(0, 100);
         let frac = format!("{:.2}", (pct as f64) / 100.0);
-        let _ = Command::new("wpctl")
+        let wp_status = Command::new("wpctl")
             .args(["set-volume", "-l", "1.0", "@DEFAULT_AUDIO_SINK@", &frac])
             .status();
-        let _ = Command::new("pactl")
-            .args(["set-sink-volume", "@DEFAULT_SINK@", &format!("{}%", pct)])
-            .status();
-        println!("[Linux Volume] Set to {}% (wpctl: {})", pct, frac);
+
+        if wp_status.is_err() || !wp_status.unwrap().success() {
+            let _ = Command::new("pactl")
+                .args(["set-sink-volume", "@DEFAULT_SINK@", &format!("{}%", pct)])
+                .status();
+        }
+        println!("[Linux Volume] Set to {}%", pct);
         pct
     }
 
