@@ -4,7 +4,7 @@ use platform::{Platform, PlatformProvider};
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::Arc;
 use tauri::{
-    menu::MenuBuilder,
+    menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::TrayIconBuilder,
     AppHandle, Emitter, Manager,
 };
@@ -364,13 +364,13 @@ pub fn run() {
             }
         })
         .setup(move |app| {
-            // Build Tray Menu (Clean typography without emojis or bare ampersands)
-            let menu = MenuBuilder::new(app)
-                .text("toggle_hud", "Toggle Radial HUD")
-                .text("open_settings", "Settings and Preferences")
-                .separator()
-                .text("quit", "Quit Dial Control")
-                .build()?;
+            // Build Tray Menu (Explicit MenuItems with proper labels and separator)
+            let toggle_i = MenuItem::with_id(app, "toggle_hud", "Toggle Radial HUD", true, None::<&str>)?;
+            let settings_i = MenuItem::with_id(app, "open_settings", "Settings and Preferences", true, None::<&str>)?;
+            let sep = PredefinedMenuItem::separator(app)?;
+            let quit_i = MenuItem::with_id(app, "quit", "Quit Dial Control", true, None::<&str>)?;
+
+            let menu = Menu::with_items(app, &[&toggle_i, &settings_i, &sep, &quit_i])?;
 
             // Register default global activation shortcut (Super+Shift+D) for users without dial hardware
             use std::str::FromStr;
