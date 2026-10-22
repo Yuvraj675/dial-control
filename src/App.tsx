@@ -96,7 +96,42 @@ export function App() {
   const handleSaveConfig = (updated: ProfilesConfig) => {
     setConfig(updated);
     localStorage.setItem(CURRENT_CONFIG_KEY, JSON.stringify(updated));
+    if (isTauri) {
+      invoke("save_config", { config: updated }).catch((e) =>
+        console.error("[Config] Failed to persist config to backend:", e)
+      );
+    }
   };
+
+  // Load persistent config from backend on startup & listen for live broadcasts
+  useEffect(() => {
+    if (!isTauri) return;
+
+    invoke<ProfilesConfig | null>("load_config")
+      .then((loaded) => {
+        if (loaded && loaded.profiles && loaded.settings) {
+          console.log("[Config] Loaded persistent config from backend storage");
+          setConfig(loaded);
+          localStorage.setItem(CURRENT_CONFIG_KEY, JSON.stringify(loaded));
+        }
+      })
+      .catch((e) => console.error("[Config] Failed to load config from backend:", e));
+
+    let unlisten: UnlistenFn | undefined;
+    listen<ProfilesConfig>("config:update", (event) => {
+      console.log("[Config] Live config update broadcast received:", event.payload);
+      if (event.payload && event.payload.profiles) {
+        setConfig(event.payload);
+        localStorage.setItem(CURRENT_CONFIG_KEY, JSON.stringify(event.payload));
+      }
+    }).then((unsub) => {
+      unlisten = unsub;
+    });
+
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, [isTauri]);
 
   // Register activation shortcut on startup if running under Tauri
   useEffect(() => {
@@ -105,7 +140,7 @@ export function App() {
         shortcutStr: config.settings.activation_shortcut,
       }).catch((e) => console.error("[Shortcut] Startup registration failed:", e));
     }
-  }, [isTauri]);
+  }, [isTauri, config.settings?.activation_shortcut]);
 
   // Keep references for event listener callbacks without stale closures
   const stateRef = useRef({

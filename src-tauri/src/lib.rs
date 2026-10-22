@@ -124,6 +124,41 @@ fn show_settings(app: AppHandle) {
 }
 
 #[tauri::command]
+fn load_config(app: AppHandle) -> Option<serde_json::Value> {
+    if let Ok(config_dir) = app.path().app_config_dir() {
+        let config_path = config_dir.join("profiles.json");
+        if config_path.exists() {
+            if let Ok(content) = std::fs::read_to_string(&config_path) {
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
+                    println!("[Config] Loaded profiles configuration from {:?}", config_path);
+                    return Some(val);
+                }
+            }
+        }
+    }
+    None
+}
+
+#[tauri::command]
+fn save_config(app: AppHandle, config: serde_json::Value) -> Result<bool, String> {
+    if let Ok(config_dir) = app.path().app_config_dir() {
+        let _ = std::fs::create_dir_all(&config_dir);
+        let config_path = config_dir.join("profiles.json");
+        if let Ok(content) = serde_json::to_string_pretty(&config) {
+            if let Err(e) = std::fs::write(&config_path, content) {
+                eprintln!("[!] Failed to write config to {:?}: {:?}", config_path, e);
+                return Err(e.to_string());
+            }
+            println!("[Config] Successfully saved profiles configuration to {:?}", config_path);
+        }
+    }
+
+    // Broadcast config update to all webview windows (HUD, Preferences, etc.)
+    let _ = app.emit("config:update", &config);
+    Ok(true)
+}
+
+#[tauri::command]
 fn execute_action(
     app: AppHandle,
     state: tauri::State<AppState>,
@@ -553,7 +588,9 @@ pub fn run() {
             get_system_volume,
             set_system_volume,
             set_mode,
-            register_activation_shortcut
+            register_activation_shortcut,
+            load_config,
+            save_config
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
