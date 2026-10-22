@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ProfilesConfig, WheelAction, ActionType, DialProfile } from "../../types/profile";
+import { ProfilesConfig, WheelAction, ActionType, DialProfile, getOrderedProfileIds } from "../../types/profile";
 import { getActionIcon, ICON_MAP } from "../../utils/iconMap";
 import {
   Palette,
@@ -293,6 +293,25 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
     });
   };
 
+  const handleMoveProfile = (direction: -1 | 1) => {
+    const ordered = getOrderedProfileIds(currentConfig);
+    const currIdx = ordered.indexOf(selectedProfileId);
+    if (currIdx === -1) return;
+    const newIdx = currIdx + direction;
+    if (newIdx >= 0 && newIdx < ordered.length) {
+      const updatedOrder = [...ordered];
+      const temp = updatedOrder[currIdx];
+      updatedOrder[currIdx] = updatedOrder[newIdx];
+      updatedOrder[newIdx] = temp;
+
+      const updated = {
+        ...currentConfig,
+        profile_order: updatedOrder,
+      };
+      setCurrentConfig(updated);
+    }
+  };
+
   const handleMoveAction = (direction: -1 | 1) => {
     const newIdx = selectedActionIndex + direction;
     if (newIdx >= 0 && newIdx < actions.length) {
@@ -392,12 +411,14 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
       actions: imported,
     };
 
+    const currentOrder = getOrderedProfileIds(currentConfig);
     const updatedConfig = {
       ...currentConfig,
       profiles: {
         ...currentConfig.profiles,
         [id]: newProfile,
       },
+      profile_order: [...currentOrder.filter((p) => p !== id), id],
     };
 
     setCurrentConfig(updatedConfig);
@@ -412,9 +433,11 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
   const handleDeleteProfile = (profileId: string) => {
     if (profileId === "default") return;
     const { [profileId]: _, ...remaining } = currentConfig.profiles;
+    const currentOrder = getOrderedProfileIds(currentConfig).filter((id) => id !== profileId);
     setCurrentConfig({
       ...currentConfig,
       profiles: remaining,
+      profile_order: currentOrder,
     });
     setSelectedProfileId("default");
     setSelectedActionIndex(0);
@@ -588,59 +611,82 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
             <div className="w-64 shrink-0 border-r border-white/[0.08] p-4 flex flex-col gap-2 overflow-y-auto bg-[#0C0D11]/40">
               <div className="flex items-center justify-between mb-2">
                 <div className="font-ndot text-[10px] uppercase text-neutral-500 tracking-widest">
-                  ACTIVE DIALS ({Object.keys(currentConfig.profiles).length})
+                  DIALS ({Object.keys(currentConfig.profiles).length})
                 </div>
-                <button
-                  onClick={() => setIsNewDialOpen(true)}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white/[0.08] hover:bg-white/15 text-white text-[10px] font-ndot tracking-wider uppercase transition-all"
-                  title="Add custom dial menu"
-                >
-                  <Plus className="w-3 h-3" />
-                  <span>NEW DIAL</span>
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => handleMoveProfile(-1)}
+                    className="p-1 rounded bg-white/[0.06] hover:bg-white/10 text-neutral-300 transition-all cursor-pointer"
+                    title="Move selected dial up"
+                  >
+                    <ArrowUp className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleMoveProfile(1)}
+                    className="p-1 rounded bg-white/[0.06] hover:bg-white/10 text-neutral-300 transition-all cursor-pointer"
+                    title="Move selected dial down"
+                  >
+                    <ArrowDown className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsNewDialOpen(true)}
+                    className="flex items-center gap-1 px-2 py-1 rounded bg-white/[0.08] hover:bg-white/15 text-white text-[10px] font-ndot tracking-wider uppercase transition-all cursor-pointer"
+                    title="Add custom dial menu"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>NEW</span>
+                  </button>
+                </div>
               </div>
 
-              {Object.entries(currentConfig.profiles).map(([id, prof]) => (
-                <div
-                  key={id}
-                  onClick={() => {
-                    setSelectedProfileId(id);
-                    setSelectedActionIndex(0);
-                  }}
-                  className={`group flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${
-                    selectedProfileId === id
-                      ? "bg-white/[0.08] border-white/20 text-white shadow-sm"
-                      : "bg-[#101217]/60 border-white/[0.03] text-neutral-400 hover:text-white hover:bg-white/[0.04]"
-                  }`}
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="p-2 rounded-lg bg-white/[0.05] border border-white/10 text-white shrink-0">
-                      {getActionIcon(prof.icon, 16)}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="font-ndot text-xs tracking-wider truncate uppercase">
-                        {prof.name}
+              {getOrderedProfileIds(currentConfig).map((id) => {
+                const prof = currentConfig.profiles[id];
+                if (!prof) return null;
+                return (
+                  <div
+                    key={id}
+                    onClick={() => {
+                      setSelectedProfileId(id);
+                      setSelectedActionIndex(0);
+                    }}
+                    className={`group flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${
+                      selectedProfileId === id
+                        ? "bg-white/[0.08] border-white/20 text-white shadow-sm"
+                        : "bg-[#101217]/60 border-white/[0.03] text-neutral-400 hover:text-white hover:bg-white/[0.04]"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="p-2 rounded-lg bg-white/[0.05] border border-white/10 text-white shrink-0">
+                        {getActionIcon(prof.icon, 16)}
                       </div>
-                      <div className="text-[10px] font-ndot text-neutral-500 tracking-widest truncate">
-                        {prof.actions.length} SLICES
+                      <div className="min-w-0">
+                        <div className="font-ndot text-xs tracking-wider truncate uppercase">
+                          {prof.name}
+                        </div>
+                        <div className="text-[10px] font-ndot text-neutral-500 tracking-widest truncate">
+                          {prof.actions.length} SLICES
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {id !== "default" && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteProfile(id);
-                      }}
-                      className="opacity-0 group-hover:opacity-100 p-1.5 rounded hover:bg-red-500/20 text-neutral-500 hover:text-red-400 transition-all"
-                      title="Delete this custom dial"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-              ))}
+                    {id !== "default" && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteProfile(id);
+                        }}
+                        className="opacity-0 group-hover:opacity-100 p-1.5 rounded hover:bg-red-500/20 text-neutral-500 hover:text-red-400 transition-all"
+                        title="Delete this custom dial"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {/* Column 2: Slices List */}

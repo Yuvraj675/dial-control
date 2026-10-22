@@ -11,6 +11,7 @@ export const DEFAULT_CONFIG: ProfilesConfig = {
     auto_close_seconds: 6,
     activation_shortcut: "Super+Shift+D",
   },
+  profile_order: ["default", "media_video", "code_editor", "file_manager", "browser_nav", "creative_design"],
   profiles: {
     default: {
       id: "default",
