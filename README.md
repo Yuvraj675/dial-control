@@ -173,6 +173,23 @@ cp src-tauri/target/release/dial-control bin/dial-control
 bash scripts/build-packages.sh
 ```
 
+### Building on Windows (VM or Laptop)
+
+On a Windows system (or Windows VM with Node.js and Rust installed):
+
+```powershell
+# Run the automated build script (or double-click scripts\build-windows.bat):
+.\scripts\build-windows.ps1
+```
+
+This compiles:
+- `Dial Control_1.0.0_x64-setup.exe` (NSIS Installer)
+- `Dial Control_1.0.0_x64_en-US.msi` (Windows Installer package)
+under `src-tauri/target/release/bundle/`.
+
+Alternatively, push to GitHub to let the automated **GitHub Actions** workflow (`build-windows.yml`) compile the `.exe` and `.msi` installers in the cloud with zero local setup needed.
+
+
 ---
 
 ## Customizing Profiles & Global Shortcuts
