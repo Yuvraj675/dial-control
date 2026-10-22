@@ -19,6 +19,34 @@ unsafe extern "system" fn enum_mon_proc(
 
 fn set_dxva2_brightness(pct: i32) {
     unsafe {
+        let dxva2_name: Vec<u16> = "dxva2.dll\0".encode_utf16().collect();
+        let h_dxva2 = LoadLibraryW(dxva2_name.as_ptr());
+        if h_dxva2.is_null() {
+            return;
+        }
+
+        let p_get_num = GetProcAddress(h_dxva2, b"GetNumberOfPhysicalMonitorsFromHMONITOR\0".as_ptr());
+        let p_get_phys = GetProcAddress(h_dxva2, b"GetPhysicalMonitorsFromHMONITOR\0".as_ptr());
+        let p_destroy = GetProcAddress(h_dxva2, b"DestroyPhysicalMonitors\0".as_ptr());
+        let p_get_bright = GetProcAddress(h_dxva2, b"GetMonitorBrightness\0".as_ptr());
+        let p_set_bright = GetProcAddress(h_dxva2, b"SetMonitorBrightness\0".as_ptr());
+
+        if p_get_num.is_null()
+            || p_get_phys.is_null()
+            || p_destroy.is_null()
+            || p_get_bright.is_null()
+            || p_set_bright.is_null()
+        {
+            FreeLibrary(h_dxva2);
+            return;
+        }
+
+        let get_num: FnGetNumberOfPhysicalMonitorsFromHMONITOR = std::mem::transmute(p_get_num);
+        let get_phys: FnGetPhysicalMonitorsFromHMONITOR = std::mem::transmute(p_get_phys);
+        let destroy: FnDestroyPhysicalMonitors = std::mem::transmute(p_destroy);
+        let get_bright: FnGetMonitorBrightness = std::mem::transmute(p_get_bright);
+        let set_bright: FnSetMonitorBrightness = std::mem::transmute(p_set_bright);
+
         let mut monitors: Vec<HMONITOR> = Vec::new();
         let _ = EnumDisplayMonitors(
             std::ptr::null_mut(),
@@ -29,7 +57,7 @@ fn set_dxva2_brightness(pct: i32) {
 
         for hmon in monitors {
             let mut count: DWORD = 0;
-            if GetNumberOfPhysicalMonitorsFromHMONITOR(hmon, &mut count) != 0 && count > 0 {
+            if get_num(hmon, &mut count) != 0 && count > 0 {
                 let mut phys = vec![
                     PHYSICAL_MONITOR {
                         hPhysicalMonitor: std::ptr::null_mut(),
@@ -37,21 +65,23 @@ fn set_dxva2_brightness(pct: i32) {
                     };
                     count as usize
                 ];
-                if GetPhysicalMonitorsFromHMONITOR(hmon, count, phys.as_mut_ptr()) != 0 {
+                if get_phys(hmon, count, phys.as_mut_ptr()) != 0 {
                     for p in &phys {
                         let mut min: DWORD = 0;
                         let mut cur: DWORD = 0;
                         let mut max: DWORD = 100;
-                        if GetMonitorBrightness(p.hPhysicalMonitor, &mut min, &mut cur, &mut max) != 0 {
+                        if get_bright(p.hPhysicalMonitor, &mut min, &mut cur, &mut max) != 0 {
                             let span = (max as i32 - min as i32).max(1);
                             let mapped = (min as i32 + (pct * span) / 100).clamp(min as i32, max as i32) as DWORD;
-                            let _ = SetMonitorBrightness(p.hPhysicalMonitor, mapped);
+                            let _ = set_bright(p.hPhysicalMonitor, mapped);
                         }
                     }
-                    let _ = DestroyPhysicalMonitors(count, phys.as_mut_ptr());
+                    let _ = destroy(count, phys.as_mut_ptr());
                 }
             }
         }
+
+        FreeLibrary(h_dxva2);
     }
 }
 

@@ -1,5 +1,6 @@
 use crate::platform::traits::{DialBackend, SystemAudio};
 use crate::platform::windows::ffi::*;
+use crate::AppState;
 use std::ptr::null_mut;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
@@ -44,7 +45,7 @@ unsafe extern "system" fn low_level_keyboard_proc(
         };
 
         match vk {
-            VK_MEDIA_PLAY_PAUSE => {
+            VK_MEDIA_PLAY_PAUSE | VK_PAUSE | VK_MEDIA_STOP => {
                 let now = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
@@ -106,17 +107,19 @@ unsafe extern "system" fn low_level_keyboard_proc(
                     0
                 };
 
-                let audio = crate::platform::windows::audio::WindowsAudio::new();
-                let current_vol = audio.get_volume();
-
-                let new_vol = if locked_val == 0 {
-                    audio.set_volume((current_vol + dir * 2).clamp(0, 100))
-                } else {
-                    current_vol
-                };
+                let mut new_vol = 50;
 
                 if let Ok(guard) = APP_HANDLE_REF.read() {
                     if let Some(ref app) = *guard {
+                        let state: tauri::State<AppState> = app.state();
+                        let current_vol = state.platform.audio().get_volume();
+
+                        new_vol = if locked_val == 0 {
+                            state.platform.audio().set_volume((current_vol + dir * 2).clamp(0, 100))
+                        } else {
+                            current_vol
+                        };
+
                         let _ = app.emit(
                             "dial:rotate",
                             RotatePayload {
