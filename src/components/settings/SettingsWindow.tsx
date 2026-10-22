@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { ProfilesConfig, WheelAction, ActionType, DialProfile, getOrderedProfileIds } from "../../types/profile";
 import { DonutRadialHUD } from "../hud/DonutRadialHUD";
 import { getActionIcon, ICON_MAP } from "../../utils/iconMap";
@@ -13,7 +13,13 @@ import {
   Disc,
   Keyboard,
   X,
-  Copy,
+  FolderInput,
+  Share2,
+  Download,
+  Upload,
+  FileDown,
+  FileUp,
+  AlertCircle,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 
@@ -45,6 +51,17 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
 
   // Action Importer Drawer in Slice Inspector
   const [isImportActionOpen, setIsImportActionOpen] = useState(false);
+
+  // Slice Hotkey Recording State
+  const [isRecordingSliceHotkey, setIsRecordingSliceHotkey] = useState(false);
+  const [stagedSliceCombo, setStagedSliceCombo] = useState<string>("");
+  const stagedSliceComboRef = useRef<string>("");
+  const heldSliceModifiersRef = useRef<Set<string>>(new Set());
+
+  // Share & Backup Modal State
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [shareMessage, setShareMessage] = useState<{ text: string; isError?: boolean } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Shortcut state & recording
   const [shortcutText, setShortcutText] = useState(
@@ -281,6 +298,285 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
         },
       });
     }
+  };
+
+  const comboToTokens = (combo: string): string[] => {
+    return combo.split("+").map((p) => {
+      const clean = p.trim().toUpperCase();
+      if (clean === "CTRL") return "KEY_LEFTCTRL";
+      if (clean === "SHIFT") return "KEY_LEFTSHIFT";
+      if (clean === "ALT") return "KEY_LEFTALT";
+      if (clean === "SUPER") return "KEY_LEFTMETA";
+      if (clean === "SPACE") return "KEY_SPACE";
+      if (clean === "ENTER") return "KEY_ENTER";
+      if (clean === "TAB") return "KEY_TAB";
+      if (clean === "ESC" || clean === "ESCAPE") return "KEY_ESC";
+      if (clean === "BACKSLASH") return "KEY_BACKSLASH";
+      if (clean === "SLASH") return "KEY_SLASH";
+      if (clean === "GRAVE") return "KEY_GRAVE";
+      if (clean === "MINUS") return "KEY_MINUS";
+      if (clean === "EQUAL") return "KEY_EQUAL";
+      if (clean === "LEFT") return "KEY_LEFT";
+      if (clean === "RIGHT") return "KEY_RIGHT";
+      if (clean === "UP") return "KEY_UP";
+      if (clean === "DOWN") return "KEY_DOWN";
+      if (clean.length === 1 && clean >= "A" && clean <= "Z") return `KEY_${clean}`;
+      if (clean.length === 1 && clean >= "0" && clean <= "9") return `KEY_${clean}`;
+      if (clean.startsWith("KEY_")) return clean;
+      return `KEY_${clean}`;
+    });
+  };
+
+  const formatTokenForDisplay = (token: string): string => {
+    const clean = token.replace(/^KEY_/, "").toUpperCase();
+    if (clean === "LEFTCTRL" || clean === "RIGHTCTRL") return "CTRL";
+    if (clean === "LEFTSHIFT" || clean === "RIGHTSHIFT") return "SHIFT";
+    if (clean === "LEFTALT" || clean === "RIGHTALT") return "ALT";
+    if (clean === "LEFTMETA" || clean === "RIGHTMETA") return "SUPER";
+    return clean;
+  };
+
+  // Slice Hotkey recorder listener
+  React.useEffect(() => {
+    if (!isRecordingSliceHotkey) return;
+
+    heldSliceModifiersRef.current.clear();
+    setStagedSliceCombo("");
+    stagedSliceComboRef.current = "";
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (e.key === "Escape") {
+        setIsRecordingSliceHotkey(false);
+        heldSliceModifiersRef.current.clear();
+        setStagedSliceCombo("");
+        stagedSliceComboRef.current = "";
+        return;
+      }
+
+      if (
+        e.key === "Backspace" &&
+        !e.ctrlKey &&
+        !e.altKey &&
+        !e.shiftKey &&
+        !e.metaKey &&
+        heldSliceModifiersRef.current.size === 0
+      ) {
+        handleUpdateAction({ keys: [] });
+        setIsRecordingSliceHotkey(false);
+        heldSliceModifiersRef.current.clear();
+        setStagedSliceCombo("");
+        stagedSliceComboRef.current = "";
+        return;
+      }
+
+      const mod = getModifierFromKey(e);
+      if (mod) heldSliceModifiersRef.current.add(mod);
+      if (e.metaKey) heldSliceModifiersRef.current.add("Super");
+      if (e.ctrlKey) heldSliceModifiersRef.current.add("Ctrl");
+      if (e.altKey) heldSliceModifiersRef.current.add("Alt");
+      if (e.shiftKey) heldSliceModifiersRef.current.add("Shift");
+
+      const mods: string[] = [];
+      if (heldSliceModifiersRef.current.has("Super")) mods.push("Super");
+      if (heldSliceModifiersRef.current.has("Ctrl")) mods.push("Ctrl");
+      if (heldSliceModifiersRef.current.has("Alt")) mods.push("Alt");
+      if (heldSliceModifiersRef.current.has("Shift")) mods.push("Shift");
+
+      const mainKey = getMainKey(e);
+
+      if (mainKey) {
+        const fullParts = [...mods];
+        if (!fullParts.includes(mainKey)) {
+          fullParts.push(mainKey);
+        }
+        const fullCombo = fullParts.join("+");
+        setStagedSliceCombo(fullCombo);
+        stagedSliceComboRef.current = fullCombo;
+      } else if (mods.length > 0) {
+        const modCombo = mods.join("+");
+        setStagedSliceCombo(modCombo);
+        stagedSliceComboRef.current = modCombo;
+      }
+    };
+
+    const onKeyUp = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const combo = stagedSliceComboRef.current;
+      if (combo) {
+        const parts = combo.split("+");
+        const hasMainKey = parts.some((p) => !["Super", "Ctrl", "Alt", "Shift"].includes(p));
+        if (hasMainKey) {
+          const tokens = comboToTokens(combo);
+          handleUpdateAction({ keys: tokens });
+          setIsRecordingSliceHotkey(false);
+          heldSliceModifiersRef.current.clear();
+          setStagedSliceCombo("");
+          stagedSliceComboRef.current = "";
+          return;
+        }
+      }
+
+      const mod = getModifierFromKey(e);
+      if (mod) heldSliceModifiersRef.current.delete(mod);
+      if (!e.ctrlKey) heldSliceModifiersRef.current.delete("Ctrl");
+      if (!e.altKey) heldSliceModifiersRef.current.delete("Alt");
+      if (!e.shiftKey) heldSliceModifiersRef.current.delete("Shift");
+
+      const remainingMods: string[] = [];
+      if (heldSliceModifiersRef.current.has("Super")) remainingMods.push("Super");
+      if (heldSliceModifiersRef.current.has("Ctrl")) remainingMods.push("Ctrl");
+      if (heldSliceModifiersRef.current.has("Alt")) remainingMods.push("Alt");
+      if (heldSliceModifiersRef.current.has("Shift")) remainingMods.push("Shift");
+
+      if (remainingMods.length === 0) {
+        setStagedSliceCombo("");
+        stagedSliceComboRef.current = "";
+      } else {
+        const remainingCombo = remainingMods.join("+");
+        setStagedSliceCombo(remainingCombo);
+        stagedSliceComboRef.current = remainingCombo;
+      }
+    };
+
+    const onBlur = () => {
+      heldSliceModifiersRef.current.clear();
+      setStagedSliceCombo("");
+      stagedSliceComboRef.current = "";
+    };
+
+    window.addEventListener("keydown", onKeyDown, true);
+    window.addEventListener("keyup", onKeyUp, true);
+    window.addEventListener("blur", onBlur);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown, true);
+      window.removeEventListener("keyup", onKeyUp, true);
+      window.removeEventListener("blur", onBlur);
+    };
+  }, [isRecordingSliceHotkey, selectedActionIndex, actions, activeProfile]);
+
+  // Download helper for JSON exports
+  const downloadJson = (data: any, filename: string) => {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // Export a single dial profile
+  const handleExportSingleDial = (profileId: string) => {
+    const prof = currentConfig.profiles[profileId];
+    if (!prof) return;
+    const exportData = {
+      version: "1.0",
+      type: "dial_profile",
+      exported_at: new Date().toISOString(),
+      profile: prof,
+    };
+    const filename = `dial-${prof.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}.json`;
+    downloadJson(exportData, filename);
+  };
+
+  // Export full configuration
+  const handleExportAll = () => {
+    const exportData = {
+      version: "1.0",
+      type: "dial_control_config",
+      exported_at: new Date().toISOString(),
+      config: currentConfig,
+    };
+    const filename = `dial-control-full-config-${new Date().toISOString().slice(0, 10)}.json`;
+    downloadJson(exportData, filename);
+  };
+
+  // Process imported JSON
+  const handleProcessImport = (data: any) => {
+    if (
+      (data.type === "dial_control_config" && data.config) ||
+      (data.settings && data.profiles)
+    ) {
+      const cfg: ProfilesConfig = data.config || data;
+      setCurrentConfig(cfg);
+      onSaveConfig(cfg);
+      setShareMessage({
+        text: `Imported full configuration (${Object.keys(cfg.profiles).length} dials)!`,
+        isError: false,
+      });
+      return;
+    }
+
+    let prof: DialProfile | null = null;
+    if (data.type === "dial_profile" && data.profile) {
+      prof = data.profile;
+    } else if (data.actions && (data.name || data.id)) {
+      prof = data;
+    }
+
+    if (prof) {
+      let id = prof.id || `dial_${Date.now()}`;
+      if (currentConfig.profiles[id]) {
+        id = `${id}_imported_${Date.now().toString().slice(-4)}`;
+      }
+      const importedProfile: DialProfile = {
+        ...prof,
+        id,
+      };
+
+      const currentOrder = getOrderedProfileIds(currentConfig);
+      const updatedConfig: ProfilesConfig = {
+        ...currentConfig,
+        profiles: {
+          ...currentConfig.profiles,
+          [id]: importedProfile,
+        },
+        profile_order: [...currentOrder.filter((p) => p !== id), id],
+      };
+
+      setCurrentConfig(updatedConfig);
+      setSelectedProfileId(id);
+      setSelectedActionIndex(0);
+      onSaveConfig(updatedConfig);
+      setShareMessage({
+        text: `Imported "${importedProfile.name}" dial successfully!`,
+        isError: false,
+      });
+      return;
+    }
+
+    setShareMessage({
+      text: "Unrecognized format: file must contain a dial profile or configuration.",
+      isError: true,
+    });
+  };
+
+  const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const text = event.target?.result as string;
+        const parsed = JSON.parse(text);
+        handleProcessImport(parsed);
+      } catch (err) {
+        setShareMessage({
+          text: "Failed to parse JSON file.",
+          isError: true,
+        });
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
   };
 
   const handleUpdateProfileMeta = (updates: Partial<DialProfile>) => {
@@ -565,13 +861,28 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
             </span>
           </div>
 
-          <div className="flex items-center gap-3 shrink-0 pl-4">
-            <span className="font-ndot text-[11px] text-neutral-400 tracking-wider whitespace-nowrap">
-              GLOBAL SHORTCUT:
-            </span>
-            <span className="font-ndot text-xs text-white px-2.5 py-1 rounded-md bg-white/[0.06] border border-white/10 tracking-widest whitespace-nowrap">
-              {shortcutText || "NONE"}
-            </span>
+          <div className="flex items-center gap-4 shrink-0 pl-4">
+            <button
+              type="button"
+              onClick={() => {
+                setShareMessage(null);
+                setIsShareModalOpen(true);
+              }}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-white font-ndot text-[11px] tracking-wider uppercase transition-all cursor-pointer"
+              title="Import or Export dials and full configuration"
+            >
+              <Share2 className="w-3.5 h-3.5 text-neutral-300" />
+              <span>SHARE & BACKUP</span>
+            </button>
+
+            <div className="flex items-center gap-2">
+              <span className="font-ndot text-[11px] text-neutral-400 tracking-wider whitespace-nowrap">
+                GLOBAL SHORTCUT:
+              </span>
+              <span className="font-ndot text-xs text-white px-2.5 py-1 rounded-md bg-white/[0.06] border border-white/10 tracking-widest whitespace-nowrap">
+                {shortcutText || "NONE"}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -723,7 +1034,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                     className="p-1.5 rounded bg-white/[0.06] hover:bg-white/10 text-white"
                     title="Import action from another dial"
                   >
-                    <Copy className="w-3.5 h-3.5" />
+                    <FolderInput className="w-3.5 h-3.5" />
                   </button>
                   <button
                     onClick={handleRemoveAction}
@@ -767,8 +1078,19 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
               <div className="max-w-md flex flex-col gap-6">
                 {/* Profile Context Matching Section */}
                 <div className="p-4 rounded-xl bg-white/[0.03] border border-white/10">
-                  <div className="font-ndot text-xs uppercase text-neutral-400 tracking-widest mb-3">
-                    DIAL CONTEXT & TRIGGERS // {activeProfile.name.toUpperCase()}
+                  <div className="flex items-center justify-between mb-3 gap-2">
+                    <div className="font-ndot text-xs uppercase text-neutral-400 tracking-widest truncate">
+                      DIAL CONTEXT & TRIGGERS // {activeProfile.name.toUpperCase()}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleExportSingleDial(selectedProfileId)}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/10 border border-white/10 text-white text-[10px] font-ndot tracking-wider uppercase transition-all cursor-pointer whitespace-nowrap shrink-0"
+                      title="Export this single dial as JSON"
+                    >
+                      <Download className="w-3 h-3 text-neutral-300" />
+                      <span>EXPORT DIAL</span>
+                    </button>
                   </div>
 
                   <div className="flex flex-col gap-3">
@@ -968,23 +1290,101 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                       </div>
                     )}
 
-                    {/* Keystrokes */}
+                    {/* Keystrokes with Interactive Recorder */}
                     {selectedAction.type === "hotkey" && (
-                      <div>
-                        <label className="font-ndot text-[11px] text-neutral-400 mb-1.5 block uppercase tracking-wider">
-                          Keystroke Sequence
+                      <div className="flex flex-col gap-2">
+                        <label className="font-ndot text-[11px] text-neutral-400 block uppercase tracking-wider">
+                          Key Combination
                         </label>
-                        <input
-                          type="text"
-                          value={selectedAction.keys?.join(" + ") || ""}
-                          onChange={(e) =>
-                            handleUpdateAction({
-                              keys: e.target.value.split("+").map((s) => s.trim().toUpperCase()),
-                            })
-                          }
-                          placeholder="KEY_LEFTCTRL + KEY_C"
-                          className="w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white font-ndot focus:outline-none focus:border-white tracking-wider uppercase"
-                        />
+                        {isRecordingSliceHotkey ? (
+                          <div className="flex flex-col gap-2.5 p-3.5 rounded-xl bg-red-950/20 border border-red-500/40">
+                            <div className="flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full bg-red-500 animate-ping shrink-0" />
+                              <span className="font-ndot text-[11px] text-red-400 uppercase tracking-widest">
+                                RECORDING COMBINATION...
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap min-h-[38px] p-2 rounded-lg bg-black/40 border border-white/5">
+                              {stagedSliceCombo ? (
+                                <>
+                                  {stagedSliceCombo.split("+").map((keyPart, i) => (
+                                    <React.Fragment key={i}>
+                                      {i > 0 && <span className="text-red-400 font-ndot text-xs">+</span>}
+                                      <div className="px-2.5 py-1 rounded bg-red-500/20 border border-red-500/60 text-red-100 font-ndot text-xs tracking-widest shadow-sm">
+                                        {keyPart.toUpperCase()}
+                                      </div>
+                                    </React.Fragment>
+                                  ))}
+                                  {!stagedSliceCombo.split("+").some((p) => !["Super", "Ctrl", "Alt", "Shift"].includes(p)) && (
+                                    <>
+                                      <span className="text-neutral-500 font-ndot text-xs">+</span>
+                                      <div className="px-2 py-0.5 rounded border border-dashed border-white/20 text-neutral-400 font-ndot text-[10px] tracking-wider animate-pulse">
+                                        PRESS KEY...
+                                      </div>
+                                    </>
+                                  )}
+                                </>
+                              ) : (
+                                <span className="text-neutral-500 font-ndot text-[10px] tracking-wider">
+                                  Press modifier keys (Ctrl, Alt, Shift, Super) + key...
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10px] font-ndot text-neutral-500 flex items-center justify-between">
+                              <span>Release to save</span>
+                              <span>ESC to cancel • Backspace to clear</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col gap-2.5 p-3 rounded-xl bg-[#111317] border border-white/10">
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <div className="flex items-center gap-1.5 flex-wrap min-h-[32px]">
+                                {selectedAction.keys && selectedAction.keys.length > 0 ? (
+                                  selectedAction.keys.map((tok, i) => (
+                                    <React.Fragment key={i}>
+                                      {i > 0 && <span className="text-neutral-500 font-ndot text-xs">+</span>}
+                                      <div className="px-2.5 py-1 rounded bg-[#181B22] border border-white/15 text-white font-ndot text-xs tracking-wider shadow-sm">
+                                        {formatTokenForDisplay(tok)}
+                                      </div>
+                                    </React.Fragment>
+                                  ))
+                                ) : (
+                                  <span className="text-neutral-500 font-ndot text-[11px] tracking-wider">
+                                    NO SHORTCUT SET
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setIsRecordingSliceHotkey(true);
+                                    heldSliceModifiersRef.current.clear();
+                                    setStagedSliceCombo("");
+                                    stagedSliceComboRef.current = "";
+                                  }}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-neutral-200 text-black font-ndot text-[10px] font-bold tracking-wider uppercase transition-all cursor-pointer shadow-sm"
+                                >
+                                  <Keyboard className="w-3.5 h-3.5 text-black" />
+                                  <span>RECORD</span>
+                                </button>
+                                {selectedAction.keys && selectedAction.keys.length > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpdateAction({ keys: [] })}
+                                    className="px-2.5 py-1.5 rounded-lg bg-white/[0.06] hover:bg-red-500/20 hover:text-red-300 text-neutral-400 font-ndot text-[10px] tracking-wider uppercase transition-all cursor-pointer"
+                                    title="Clear keystrokes"
+                                  >
+                                    CLEAR
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                            <div className="text-[10px] font-ndot text-neutral-500 uppercase tracking-wider">
+                              RAW TOKENS: {selectedAction.keys?.join(", ") || "NONE"}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -1540,6 +1940,166 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
               <button
                 onClick={() => setIsImportActionOpen(false)}
                 className="px-4 py-2 rounded-lg bg-white/[0.08] hover:bg-white/15 text-white font-ndot text-xs uppercase tracking-wider"
+              >
+                CLOSE
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: Share & Backup (Import / Export) ────────────────────────── */}
+      {isShareModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-lg bg-[#0E1015] border border-white/20 rounded-2xl p-6 shadow-2xl flex flex-col gap-5">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2.5">
+                <Share2 className="w-4 h-4 text-white" />
+                <span className="font-ndot text-sm text-white tracking-widest uppercase">
+                  SHARE & BACKUP // IMPORT & EXPORT
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  setIsShareModalOpen(false);
+                  setShareMessage(null);
+                }}
+                className="p-1 rounded text-neutral-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Notification alert if import / export succeeded */}
+            {shareMessage && (
+              <div
+                className={`p-3 rounded-xl border flex items-center gap-2.5 font-ndot text-xs tracking-wider ${
+                  shareMessage.isError
+                    ? "bg-red-500/15 border-red-500/30 text-red-200"
+                    : "bg-emerald-500/15 border-emerald-500/30 text-emerald-200"
+                }`}
+              >
+                {shareMessage.isError ? (
+                  <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+                ) : (
+                  <Check className="w-4 h-4 shrink-0 text-emerald-400" />
+                )}
+                <span>{shareMessage.text}</span>
+              </div>
+            )}
+
+            <div className="flex flex-col gap-4">
+              {/* Option 1: Export Single Dial */}
+              <div className="p-4 rounded-xl bg-white/[0.03] border border-white/10 flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-ndot text-xs text-white uppercase tracking-wider">
+                      EXPORT SINGLE DIAL
+                    </div>
+                    <div className="text-[10px] font-ndot text-neutral-400 mt-0.5 tracking-wider">
+                      Share this specific dial profile with friends or the community.
+                    </div>
+                  </div>
+                  <FileDown className="w-5 h-5 text-neutral-400" />
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <select
+                    id="export-dial-select"
+                    defaultValue={selectedProfileId}
+                    className="flex-1 px-3 py-2 rounded-lg bg-[#14161D] border border-white/10 text-xs text-white font-ndot uppercase tracking-wider focus:outline-none focus:border-white"
+                  >
+                    {getOrderedProfileIds(currentConfig).map((id) => (
+                      <option key={id} value={id}>
+                        {currentConfig.profiles[id]?.name.toUpperCase() || id.toUpperCase()} ({currentConfig.profiles[id]?.actions.length || 0} SLICES)
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const sel = (document.getElementById("export-dial-select") as HTMLSelectElement)?.value || selectedProfileId;
+                      handleExportSingleDial(sel);
+                      setShareMessage({
+                        text: `Dial "${currentConfig.profiles[sel]?.name}" exported!`,
+                        isError: false,
+                      });
+                    }}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white/[0.08] hover:bg-white/15 text-white font-ndot text-xs tracking-wider uppercase transition-all cursor-pointer font-bold whitespace-nowrap"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>DOWNLOAD</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Option 2: Export Full Configuration */}
+              <div className="p-4 rounded-xl bg-white/[0.03] border border-white/10 flex items-center justify-between gap-4">
+                <div>
+                  <div className="font-ndot text-xs text-white uppercase tracking-wider">
+                    EXPORT ENTIRE BACKUP
+                  </div>
+                  <div className="text-[10px] font-ndot text-neutral-400 mt-0.5 tracking-wider">
+                    Full backup of all {Object.keys(currentConfig.profiles).length} dials, wheel ordering, aesthetics, and shortcuts.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleExportAll();
+                    setShareMessage({
+                      text: "Full setup exported successfully!",
+                      isError: false,
+                    });
+                  }}
+                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-white/[0.08] hover:bg-white/15 text-white font-ndot text-xs tracking-wider uppercase transition-all cursor-pointer font-bold whitespace-nowrap shrink-0"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>EXPORT ALL</span>
+                </button>
+              </div>
+
+              {/* Import from JSON */}
+              <div className="p-4 rounded-xl bg-white/[0.03] border border-white/10 flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-ndot text-xs text-white uppercase tracking-wider">
+                      IMPORT FROM JSON
+                    </div>
+                    <div className="text-[10px] font-ndot text-neutral-400 mt-0.5 tracking-wider">
+                      Auto-detects either a single shared dial or a full configuration file.
+                    </div>
+                  </div>
+                  <FileUp className="w-5 h-5 text-neutral-400" />
+                </div>
+
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileImport}
+                  accept=".json,application/json"
+                  className="hidden"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed border-white/20 hover:border-white/50 bg-white/[0.02] hover:bg-white/[0.06] text-white font-ndot text-xs tracking-widest uppercase transition-all cursor-pointer"
+                >
+                  <Upload className="w-4 h-4 text-white" />
+                  <span>SELECT .JSON FILE TO IMPORT</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsShareModalOpen(false);
+                  setShareMessage(null);
+                }}
+                className="px-5 py-2 rounded-lg bg-white/[0.08] hover:bg-white/15 text-white font-ndot text-xs uppercase tracking-wider cursor-pointer"
               >
                 CLOSE
               </button>
