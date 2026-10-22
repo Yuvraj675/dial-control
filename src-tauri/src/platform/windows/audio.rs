@@ -86,6 +86,9 @@ unsafe fn with_endpoint_volume<F, R>(f: F) -> Option<R>
 where
     F: FnOnce(*mut *const IAudioEndpointVolumeVtbl) -> Option<R>,
 {
+    let hr_init = CoInitializeEx(null_mut(), 0);
+    let com_ok = hr_init == 0 || hr_init == 1;
+
     let mut enumerator: *mut *const IMMDeviceEnumeratorVtbl = null_mut();
     let hr = CoCreateInstance(
         &CLSID_MMDEVICE_ENUMERATOR,
@@ -95,6 +98,9 @@ where
         &mut enumerator as *mut _ as *mut *mut c_void,
     );
     if hr < 0 || enumerator.is_null() {
+        if com_ok {
+            CoUninitialize();
+        }
         return None;
     }
 
@@ -110,6 +116,9 @@ where
     ((**enumerator).base.Release)(enumerator as *mut c_void);
 
     if hr < 0 || device.is_null() {
+        if com_ok {
+            CoUninitialize();
+        }
         return None;
     }
 
@@ -125,12 +134,19 @@ where
     ((**device).base.Release)(device as *mut c_void);
 
     if hr < 0 || volume.is_null() {
+        if com_ok {
+            CoUninitialize();
+        }
         return None;
     }
 
     let result = f(volume);
 
     ((**volume).base.Release)(volume as *mut c_void);
+
+    if com_ok {
+        CoUninitialize();
+    }
 
     result
 }
@@ -246,8 +262,12 @@ impl WindowsAudio {
 
 impl SystemAudio for WindowsAudio {
     fn get_volume(&self) -> i32 {
-        let _ = self.cmd_tx.send(AudioCommand::RefreshVolume);
-        self.cached_vol.load(Ordering::SeqCst)
+        if let Some(vol) = query_hardware_volume() {
+            self.cached_vol.store(vol, Ordering::SeqCst);
+            vol
+        } else {
+            self.cached_vol.load(Ordering::SeqCst)
+        }
     }
 
     fn set_volume(&self, pct: i32) -> i32 {

@@ -21,6 +21,96 @@ impl LinuxBrightness {
         Self { input }
     }
 
+    /// Dynamic sysfs scanner: works on every Linux kernel across Intel, AMD, Nvidia, Apple, ACPI backlights
+    fn get_sysfs_backlight(&self) -> Option<i32> {
+        let entries = fs::read_dir("/sys/class/backlight").ok()?;
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let cur_str = fs::read_to_string(path.join("actual_brightness"))
+                .or_else(|_| fs::read_to_string(path.join("brightness")));
+            let max_str = fs::read_to_string(path.join("max_brightness"));
+
+            if let (Ok(cur), Ok(max)) = (cur_str, max_str) {
+                if let (Ok(cur_val), Ok(max_val)) = (
+                    cur.trim().parse::<f64>(),
+                    max.trim().parse::<f64>(),
+                ) {
+                    if max_val > 0.0 {
+                        let pct = ((cur_val / max_val) * 100.0).round().clamp(0.0, 100.0) as i32;
+                        return Some(pct);
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// Query standard Linux brightnessctl utility (used on Arch, Hyprland, Sway, KDE, etc.)
+    fn get_brightnessctl(&self) -> Option<i32> {
+        let out = Command::new("brightnessctl").args(["-m"]).output().ok()?;
+        if !out.status.success() {
+            return None;
+        }
+        let text = String::from_utf8_lossy(&out.stdout);
+        for line in text.lines() {
+            let parts: Vec<&str> = line.split(',').collect();
+            if parts.len() >= 4 {
+                let pct_str = parts[3].trim().trim_end_matches('%');
+                if let Ok(pct) = pct_str.parse::<i32>() {
+                    return Some(pct.clamp(0, 100));
+                }
+            }
+        }
+        None
+    }
+
+    /// Query KDE Plasma PowerDevil D-Bus
+    fn get_kde_brightness(&self) -> Option<i32> {
+        let cur_out = Command::new("busctl")
+            .args([
+                "--user",
+                "get-property",
+                "org.kde.Solid.PowerManagement",
+                "/org/kde/Solid/PowerManagement/Actions/BrightnessControl",
+                "org.kde.Solid.PowerManagement.Actions.BrightnessControl",
+                "brightness",
+            ])
+            .output()
+            .ok()?;
+
+        if !cur_out.status.success() {
+            return None;
+        }
+
+        let cur_text = String::from_utf8_lossy(&cur_out.stdout);
+        let cur_val = cur_text.split_whitespace().last()?.parse::<f64>().ok()?;
+
+        // Query max brightness to compute accurate ratio
+        let max_val = if let Ok(max_out) = Command::new("busctl")
+            .args([
+                "--user",
+                "get-property",
+                "org.kde.Solid.PowerManagement",
+                "/org/kde/Solid/PowerManagement/Actions/BrightnessControl",
+                "org.kde.Solid.PowerManagement.Actions.BrightnessControl",
+                "brightnessMax",
+            ])
+            .output()
+        {
+            let max_text = String::from_utf8_lossy(&max_out.stdout);
+            max_text.split_whitespace().last().and_then(|s| s.parse::<f64>().ok()).unwrap_or(100.0)
+        } else {
+            100.0
+        };
+
+        if max_val > 0.0 {
+            Some(((cur_val / max_val) * 100.0).round().clamp(0.0, 100.0) as i32)
+        } else {
+            Some((cur_val as i32).clamp(0, 100))
+        }
+    }
+
+    /// Query GNOME Mutter GetResources
     fn get_mutter_resources_brightness(&self) -> Option<i32> {
         let out = Command::new("busctl")
             .args([
@@ -52,6 +142,7 @@ impl LinuxBrightness {
         None
     }
 
+    /// Query GNOME Mutter Backlight property
     fn get_backlight_info(&self) -> Option<BacklightInfo> {
         let out = Command::new("busctl")
             .args([
@@ -112,45 +203,61 @@ impl LinuxBrightness {
             None
         }
     }
-
-    fn get_sysfs_backlight(&self) -> Option<i32> {
-        let actual_str = fs::read_to_string("/sys/class/backlight/intel_backlight/actual_brightness")
-            .or_else(|_| fs::read_to_string("/sys/class/backlight/amdgpu_bl0/actual_brightness"))
-            .ok()?;
-        let max_str = fs::read_to_string("/sys/class/backlight/intel_backlight/max_brightness")
-            .or_else(|_| fs::read_to_string("/sys/class/backlight/amdgpu_bl0/max_brightness"))
-            .ok()?;
-        let actual: f64 = actual_str.trim().parse().ok()?;
-        let max: f64 = max_str.trim().parse().ok()?;
-        if max > 0.0 {
-            Some(((actual / max) * 100.0).round().clamp(0.0, 100.0) as i32)
-        } else {
-            None
-        }
-    }
 }
 
 impl SystemBrightness for LinuxBrightness {
     fn get_brightness(&self) -> i32 {
-        // 1. GNOME Mutter GetResources (direct native brightness percentage)
+        // 1. Dynamic /sys/class/backlight/* scan (kernel hardware level, 100% universal across all DEs & GPUs)
+        if let Some(pct) = self.get_sysfs_backlight() {
+            return pct;
+        }
+
+        // 2. brightnessctl (standard on Arch Linux, Hyprland, Sway, KDE, etc.)
+        if let Some(pct) = self.get_brightnessctl() {
+            return pct;
+        }
+
+        // 3. KDE Plasma PowerDevil D-Bus
+        if let Some(pct) = self.get_kde_brightness() {
+            return pct;
+        }
+
+        // 4. GNOME Mutter D-Bus
         if let Some(pct) = self.get_mutter_resources_brightness() {
             return pct;
         }
-        // 2. Mutter Backlight property
         if let Some(b) = self.get_backlight_info() {
             let range = (b.max - b.min).max(1);
             let pct = (((b.value - b.min) as f64 / range as f64) * 100.0).round() as i32;
             return pct.clamp(0, 100);
         }
-        // 3. Fallback to sysfs
-        if let Some(pct) = self.get_sysfs_backlight() {
-            return pct;
-        }
+
         50
     }
 
     fn set_brightness(&self, pct: i32) -> i32 {
         let pct = pct.clamp(0, 100);
+
+        // 1. Try brightnessctl
+        let _ = Command::new("brightnessctl")
+            .args(["set", &format!("{}%", pct)])
+            .output();
+
+        // 2. Try KDE PowerDevil D-Bus
+        let _ = Command::new("busctl")
+            .args([
+                "--user",
+                "call",
+                "org.kde.Solid.PowerManagement",
+                "/org/kde/Solid/PowerManagement/Actions/BrightnessControl",
+                "org.kde.Solid.PowerManagement.Actions.BrightnessControl",
+                "setBrightness",
+                "i",
+                &pct.to_string(),
+            ])
+            .output();
+
+        // 3. Try GNOME Mutter D-Bus
         if let Some(b) = self.get_backlight_info() {
             let range = b.max - b.min;
             let raw = b.min + (pct * range) / 100;
@@ -167,19 +274,39 @@ impl SystemBrightness for LinuxBrightness {
                     &b.connector,
                     &raw.to_string(),
                 ])
-                .status();
-            println!("[Linux Brightness] Set to {}% on {}", pct, b.connector);
+                .output();
         }
+
         pct
     }
 
     fn step_brightness(&self, direction: i32) {
+        let mut handled = false;
+
+        // Try brightnessctl first
         if direction > 0 {
-            self.input.emit_brightness_up();
-            println!("[Linux Brightness] Emitted KEY_BRIGHTNESSUP (Fn+F6)");
+            if let Ok(status) = Command::new("brightnessctl").args(["set", "+5%"]).status() {
+                if status.success() {
+                    handled = true;
+                }
+            }
         } else if direction < 0 {
-            self.input.emit_brightness_down();
-            println!("[Linux Brightness] Emitted KEY_BRIGHTNESSDOWN (Fn+F5)");
+            if let Ok(status) = Command::new("brightnessctl").args(["set", "5%-"]).status() {
+                if status.success() {
+                    handled = true;
+                }
+            }
+        }
+
+        // Fallback to uinput virtual keyboard brightness keys
+        if !handled {
+            if direction > 0 {
+                self.input.emit_brightness_up();
+                println!("[Linux Brightness] Emitted KEY_BRIGHTNESSUP (Fn+F6)");
+            } else if direction < 0 {
+                self.input.emit_brightness_down();
+                println!("[Linux Brightness] Emitted KEY_BRIGHTNESSDOWN (Fn+F5)");
+            }
         }
     }
 }

@@ -52,45 +52,66 @@ unsafe extern "system" fn low_level_keyboard_proc(
                     .as_millis() as usize;
 
                 let last = LAST_DIAL_CLICK_TIME.load(Ordering::SeqCst);
-                if now.saturating_sub(last) < 400 {
+                if now.saturating_sub(last) < 250 {
                     // Hardware contact debounce: block repeat event
                     return 1;
                 }
                 LAST_DIAL_CLICK_TIME.store(now, Ordering::SeqCst);
 
                 if !is_hud_open {
-                    // Earbuds dial clicked while HUD is closed -> OPEN THE RADIAL HUD!
-                    println!("[Windows Dial] Intercepted Earbuds Dial Click -> Opening HUD");
+                    // 1. Immediately flip atomic flag so consecutive inputs know HUD is active
+                    if let Ok(is_open_guard) = IS_HUD_OPEN_REF.read() {
+                        if let Some(ref is_open) = *is_open_guard {
+                            is_open.store(true, Ordering::SeqCst);
+                        }
+                    }
+
+                    // 2. Offload GUI display to worker thread so the low-level hook returns in <0.01ms,
+                    // preventing Windows from timing out and silently removing the hook!
                     if let Ok(guard) = APP_HANDLE_REF.read() {
                         if let Some(ref app) = *guard {
-                            if let Ok(is_open_guard) = IS_HUD_OPEN_REF.read() {
-                                if let Some(ref is_open) = *is_open_guard {
-                                    is_open.store(true, Ordering::SeqCst);
-                                }
-                            }
-                            if let Ok(locked_guard) = LOCKED_VOL_REF.read() {
-                                if let Some(ref locked) = *locked_guard {
-                                    locked.store(50, Ordering::SeqCst);
-                                }
-                            }
+                            let app = app.clone();
+                            thread::spawn(move || {
+                                println!("[Windows Dial] Intercepted Earbuds Dial Click -> Opening HUD");
+                                let state: tauri::State<AppState> = app.state();
+                                let curr_vol = state.platform.audio().get_volume();
+                                let curr_bright = state.platform.brightness().get_brightness();
 
-                            if let Some(window) = app.get_webview_window("hud") {
-                                let _ = window.unminimize();
-                                let _ = window.show();
-                                let _ = window.set_focus();
-                                let _ = window.set_always_on_top(true);
-                                let _ = window.emit("hud:visibility", true);
-                            }
+                                state.is_hud_open.store(true, Ordering::SeqCst);
+                                state.locked_vol.store(curr_vol, Ordering::SeqCst);
+                                if let Ok(locked_guard) = LOCKED_VOL_REF.read() {
+                                    if let Some(ref locked) = *locked_guard {
+                                        locked.store(curr_vol, Ordering::SeqCst);
+                                    }
+                                }
+
+                                if let Some(window) = app.get_webview_window("hud") {
+                                    let _ = window.unminimize();
+                                    let _ = window.show();
+                                    let _ = window.set_focus();
+                                    let _ = window.set_always_on_top(true);
+                                    let _ = window.emit("hud:visibility", true);
+                                    let _ = window.emit(
+                                        "sync:state",
+                                        serde_json::json!({
+                                            "volume": curr_vol,
+                                            "brightness": curr_bright,
+                                        }),
+                                    );
+                                }
+                            });
                         }
                     }
                     // Block OS from toggling audio playback
                     return 1;
                 } else {
-                    // Earbuds dial clicked while HUD is open -> CONFIRM SELECTED ACTION!
                     println!("[Windows Dial] Intercepted Earbuds Dial Click -> Confirm selection");
                     if let Ok(guard) = APP_HANDLE_REF.read() {
                         if let Some(ref app) = *guard {
-                            let _ = app.emit("dial:click", ());
+                            let app = app.clone();
+                            thread::spawn(move || {
+                                let _ = app.emit("dial:click", ());
+                            });
                         }
                     }
                     // Block OS from toggling audio playback
@@ -109,24 +130,27 @@ unsafe extern "system" fn low_level_keyboard_proc(
 
                 if let Ok(guard) = APP_HANDLE_REF.read() {
                     if let Some(ref app) = *guard {
-                        let state: tauri::State<AppState> = app.state();
-                        let current_vol = state.platform.audio().get_volume();
+                        let app = app.clone();
+                        thread::spawn(move || {
+                            let state: tauri::State<AppState> = app.state();
+                            let current_vol = state.platform.audio().get_volume();
 
-                        let new_vol = if locked_val == 0 {
-                            state.platform.audio().set_volume((current_vol + dir * 2).clamp(0, 100))
-                        } else {
-                            current_vol
-                        };
+                            let new_vol = if locked_val == 0 {
+                                state.platform.audio().set_volume((current_vol + dir * 2).clamp(0, 100))
+                            } else {
+                                current_vol
+                            };
 
-                        let _ = app.emit(
-                            "dial:rotate",
-                            RotatePayload {
-                                direction: dir,
-                                delta: dir,
-                                volume: new_vol,
-                                volume_pct: new_vol,
-                            },
-                        );
+                            let _ = app.emit(
+                                "dial:rotate",
+                                RotatePayload {
+                                    direction: dir,
+                                    delta: dir,
+                                    volume: new_vol,
+                                    volume_pct: new_vol,
+                                },
+                            );
+                        });
                     }
                 }
                 // Block volume key from default OS beep/volume popup while navigating

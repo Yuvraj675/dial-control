@@ -1,4 +1,4 @@
-use crate::platform::traits::DialBackend;
+use crate::platform::traits::{DialBackend, PlatformProvider};
 use futures_lite::stream::StreamExt;
 use std::collections::HashMap;
 use std::fs;
@@ -109,14 +109,25 @@ fn start_input_grabber(
 
                                         if !was_open {
                                             println!(">> [NATIVE DIAL CLICK] -> Opening HUD on Wayland");
+                                            let state: tauri::State<crate::AppState> = app.state();
+                                            let curr_vol = state.platform.audio().get_volume();
+                                            let curr_bright = state.platform.brightness().get_brightness();
+
                                             is_hud_open.store(true, Ordering::SeqCst);
-                                            locked_vol.store(50, Ordering::SeqCst);
+                                            locked_vol.store(curr_vol, Ordering::SeqCst);
                                             if let Some(window) = app.get_webview_window("hud") {
                                                 let _ = window.show();
                                                 let _ = window.unminimize();
                                                 let _ = window.set_focus();
                                                 let _ = window.set_always_on_top(true);
                                                 let _ = window.emit("hud:visibility", true);
+                                                let _ = window.emit(
+                                                    "sync:state",
+                                                    serde_json::json!({
+                                                        "volume": curr_vol,
+                                                        "brightness": curr_bright,
+                                                    }),
+                                                );
                                             }
                                         } else {
                                             println!(">> [NATIVE DIAL CLICK] -> Dispatched action select to HUD");
