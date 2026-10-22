@@ -31,6 +31,10 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
   const [currentConfig, setCurrentConfig] = useState<ProfilesConfig>(config);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
+  React.useEffect(() => {
+    setCurrentConfig(config);
+  }, [config]);
+
   // New Dial Modal state
   const [isNewDialOpen, setIsNewDialOpen] = useState(false);
   const [newDialName, setNewDialName] = useState("");
