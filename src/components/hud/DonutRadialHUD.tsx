@@ -68,6 +68,11 @@ export const DonutRadialHUD: React.FC<DonutRadialHUDProps> = ({
     <AnimatePresence>
       {isOpen && (
         <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              onDismiss?.();
+            }
+          }}
           onContextMenu={(e) => {
             e.preventDefault();
             onDismiss?.();

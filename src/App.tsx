@@ -208,7 +208,7 @@ export function App() {
       // 1. Dial Rotation
       const unlistenRotate = await listen<{ direction: number; delta: number; volume?: number; volume_pct?: number }>("dial:rotate", (event) => {
         const { currentMode, actionsCount } = stateRef.current;
-        const dir = event.payload.direction;
+        const dir = event.payload.direction ?? event.payload.delta ?? 1;
 
         if (currentMode === "menu") {
           setSelectedIndex((prev) => {
@@ -217,10 +217,10 @@ export function App() {
             return next % actionsCount;
           });
         } else if (currentMode === "volume") {
-          // In volume mode, BlueZ & PipeWire update hardware volume naturally.
-          // Update our HUD gauge directly from volume_pct WITHOUT calling set_system_volume!
-          if (event.payload.volume_pct !== undefined) {
-            setGaugeValue(event.payload.volume_pct);
+          // In volume mode, PipeWire/BlueZ on Linux or Core Audio on Windows update hardware volume naturally.
+          const vol = event.payload.volume_pct ?? event.payload.volume;
+          if (vol !== undefined) {
+            setGaugeValue(vol);
           }
         } else if (currentMode === "brightness") {
           // Emulate hardware Fn+F5 / Fn+F6 keys via uinput (5% per step matching GNOME's native scale)
