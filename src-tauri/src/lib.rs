@@ -46,15 +46,20 @@ fn set_mode(state: tauri::State<AppState>, mode: String) {
         state.locked_vol.store(0, Ordering::SeqCst);
         println!("[HUD] Switched to volume mode (lock released for natural hardware volume control)");
     } else {
-        state.locked_vol.store(50, Ordering::SeqCst);
-        println!("[HUD] Switched to mode: {} (volume locked at 50 for navigation)", mode);
+        let curr_vol = state.platform.audio().get_volume();
+        state.locked_vol.store(curr_vol, Ordering::SeqCst);
+        println!("[HUD] Switched to mode: {} (volume locked at {}% for navigation)", mode, curr_vol);
     }
 }
 
 #[tauri::command]
 fn show_hud(app: AppHandle, state: tauri::State<AppState>) {
+    let curr_vol = state.platform.audio().get_volume();
+    let curr_bright = state.platform.brightness().get_brightness();
+
     state.is_hud_open.store(true, Ordering::SeqCst);
-    state.locked_vol.store(50, Ordering::SeqCst);
+    state.locked_vol.store(curr_vol, Ordering::SeqCst);
+
     if let Some(window) = app.get_webview_window("hud") {
         let _ = window.unminimize();
         let _ = window.show();
@@ -62,6 +67,13 @@ fn show_hud(app: AppHandle, state: tauri::State<AppState>) {
         let _ = window.set_always_on_top(true);
     }
     let _ = app.emit("hud:visibility", true);
+    let _ = app.emit(
+        "sync:state",
+        serde_json::json!({
+            "volume": curr_vol,
+            "brightness": curr_bright,
+        }),
+    );
 }
 
 #[tauri::command]
@@ -191,7 +203,10 @@ fn execute_action(
                 println!("[Action] Spawning default terminal emulator...");
                 #[cfg(target_os = "windows")]
                 {
-                    let _ = std::process::Command::new("cmd")
+                    use std::os::windows::process::CommandExt;
+                    let mut cmd = std::process::Command::new("cmd");
+                    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+                    let _ = cmd
                         .args(["/c", "where wt.exe >nul 2>&1 && start wt.exe || where powershell.exe >nul 2>&1 && start powershell.exe || start cmd.exe"])
                         .spawn();
                 }
@@ -206,7 +221,10 @@ fn execute_action(
                 println!("[Action] Spawning command: {}", cmd);
                 #[cfg(target_os = "windows")]
                 {
-                    let _ = std::process::Command::new("cmd")
+                    use std::os::windows::process::CommandExt;
+                    let mut proc = std::process::Command::new("cmd");
+                    proc.creation_flags(0x08000000); // CREATE_NO_WINDOW
+                    let _ = proc
                         .args(["/c", "start", cmd])
                         .spawn();
                 }

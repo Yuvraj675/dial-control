@@ -180,7 +180,11 @@ export function App() {
             .catch(() => setGaugeValue(brightnessLevel));
         } else {
           invoke<number>("get_system_volume")
-            .then((v) => setGaugeValue(v))
+            .then((v) => {
+              if (typeof v === "number" && !isNaN(v)) {
+                setGaugeValue(v);
+              }
+            })
             .catch(console.error);
         }
       } else {
@@ -314,7 +318,17 @@ export function App() {
           setCurrentMode("menu");
           if (isTauri) {
             invoke("set_mode", { mode: "menu" }).catch(console.error);
-            // Pre-fetch actual system brightness from GNOME Mutter so it is ready
+
+            // Pre-fetch live system volume so dial gauge never snaps
+            invoke<number>("get_system_volume")
+              .then((v) => {
+                if (typeof v === "number" && !isNaN(v)) {
+                  setGaugeValue(v);
+                }
+              })
+              .catch(console.error);
+
+            // Pre-fetch actual system brightness
             invoke<number>("get_system_brightness")
               .then((b) => {
                 if (typeof b === "number" && !isNaN(b)) {
@@ -327,6 +341,19 @@ export function App() {
         }
       });
       unlistenList.push(unlistenVis);
+
+      // 5. Backend State Synchronization (Emitted whenever HUD is shown or state re-synced)
+      const unlistenSync = await listen<{ volume?: number; brightness?: number }>("sync:state", (event) => {
+        const { volume, brightness } = event.payload;
+        if (typeof volume === "number" && !isNaN(volume)) {
+          setGaugeValue(volume);
+        }
+        if (typeof brightness === "number" && !isNaN(brightness)) {
+          setBrightnessLevel(brightness);
+          localStorage.setItem("dial_brightness_level", String(brightness));
+        }
+      });
+      unlistenList.push(unlistenSync);
     }
 
     setupTauriListeners().catch(console.error);
