@@ -60,16 +60,6 @@ fn show_hud(app: AppHandle, state: tauri::State<AppState>) {
         let _ = window.show();
         let _ = window.set_focus();
         let _ = window.set_always_on_top(true);
-        #[cfg(target_os = "windows")]
-        {
-            use crate::platform::windows::ffi::*;
-            if let Ok(hwnd) = window.hwnd() {
-                unsafe {
-                    ShowWindow(hwnd.0 as HWND, SW_RESTORE);
-                    SetForegroundWindow(hwnd.0 as HWND);
-                }
-            }
-        }
     }
     let _ = app.emit("hud:visibility", true);
 }
@@ -197,19 +187,19 @@ fn execute_action(
         }
         "command" => {
             hide_hud(app, state);
-            if action_id == "file_terminal" {
+            if action_id == "file_terminal" || action_id.contains("terminal") {
                 println!("[Action] Spawning default terminal emulator...");
                 #[cfg(target_os = "windows")]
                 {
                     let _ = std::process::Command::new("cmd")
-                        .args(["/c", "start wt.exe || start powershell.exe || start cmd.exe"])
+                        .args(["/c", "where wt.exe >nul 2>&1 && start wt.exe || where powershell.exe >nul 2>&1 && start powershell.exe || start cmd.exe"])
                         .spawn();
                 }
                 #[cfg(not(target_os = "windows"))]
                 {
                     let _ = std::process::Command::new("sh")
                         .arg("-c")
-                        .arg("x-terminal-emulator || ptyxis || gnome-terminal || kgx || konsole || alacritty || kitty || xfce4-terminal || foot || terminator || xterm")
+                        .arg("gtk-launch org.gnome.Ptyxis 2>/dev/null || gtk-launch org.gnome.Console 2>/dev/null || gtk-launch org.gnome.Terminal 2>/dev/null || x-terminal-emulator || ptyxis || gnome-terminal || kgx || konsole || alacritty || kitty || xfce4-terminal || foot || terminator || xterm")
                         .spawn();
                 }
             } else if let Some(cmd) = action.get("cmd").and_then(|v| v.as_str()) {
