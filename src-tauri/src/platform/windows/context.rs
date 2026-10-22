@@ -1,9 +1,16 @@
 use crate::platform::common::{match_profile, ContextEvent};
 use crate::platform::traits::ContextDetector;
 use crate::platform::windows::ffi::*;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
+
+static LAST_TARGET_HWND: AtomicUsize = AtomicUsize::new(0);
+
+pub fn get_last_target_hwnd() -> HWND {
+    LAST_TARGET_HWND.load(Ordering::SeqCst) as HWND
+}
 
 pub struct WindowsContext;
 
@@ -21,7 +28,7 @@ impl ContextDetector for WindowsContext {
             let mut last_title = String::new();
 
             loop {
-                thread::sleep(Duration::from_millis(400));
+                thread::sleep(Duration::from_millis(350));
 
                 unsafe {
                     let hwnd = GetForegroundWindow();
@@ -51,7 +58,19 @@ impl ContextDetector for WindowsContext {
                         continue;
                     }
 
-                    // 2. Get process executable name
+                    // Record target window for hotkey focus restoration
+                    LAST_TARGET_HWND.store(hwnd as usize, Ordering::SeqCst);
+
+                    // 2. Get window class name (works 100% without process privileges)
+                    let mut class_buf = [0u16; 256];
+                    let class_len = GetClassNameW(hwnd, class_buf.as_mut_ptr(), 256);
+                    let class_name = if class_len > 0 {
+                        String::from_utf16_lossy(&class_buf[..class_len as usize])
+                    } else {
+                        String::new()
+                    };
+
+                    // 3. Get process executable name
                     let mut app_name = String::new();
                     let h_process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
                     if !h_process.is_null() {
@@ -71,27 +90,38 @@ impl ContextDetector for WindowsContext {
                         CloseHandle(h_process);
                     }
 
-                    if app_name.is_empty() && title.is_empty() {
+                    // Fallback heuristics using class name if process path was unreadable
+                    if app_name.is_empty() {
+                        if class_name.contains("Chrome_WidgetWin") {
+                            app_name = "chrome".to_string();
+                        } else if class_name.contains("MozillaWindowClass") {
+                            app_name = "firefox".to_string();
+                        } else if class_name == "CabinetWClass" || class_name == "ExploreWClass" {
+                            app_name = "explorer".to_string();
+                        }
+                    }
+
+                    if app_name.is_empty() && title.is_empty() && class_name.is_empty() {
                         continue;
                     }
 
-                    // 3. Match against profile rules
-                    let profile_id = match_profile(&app_name, &app_name, &title);
+                    // 4. Match against profile rules
+                    let profile_id = match_profile(&app_name, &class_name, &title);
 
                     if profile_id != last_profile || title != last_title {
                         last_profile = profile_id.to_string();
                         last_title = title.clone();
 
                         println!(
-                            "[Windows Context] Focus -> App: '{}' | Title: '{}' | Profile: {}",
-                            app_name, title, profile_id
+                            "[Windows Context] Focus -> App: '{}' | Class: '{}' | Title: '{}' | Profile: {}",
+                            app_name, class_name, title, profile_id
                         );
 
                         let event = ContextEvent {
                             profile_id: profile_id.to_string(),
-                            app: app_name.clone(),
+                            app: if !app_name.is_empty() { app_name } else { class_name.clone() },
                             title: title.clone(),
-                            wm_class: app_name.clone(),
+                            wm_class: class_name,
                         };
                         let _ = app.emit("context:change", event);
                     }

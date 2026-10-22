@@ -177,10 +177,21 @@ fn execute_action(
             if let Some(cmd) = action.get("cmd").and_then(|v| v.as_str()) {
                 hide_hud(app, state);
                 println!("[Action] Spawning command: {}", cmd);
-                let _ = std::process::Command::new("sh")
-                    .arg("-c")
-                    .arg(cmd)
-                    .spawn();
+                #[cfg(target_os = "windows")]
+                {
+                    use std::os::windows::process::CommandExt;
+                    let mut c = std::process::Command::new("cmd");
+                    c.args(["/c", cmd]);
+                    c.creation_flags(0x08000000); // CREATE_NO_WINDOW
+                    let _ = c.spawn();
+                }
+                #[cfg(not(target_os = "windows"))]
+                {
+                    let _ = std::process::Command::new("sh")
+                        .arg("-c")
+                        .arg(cmd)
+                        .spawn();
+                }
             }
         }
         _ => {}
@@ -444,6 +455,7 @@ pub fn run() {
                 }
                 if let Some(hud_w) = app.get_webview_window("hud") {
                     let _ = hud_w.set_icon(icon.clone());
+                    let _ = hud_w.set_shadow(false);
                 }
             }
 

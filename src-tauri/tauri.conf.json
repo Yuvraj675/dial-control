@@ -22,6 +22,7 @@
         "alwaysOnTop": true,
         "visible": false,
         "center": true,
+        "shadow": false,
         "url": "index.html?view=hud"
       },
       {

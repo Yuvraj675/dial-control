@@ -1,49 +1,88 @@
 use crate::platform::traits::SystemBrightness;
 use std::process::Command;
-use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
+use std::sync::Arc;
 use std::thread;
+use std::time::Duration;
 
 pub struct WindowsBrightness {
-    cached_brightness: AtomicI32,
+    cached_brightness: Arc<AtomicI32>,
+    pending_target: Arc<AtomicI32>,
+    is_updating: Arc<AtomicBool>,
 }
 
 impl WindowsBrightness {
     pub fn new() -> Self {
-        let instance = Self {
-            cached_brightness: AtomicI32::new(70),
-        };
+        let cached = Arc::new(AtomicI32::new(70));
+        let pending = Arc::new(AtomicI32::new(70));
+        let updating = Arc::new(AtomicBool::new(false));
 
-        // Query initial hardware brightness asynchronously in background
-        thread::spawn(|| {
-            if let Ok(output) = Command::new("powershell")
+        // Query initial hardware brightness asynchronously without visible console window
+        let cached_clone = cached.clone();
+        thread::spawn(move || {
+            let mut cmd = Command::new("powershell");
+            #[cfg(target_os = "windows")]
+            {
+                use std::os::windows::process::CommandExt;
+                cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+            }
+            if let Ok(output) = cmd
                 .args([
                     "-NoProfile",
                     "-NonInteractive",
                     "-Command",
-                    "(Get-CimInstance -Namespace root/wmi -ClassName WmiMonitorBrightness).CurrentBrightness",
+                    "try { (Get-CimInstance -Namespace root/wmi -ClassName WmiMonitorBrightness -ErrorAction Stop).CurrentBrightness } catch { }",
                 ])
                 .output()
             {
                 if let Ok(s) = String::from_utf8(output.stdout) {
                     if let Ok(val) = s.trim().parse::<i32>() {
                         println!("[Windows Brightness] Initial hardware query: {}%", val);
+                        cached_clone.store(val, Ordering::SeqCst);
                     }
                 }
             }
         });
 
-        instance
+        Self {
+            cached_brightness: cached,
+            pending_target: pending,
+            is_updating: updating,
+        }
     }
 
     fn apply_hardware_brightness(&self, target: i32) {
+        self.pending_target.store(target, Ordering::SeqCst);
+
+        // Debounce: If already updating in background, the worker loop will pick up the latest pending target
+        if self.is_updating.swap(true, Ordering::SeqCst) {
+            return;
+        }
+
+        let is_updating = self.is_updating.clone();
+        let pending_target = self.pending_target.clone();
+
         thread::spawn(move || {
-            let cmd = format!(
-                "(Get-CimInstance -Namespace root/wmi -ClassName WmiMonitorBrightnessMethods).WmiSetBrightness(1, {})",
-                target
+            // Debounce delay so fast scrolling doesn't spam PowerShell
+            thread::sleep(Duration::from_millis(200));
+
+            let final_target = pending_target.load(Ordering::SeqCst);
+            let ps_script = format!(
+                "try {{ (Get-CimInstance -Namespace root/wmi -ClassName WmiMonitorBrightnessMethods -ErrorAction Stop).WmiSetBrightness(1, {}) }} catch {{ }}",
+                final_target
             );
-            let _ = Command::new("powershell")
-                .args(["-NoProfile", "-NonInteractive", "-Command", &cmd])
+
+            let mut cmd = Command::new("powershell");
+            #[cfg(target_os = "windows")]
+            {
+                use std::os::windows::process::CommandExt;
+                cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+            }
+            let _ = cmd
+                .args(["-NoProfile", "-NonInteractive", "-Command", &ps_script])
                 .status();
+
+            is_updating.store(false, Ordering::SeqCst);
         });
     }
 }
