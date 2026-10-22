@@ -1,8 +1,8 @@
-# CMF Buds Pro 2 — Smart Dial Control System
+# CMF Buds Pro 2 - Smart Dial Control System
 
-Turn your **CMF Buds Pro 2** smart dial case into a context-aware, beautifully animated radial controller for **Linux, macOS, and Windows** — inspired by **[KnifeLemon/Filee](https://github.com/KnifeLemon/Filee)** and the Nothing OS aesthetic.
+Turn your **CMF Buds Pro 2** smart dial case into a context-aware, beautifully animated radial controller for **Linux and Windows** (with macOS in active development) - inspired by **[KnifeLemon/Filee](https://github.com/KnifeLemon/Filee)** and the Nothing OS aesthetic.
 
-- **100% Dual-Pairing Preserved**: Keeps your phone connection and the Nothing X app active simultaneously.
+- **100% Dual-Pairing Preserved**: Keeps your phone connection and the Nothing X mobile application active simultaneously.
 - **Direct Launch & System Tray Docking**: Launches directly into the Settings & Customizer window on startup. Closing the window minimizes seamlessly to the system tray background daemon.
 - **Nothing OS Typography**: Fully styled with authentic Nothing OS dot-matrix typography (`Ndot57`) across all HUD dials, settings panels, slice inspectors, and configuration cards.
 - **Custom Dials Creator**: Create custom dial profiles from scratch with custom shortcut triggers, import actions across any dial, and configure dynamic window title/class pattern matching.
@@ -11,8 +11,8 @@ Turn your **CMF Buds Pro 2** smart dial case into a context-aware, beautifully a
 - **Click the Dial / Press Shortcut**: An animated, glowing Donut Radial HUD pops up on screen with options tailored to your currently focused application.
 - **Home Dial Option**: Every dial menu features a `HOME` option that opens the interactive Home Dial switcher where you can manually choose between any dial menu (System, Media, Code, Files, Browser, Design, or custom profiles).
 - **Rotate the Dial / Arrow Keys**: Smoothly cycles options with audio feedback while your media volume remains locked.
-- **Click Again / Enter**: Executes the action (e.g. `Copy`/`Paste` in Files, `Seek`/`Fullscreen` in YouTube, `Format` in VS Code, or opens the Volume/Brightness gauge).
-- **System Tray Daemon**: Runs quietly in your system tray / top panel with clean, emoji-free controls, radial toggles, and settings customizer.
+- **Click Again / Enter**: Executes the action (such as `Copy`/`Paste` in Files, `Seek`/`Fullscreen` in YouTube, `Format` in VS Code, or opens the Volume/Brightness gauge).
+- **System Tray Daemon**: Runs quietly in your system tray / top panel with clean, text-based controls, radial toggles, and settings customizer.
 - **Built with Tauri v2 + Rust + React**: Native performance, minimal memory footprint, and cross-platform architecture.
 
 ---
@@ -21,12 +21,13 @@ Turn your **CMF Buds Pro 2** smart dial case into a context-aware, beautifully a
 
 ```
 dial-control/
-├── assets/                 # Desktop & system tray icons
+├── assets/                 # Desktop & system tray icons (PNG, SVG, ICO)
 ├── config/                 # Declarative profiles.json configuration
 ├── docs/                   # Protocol & architectural specifications
 ├── public/                 # Typography (NType82, Ndot57) & assets
-├── scripts/                # Platform helper scripts (e.g. udev rules)
-├── src/                    # Frontend UI (React 18, TypeScript, Tailwind CSS)
+├── resources/              # GNOME Shell extension & OS assets
+├── scripts/                # Packaging, udev rules & build scripts
+├── src/                    # Frontend UI (React 19, TypeScript, Tailwind CSS)
 │   ├── components/
 │   │   ├── hud/            # DonutRadialHUD (Framer Motion circular wheel & Home Dial)
 │   │   └── settings/       # SettingsWindow (Slice editor & profile manager)
@@ -39,10 +40,11 @@ dial-control/
 │       └── platform/       # Modular OS Abstractions (Linux, Windows, macOS)
 │           ├── mod.rs      # Unified provider switcher
 │           ├── traits.rs   # Core platform traits
+│           ├── common.rs   # Shared profile matcher & context event
 │           ├── linux/      # WirePlumber, Mutter, uinput, BlueZ, evdev & D-Bus Context
-│           ├── windows/    # WASAPI, Win32 & RawInput stubs
+│           ├── windows/    # Core Audio COM, dxva2 DDC/CI, WMI/CIM, Win32 hooks
 │           └── macos/      # CoreAudio, IOKit & Cocoa stubs
-└── temp/                   # [Gitignored] Reference prototypes & scripts
+└── dist-packages/          # Pre-assembled Linux & Windows installation packages
 ```
 
 ---
@@ -51,8 +53,8 @@ dial-control/
 
 | Platform | Dial / AVRCP Interception | Volume Control | Brightness Control | Context Detection | Status |
 |---|---|---|---|---|---|
-| **Linux (X11 / Wayland)** | BlueZ D-Bus + `evdev` grabber | WirePlumber (`wpctl`) / PulseAudio | `/sys/class/backlight` + GNOME Mutter D-Bus | GNOME FocusedWindow D-Bus + Sway/Hyprland/KDE/X11 | **Fully Functional** |
-| **Windows (10 / 11)** | Low-Level Hook (`WH_KEYBOARD_LL`) + AVRCP | Win32 Master Volume + VK stepping | WMI (`WmiMonitorBrightness`) | Win32 `GetForegroundWindow` + Process Image Query | **Implemented (Ready for Testing)** |
+| **Linux (X11 / Wayland)** | BlueZ D-Bus + `evdev` grabber | WirePlumber (`wpctl`) / PulseAudio | `/sys/class/backlight` + GNOME Mutter D-Bus | GNOME FocusedWindow D-Bus + Hyprland/Sway/KDE/X11 | **Fully Functional** |
+| **Windows (10 / 11)** | Low-Level Hook (`WH_KEYBOARD_LL`) | Windows Core Audio COM (`IAudioEndpointVolume`) | Dual-layer: `dxva2.dll` (DDC/CI) + WMI/CIM | Win32 `GetForegroundWindow` + Process Image & Class Name | **Fully Functional** |
 | **macOS** | CoreBluetooth / IOHIDManager | CoreAudio HAL | DisplayServices / IOKit | Cocoa `NSWorkspace` | **In Development** |
 
 ---
@@ -63,17 +65,57 @@ The dial automatically detects your active foreground application and adapts its
 
 | Foreground App | Profile | Slices on the Wheel |
 |---|---|---|
-| **Files / Nautilus / Dolphin** | **📁 Files & Folders** | 📋 Copy (`Ctrl+C`), 📥 Paste (`Ctrl+V`), 🗑️ Trash (`Delete`), 📁 New Folder (`Ctrl+Shift+N`), 🏷️ Rename (`F2`), 💻 Terminal, 🏠 Home Dial |
-| **YouTube / Firefox / Chrome / Zen** | **🎬 Video & Media** | ⏯️ Play/Pause, ⏩ Seek +10s (`Right`), ⏪ Seek -10s (`Left`), 🖥️ Fullscreen (`F`), 🔇 Mute (`M`), 🔊 Volume Gauge, 🏠 Home Dial |
-| **VS Code / Cursor / Zed** | **💻 Code & Editor** | 💾 Save All (`Ctrl+S`), ✨ Format (`Shift+Alt+F`), 🔍 Find in Files (`Ctrl+Shift+F`), 💬 Comment (`Ctrl+/`), 💻 Terminal (`Ctrl+\``), 🔄 Git, 🏠 Home Dial |
-| **Desktop / General Apps** | **⚙️ System Controls** | 🔊 Volume Adjust, ☀️ Brightness Adjust, ⏯️ Play/Pause, ⏭️ Next Track, ⏮️ Prev Track, 🔇 Mute Toggle, 🏠 Home Dial |
-| **Any Screen (via Home)** | **🏠 Home Dial Switcher** | ⚙️ System, 🎬 Media, 💻 Code, 📁 Files, 🌐 Browser, 🎨 Design (plus any custom user profiles) |
+| **Files / Nautilus / Dolphin** | **Files & Folders** | Copy (`Ctrl+C`), Paste (`Ctrl+V`), Trash (`Delete`), New Folder (`Ctrl+Shift+N`), Rename (`F2`), Terminal, Home Dial |
+| **YouTube / Firefox / Chrome / Zen** | **Video & Media** | Play/Pause, Seek +10s (`Right`), Seek -10s (`Left`), Fullscreen (`F`), Mute (`M`), Volume Gauge, Home Dial |
+| **VS Code / Cursor / Zed** | **Code & Editor** | Save All (`Ctrl+S`), Format (`Shift+Alt+F`), Find in Files (`Ctrl+Shift+F`), Comment (`Ctrl+/`), Terminal (`Ctrl+\``), Git Diff, Home Dial |
+| **Desktop / General Apps** | **System Controls** | Volume Adjust, Brightness Adjust, Play/Pause, Next Track, Prev Track, Mute Toggle, Home Dial |
+| **Any Screen (via Home)** | **Home Dial Switcher** | System, Media, Code, Files, Browser, Design (plus any custom user profiles) |
+
+---
+
+## Windows Implementation Details
+
+The Windows port runs with native Win32 and COM integrations designed for maximum responsiveness, security, and hardware compatibility:
+
+- **Earbuds Dial Case Interception**: Uses a Win32 Low-Level Keyboard Hook (`WH_KEYBOARD_LL`). When the HUD is closed, clicking the dial case button (`VK_MEDIA_PLAY_PAUSE`) opens the radial HUD and blocks the default OS playback toggle. While open, rotating navigates slices and clicking confirms selection.
+- **Hardware Master Volume (Zero Desynchronization)**: Directly interfaces with the Windows Core Audio COM API (`IAudioEndpointVolume` and `IMMDeviceEnumerator` via `ole32.dll`). It reads the exact system volume level on startup and sets the hardware master scalar directly without keypress simulation.
+- **Dual-Layer Display Brightness**:
+  - **Internal Laptop Screens**: Dual-execution PowerShell script invoking both `(Get-WmiObject -Namespace root/wmi -ClassName WmiMonitorBrightnessMethods).WmiSetBrightness(...)` and `Invoke-CimMethod` with 150ms debouncing and `CREATE_NO_WINDOW`.
+  - **External Desktop Monitors**: Direct Win32 High-Level Monitor Configuration API (`dxva2.dll` / `SetMonitorBrightness`) via Direct3D/DDC/CI.
+- **Context & Desktop Detection**: Distinguishes Windows desktop components (`Progman`, `WorkerW`, `Shell_TrayWnd`) from actual File Explorer folder windows (`CabinetWClass`), ensuring the desktop routes to System Controls instead of Files.
+- **Input Tagging**: Stamped synthetic media inputs with `SYNTHETIC_INPUT_TAG` (`0x4449414C`) to prevent the low-level hook from blocking its own emitted keystrokes.
+- **Overlay Window Presentation**: HUD window uses `"skipTaskbar": true` and `"shadow": false` to eliminate rectangular borders/shadows, and auto-dismisses smoothly when focus is lost (`Focused(false)` / clicking outside).
+- **Interactive Terminal Launcher**: Uses progressive PATH detection (`where wt.exe ... && start wt.exe || where powershell.exe ... || start cmd.exe`) to launch Windows Terminal, PowerShell, or Command Prompt without console suppression.
+- **Security & Least-Privilege**: Runs completely without Administrator privileges in user scope (`%LOCALAPPDATA%\Programs\dial-control`). Respects Windows UIPI (User Interface Privilege Isolation) so hotkeys can be delivered to user web browsers and applications.
+
+---
+
+## Tiling Window Managers (Hyprland, Sway, i3)
+
+By default, tiling compositors place all new windows into the tiling layout. To have the radial HUD display as a floating, centered overlay with zero borders, add the following configuration:
+
+### Hyprland (`~/.config/hypr/hyprland.conf`)
+```ini
+# Dial Control HUD - Floating Radial Overlay
+windowrulev2 = float, class:^(dial-control)$, title:^(Dial Control HUD)$
+windowrulev2 = center, class:^(dial-control)$, title:^(Dial Control HUD)$
+windowrulev2 = noborder, class:^(dial-control)$, title:^(Dial Control HUD)$
+windowrulev2 = noshadow, class:^(dial-control)$, title:^(Dial Control HUD)$
+windowrulev2 = pin, class:^(dial-control)$, title:^(Dial Control HUD)$
+```
+
+### Sway / i3 (`~/.config/sway/config` or `~/.config/i3/config`)
+```ini
+for_window [app_id="dial-control" title="Dial Control HUD"] floating enable, border none
+```
 
 ---
 
 ## Pre-Built Distribution Packages
 
-Dial Control provides native, pre-assembled packages for all major Linux distributions in [`dist-packages/`](file:///home/yuvraj/Documents/Code_Projects/dial-control/dist-packages/):
+Dial Control provides native, pre-assembled packages for all major Linux distributions in `dist-packages/` and Windows releases via GitHub Actions:
+
+### Linux Packages
 
 | Distribution | Package Format | Installation Command |
 |---|---|---|
@@ -82,14 +124,19 @@ Dial Control provides native, pre-assembled packages for all major Linux distrib
 | **Arch Linux / Manjaro / EndeavourOS** | `.pkg.tar.zst` | `sudo pacman -U ./dist-packages/dial-control-1.0.0-1-x86_64.pkg.tar.zst` |
 | **Any Linux (Portable)** | `.AppImage` | `chmod +x dist-packages/Dial-Control-1.0.0-amd64.AppImage && ./dist-packages/Dial-Control-1.0.0-amd64.AppImage` |
 
-### What is Bundled Inside the Native Packages?
-
-Each native package (`.deb`, `.rpm`, and Arch package) installs a complete system integration with zero manual browsing or repository hunting required:
+#### Bundled Inside the Linux Packages
 - **Application Binary**: Installed to `/usr/bin/dial-control`.
 - **Desktop Entry & Icon**: Registered under `/usr/share/applications/` and `/usr/share/icons/hicolor/512x512/apps/`.
-- **Hardware Access Rules (`udev`)**: Installs `/usr/lib/udev/rules.d/99-dial-control.rules` to give the logged-in desktop user non-root access to `/dev/uinput` (virtual keystroke emulation) and the CMF Buds Pro 2 rotary input events.
+- **Hardware Access Rules (`udev`)**: Installs `/usr/lib/udev/rules.d/99-dial-control.rules` giving the desktop user non-root access to `/dev/uinput` and CMF Buds Pro 2 rotary input events.
 - **GNOME Shell Focused Window Extension**: Installs the `focused-window-dbus@flexagoon.com` extension system-wide to `/usr/share/gnome-shell/extensions/` to enable Wayland context detection.
-- **Post-Install Script**: Automatically reloads udev rules (`udevadm control --reload-rules && udevadm trigger`), refreshes desktop and icon databases, and enables the GNOME extension.
+
+### Windows Packages
+
+Windows packages are compiled automatically via **GitHub Actions** (`.github/workflows/build-windows.yml`) on every push to `main`:
+- **`Dial Control_1.0.0_x64-setup.exe`**: Per-user NSIS Installer with automatic Start Menu and desktop integration.
+- **`Dial Control_1.0.0_x64_en-US.msi`**: Windows Installer package with standard Windows Add/Remove Programs integration.
+
+Download the latest installer from the GitHub repository's **Actions** tab (under workflow run artifacts) or **Releases**.
 
 ---
 
@@ -99,29 +146,26 @@ Each native package (`.deb`, `.rpm`, and Arch package) installs a complete syste
 
 | Distribution / Environment | Status | Details & Requirements |
 |---|---|---|
-| **Ubuntu 24.04 LTS (Noble) & 24.10+** | **Supported** | Native `.deb` works out of the box. GNOME Shell 46+. |
+| **Windows 11 & Windows 10** | **Supported** | Native `.exe` / `.msi`. Pre-installed WebView2 runtime. |
+| **Ubuntu 24.04 LTS & 24.10+** | **Supported** | Native `.deb` works out of the box. GNOME Shell 46+. |
 | **Fedora 40, 41 & Nobara** | **Supported** | Native `.rpm` works out of the box. GNOME Shell 46/47+. |
 | **Arch Linux / Manjaro / EndeavourOS** | **Supported** | Native `.pkg.tar.zst` works out of the box. |
 | **openSUSE Tumbleweed** | **Supported** | Native `.rpm` works out of the box. |
 | **KDE Plasma (Any Modern Distro)** | **Supported** | Natively queries active window via `kdotool`. Zero extensions needed. |
-| **Hyprland / Sway (Wayland)** | **Supported** | Natively queries active window via `hyprctl` / `swaymsg`. Zero extensions needed. |
+| **Hyprland / Sway (Wayland)** | **Supported** | Supported with floating window rules. |
 | **X11 / XWayland** | **Supported** | Natively queries active window via `xdotool`. |
 | **Ubuntu 22.04 LTS / Debian 12** | **Incompatible** | Requires `GLIBC >= 2.39`. See note below for older distros. |
 
 ### Technical Details & First-Time Setup Notes
 
 1. **GLIBC Requirement (`GLIBC_2.39`)**:
-   - The release binaries are compiled on Fedora/Nobara with `GLIBC_2.39`. Modern Linux releases (Ubuntu 24.04+, Fedora 40+, Arch) satisfy this requirement.
-   - On older distributions (Ubuntu 22.04 LTS with GLIBC 2.35 or Debian 12 with GLIBC 2.36), the binary will not launch. To target older distributions, build the release binary inside an `ubuntu:22.04` container.
+   The release binaries are compiled on Fedora/Nobara with `GLIBC_2.39`. Modern Linux releases (Ubuntu 24.04+, Fedora 40+, Arch) satisfy this requirement.
 2. **GNOME Wayland First-Time Session Restart**:
-   - GNOME Shell on Wayland cannot reload extensions in a live session (`Alt+F2 -> r` is disabled on Wayland).
-   - After installing Dial Control on a **GNOME Wayland** system for the first time, **log out and log back in once** (or reboot) so GNOME Shell loads the newly placed system extension.
-   - *Graceful fallback*: If the extension is not yet loaded, Dial Control will not crash; it will operate normally using the default dial profile.
+   After installing Dial Control on a **GNOME Wayland** system for the first time, log out and log back in once (or reboot) so GNOME Shell loads the newly placed system extension.
 3. **Bluetooth Connection Order**:
-   - If your CMF Buds Pro 2 were already connected via Bluetooth *before* running the package installation, disconnect and reconnect the earbuds once over Bluetooth so `systemd-logind` attaches the new `uaccess` permissions to the input node.
+   If your CMF Buds Pro 2 were already connected via Bluetooth before running the package installation, disconnect and reconnect the earbuds once over Bluetooth so `systemd-logind` attaches the new `uaccess` permissions to the input node.
 4. **AppImage Considerations**:
-   - The standalone `.AppImage` runs without root privileges and therefore cannot automatically place udev rules into `/usr/lib/udev/rules.d/` or system extensions into `/usr/share/gnome-shell/extensions/`.
-   - When using the AppImage, either run `bash scripts/setup_udev.sh` once or add your user to the `input` group (`sudo usermod -aG input $USER`).
+   When using the standalone AppImage, either run `bash scripts/setup_udev.sh` once or add your user to the `input` group (`sudo usermod -aG input $USER`).
 
 ---
 
@@ -129,9 +173,9 @@ Each native package (`.deb`, `.rpm`, and Arch package) installs a complete syste
 
 ### Prerequisites
 
-- **Node.js** (v18+) and **pnpm** (or npm/yarn)
+- **Node.js** (v18+) and **pnpm** (or npm)
 - **Rust** (stable toolchain)
-- **Linux Packages** (if running on Linux):
+- **Linux Packages** (if developing on Linux):
   ```bash
   # Debian/Ubuntu
   sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
@@ -149,11 +193,11 @@ To allow Dial Control to intercept dial clicks and emulate keys without requirin
 bash scripts/setup_udev.sh
 ```
 
-This installs `/etc/udev/rules.d/99-cmf-dial.rules` and grants your user account `uaccess` to the CMF Buds AVRCP input events.
-
 ---
 
 ## Development & Building
+
+### Building on Linux
 
 ```bash
 # 1. Install dependencies
@@ -162,20 +206,20 @@ pnpm install
 # 2. Run in development mode (hot reloading UI + Rust backend)
 pnpm tauri dev
 
-# 3. Build standalone production binary (embeds frontend into binary)
+# 3. Build standalone production binary
 pnpm tauri build --no-bundle
 # (or: npx @tauri-apps/cli build --no-bundle)
 
-# 4. Copy to launcher bin/ (optional for desktop integration)
+# 4. Copy to launcher bin/
 cp src-tauri/target/release/dial-control bin/dial-control
 
 # 5. Build all multi-distribution packages (.deb, .rpm, AppImage, Arch Linux)
 bash scripts/build-packages.sh
 ```
 
-### Building on Windows (VM or Laptop)
+### Building on Windows (Local Machine or VM)
 
-On a Windows system (or Windows VM with Node.js and Rust installed):
+On a Windows system with Node.js and Rust installed:
 
 ```powershell
 # Run the automated build script (or double-click scripts\build-windows.bat):
@@ -184,11 +228,10 @@ On a Windows system (or Windows VM with Node.js and Rust installed):
 
 This compiles:
 - `Dial Control_1.0.0_x64-setup.exe` (NSIS Installer)
-- `Dial Control_1.0.0_x64_en-US.msi` (Windows Installer package)
+- `Dial Control_1.0.0_x64_en-US.msi` (WiX MSI Installer)
 under `src-tauri/target/release/bundle/`.
 
 Alternatively, push to GitHub to let the automated **GitHub Actions** workflow (`build-windows.yml`) compile the `.exe` and `.msi` installers in the cloud with zero local setup needed.
-
 
 ---
 
