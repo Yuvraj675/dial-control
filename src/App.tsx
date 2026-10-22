@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { DonutRadialHUD } from "./components/hud/DonutRadialHUD";
 import { SettingsWindow } from "./components/settings/SettingsWindow";
 import { DEFAULT_CONFIG } from "./data/defaultProfiles";
-import { ProfilesConfig, WheelAction, DialProfile } from "./types/profile";
+import { ProfilesConfig, WheelAction, DialProfile, getOrderedProfileIds } from "./types/profile";
 import { Disc, Layers, Sliders, Eye, EyeOff } from "lucide-react";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
@@ -61,18 +61,25 @@ export function App() {
     return saved !== null ? Number(saved) : 55;
   });
 
-  // Dynamic Home Dial profile that lists all available profiles
+  // Dynamic Home Dial profile that lists all available profiles in user-defined order
   const activeProfile: DialProfile = (() => {
     if (activeProfileId === "home") {
-      const profileEntries = Object.entries(config.profiles).filter(([id]) => id !== "home");
-      const actions: WheelAction[] = profileEntries.map(([id, prof]) => ({
-        id: `profile_${id}`,
-        label: prof.name.toUpperCase(),
-        icon: prof.icon || "sliders",
-        type: "profile" as const,
-        action: id,
-        desc: `Switch to ${prof.name} dial`,
-      }));
+      const orderedIds = getOrderedProfileIds(config).filter((id) => id !== "home");
+      const actions: WheelAction[] = orderedIds
+        .map((id) => {
+          const prof = config.profiles[id];
+          if (!prof) return null;
+          return {
+            id: `profile_${id}`,
+            label: prof.name.toUpperCase(),
+            icon: prof.icon || "sliders",
+            type: "profile" as const,
+            action: id,
+            desc: `Switch to ${prof.name} dial`,
+          };
+        })
+        .filter(Boolean) as WheelAction[];
+
       actions.push({
         id: "close_hud",
         label: "CLOSE",
@@ -321,11 +328,13 @@ export function App() {
         const query = `${wm_class || ""} ${app || ""} ${title || ""}`.toLowerCase();
         let targetId = profile_id;
 
-        // Custom profiles from settings have priority
-        for (const [id, prof] of Object.entries(profiles)) {
-          if (id === "default") continue;
+        // Check ordered profiles for custom trigger matches
+        const orderedProfileIds = getOrderedProfileIds(stateRef.current.config);
+        for (const id of orderedProfileIds) {
+          if (id === "default" || id === "home") continue;
+          const prof = profiles[id];
           if (
-            prof.match_patterns?.some((pat) => {
+            prof?.match_patterns?.some((pat) => {
               const clean = pat.replace(/\*/g, "").toLowerCase().trim();
               return clean.length > 0 && query.includes(clean);
             })
@@ -560,11 +569,15 @@ export function App() {
                   }}
                   className="bg-transparent text-white text-[11px] font-ndot tracking-wider focus:outline-none uppercase cursor-pointer"
                 >
-                  {Object.entries(config.profiles).map(([id, p]) => (
-                    <option key={id} value={id} className="bg-[#0E1014] text-white">
-                      {p.name}
-                    </option>
-                  ))}
+                  {getOrderedProfileIds(config).map((id) => {
+                    const p = config.profiles[id];
+                    if (!p) return null;
+                    return (
+                      <option key={id} value={id} className="bg-[#0E1014] text-white">
+                        {p.name}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 

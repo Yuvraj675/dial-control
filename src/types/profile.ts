@@ -33,4 +33,19 @@ export interface AppSettings {
 export interface ProfilesConfig {
   settings: AppSettings;
   profiles: Record<string, DialProfile>;
+  profile_order?: string[];
+}
+
+export function getOrderedProfileIds(config: ProfilesConfig): string[] {
+  const allIds = Object.keys(config.profiles);
+  if (!config.profile_order || config.profile_order.length === 0) {
+    return allIds;
+  }
+  const ordered = config.profile_order.filter((id) => allIds.includes(id));
+  for (const id of allIds) {
+    if (!ordered.includes(id)) {
+      ordered.push(id);
+    }
+  }
+  return ordered;
 }
