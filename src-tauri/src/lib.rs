@@ -412,6 +412,31 @@ pub fn run() {
                 }
             }
 
+            // TCP loopback listener for instantaneous CLI --toggle on Windows
+            #[cfg(windows)]
+            {
+                let app_handle = app.handle().clone();
+                if let Ok(listener) = std::net::TcpListener::bind("127.0.0.1:41829") {
+                    use std::io::{BufRead, BufReader};
+                    std::thread::spawn(move || {
+                        for stream in listener.incoming() {
+                            if let Ok(stream) = stream {
+                                let mut reader = BufReader::new(stream);
+                                let mut line = String::new();
+                                if reader.read_line(&mut line).is_ok() {
+                                    let cmd = line.trim();
+                                    if cmd == "toggle" {
+                                        let state: tauri::State<AppState> = app_handle.state();
+                                        toggle_hud(app_handle.clone(), state);
+                                    }
+                                }
+                            }
+                        }
+                    });
+                    println!("[IPC] TCP loopback listener active on 127.0.0.1:41829");
+                }
+            }
+
             // Set app window icons on taskbar/dock
             if let Some(icon) = app.default_window_icon() {
                 if let Some(settings_w) = app.get_webview_window("settings") {

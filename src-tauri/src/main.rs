@@ -16,6 +16,17 @@ fn main() {
                 return;
             }
         }
+        #[cfg(windows)]
+        {
+            use std::io::Write;
+            use std::net::TcpStream;
+            if let Ok(mut stream) = TcpStream::connect("127.0.0.1:41829") {
+                let _ = stream.write_all(b"toggle\n");
+                let _ = stream.flush();
+                println!("[CLI] Dispatched toggle signal to running daemon via TCP loopback.");
+                return;
+            }
+        }
     }
 
     dial_control_lib::run();

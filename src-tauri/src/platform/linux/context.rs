@@ -3,13 +3,7 @@ use futures_lite::StreamExt;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct ContextEvent {
-    pub profile_id: String,
-    pub app: String,
-    pub title: String,
-    pub wm_class: String,
-}
+pub use crate::platform::common::{match_profile, ContextEvent};
 
 #[derive(Debug, serde::Deserialize)]
 struct FocusedWindowJson {
@@ -28,67 +22,6 @@ impl LinuxContext {
     }
 }
 
-/// Matches foreground application details against known profile patterns.
-pub fn match_profile(app: &str, wm_class: &str, title: &str) -> &'static str {
-    let query = format!("{} {} {}", wm_class, app, title).to_lowercase();
-
-    // 1. Media & Streaming (checked first so YouTube/Netflix in Chrome stays media)
-    let media_patterns = [
-        "youtube", "netflix", "spotify", "vlc", "mpv", "twitch", "prime video",
-        "soundcloud", "disney", "jellyfin", "plex", "rhythmbox", "audacious",
-    ];
-    for pat in &media_patterns {
-        if query.contains(pat) {
-            return "media_video";
-        }
-    }
-
-    // 2. Code Editors & IDEs
-    let code_patterns = [
-        "code", "cursor", "zed", "sublime", "nvim", "vim", "pycharm", "intellij",
-        "rustrover", "webstorm", "android-studio", "clion", "eclipse", "neovim",
-    ];
-    for pat in &code_patterns {
-        if query.contains(pat) {
-            return "code_editor";
-        }
-    }
-
-    // 3. File Managers
-    let file_patterns = [
-        "nautilus", "dolphin", "thunar", "pcmanfm", "filee", "explorer", "nemo",
-        "caja", "files", "org.gnome.nautilus",
-    ];
-    for pat in &file_patterns {
-        if query.contains(pat) {
-            return "file_manager";
-        }
-    }
-
-    // 4. Web Browsers
-    let browser_patterns = [
-        "firefox", "chrome", "chromium", "zen", "brave", "edge", "opera",
-        "vivaldi", "epiphany", "google-chrome",
-    ];
-    for pat in &browser_patterns {
-        if query.contains(pat) {
-            return "browser_nav";
-        }
-    }
-
-    // 5. Creative & Design
-    let design_patterns = [
-        "figma", "blender", "resolve", "photoshop", "inkscape", "gimp",
-        "krita", "illustrator", "premiere", "darktable", "freecad",
-    ];
-    for pat in &design_patterns {
-        if query.contains(pat) {
-            return "creative_design";
-        }
-    }
-
-    "default"
-}
 
 // ── Compositor Fallbacks ───────────────────────────────────────────────────
 
