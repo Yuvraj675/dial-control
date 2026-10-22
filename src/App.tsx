@@ -608,6 +608,8 @@ export function App() {
           currentMode={currentMode}
           gaugeValue={gaugeValue}
           theme={config.settings.theme}
+          dialRadius={config.settings.dial_radius}
+          donutThickness={config.settings.donut_thickness}
           onSelectAction={handleExecuteAction}
           onDismiss={() => {
             if (isTauri) {

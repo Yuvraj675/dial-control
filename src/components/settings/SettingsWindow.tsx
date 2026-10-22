@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { ProfilesConfig, WheelAction, ActionType, DialProfile, getOrderedProfileIds } from "../../types/profile";
+import { DonutRadialHUD } from "../hud/DonutRadialHUD";
 import { getActionIcon, ICON_MAP } from "../../utils/iconMap";
 import {
   Palette,
@@ -1111,6 +1112,26 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
               }
               className="w-full accent-white cursor-pointer h-2 bg-white/10 rounded-lg mt-1"
             />
+          </div>
+
+          {/* Live Preview Card */}
+          <div className="p-7 rounded-2xl bg-[#0C0E14] border border-white/10 flex flex-col gap-4 shadow-sm">
+            <div className="flex items-center justify-between font-ndot text-xs text-neutral-400 uppercase tracking-widest">
+              <span>LIVE DIAL PREVIEW</span>
+              <span className="text-[10px] text-neutral-500 font-ndot tracking-wider">AESTHETIC SIMULATOR</span>
+            </div>
+            <div className="w-full h-80 rounded-xl bg-[#07080B] border border-white/[0.06] flex items-center justify-center overflow-hidden relative">
+              <DonutRadialHUD
+                profile={activeProfile}
+                selectedIndex={0}
+                isOpen={true}
+                currentMode="menu"
+                theme={currentConfig.settings.theme}
+                dialRadius={currentConfig.settings.dial_radius}
+                donutThickness={currentConfig.settings.donut_thickness}
+                isStaticPreview={true}
+              />
+            </div>
           </div>
         </div>
 
