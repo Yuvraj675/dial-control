@@ -70,9 +70,18 @@ pub(crate) fn do_stop_scroll_mode(app: &AppHandle, state: &AppState) {
     if let Some(window) = app.get_webview_window("hud") {
         let _ = window.hide();
     }
-    if let Some(overlay) = app.get_webview_window("scroll_overlay") {
-        let _ = overlay.hide();
+
+    // Unregister temporary scroll mode hotkeys (Space & Escape)
+    use std::str::FromStr;
+    use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
+    let global_shortcut = app.global_shortcut();
+    if let Ok(space_sc) = Shortcut::from_str("Space") {
+        let _ = global_shortcut.unregister(space_sc);
     }
+    if let Ok(esc_sc) = Shortcut::from_str("Escape") {
+        let _ = global_shortcut.unregister(esc_sc);
+    }
+
     let _ = app.emit("hud:visibility", false);
     let _ = app.emit("scroll_mode:exit", ());
     println!("[HUD] Stopped scroll mode");
@@ -93,71 +102,30 @@ fn close_hud_for_scroll(app: AppHandle, state: tauri::State<AppState>) {
     }
     let _ = app.emit("hud:visibility", false);
 
-    if let Some(overlay_window) = app.get_webview_window("scroll_overlay") {
-        let _ = overlay_window.set_fullscreen(true);
-
-        #[cfg(target_os = "windows")]
-        {
-            if let Ok(hwnd) = overlay_window.hwnd() {
-                use crate::platform::windows::ffi::*;
-                unsafe {
-                    let ex_style = GetWindowLongW(hwnd.0 as HWND, GWL_EXSTYLE);
-                    SetWindowLongW(
-                        hwnd.0 as HWND,
-                        GWL_EXSTYLE,
-                        ex_style | (WS_EX_TRANSPARENT as i32) | (WS_EX_LAYERED as i32),
-                    );
-                    SetWindowPos(
-                        hwnd.0 as HWND,
-                        HWND_TOPMOST,
-                        0,
-                        0,
-                        0,
-                        0,
-                        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW,
-                    );
-                }
-            }
-        }
-
-        #[cfg(target_os = "linux")]
-        {
-            use gtk::prelude::*;
-            if let Ok(gtk_w) = overlay_window.gtk_window() {
-                gtk_w.set_accept_focus(false);
-                gtk_w.set_focus_on_map(false);
-                gtk_w.realize();
-                if let Some(gdk_win) = gtk_w.window() {
-                    let empty_region = gtk::cairo::Region::create();
-                    gdk_win.input_shape_combine_region(&empty_region, 0, 0);
-                }
-                gtk_w.connect_map(|w| {
-                    if let Some(gdk_win) = w.window() {
-                        let empty_region = gtk::cairo::Region::create();
-                        gdk_win.input_shape_combine_region(&empty_region, 0, 0);
-                    }
-                });
-            }
-        }
-
-        let _ = overlay_window.unminimize();
-        let _ = overlay_window.show();
-        let _ = overlay_window.set_always_on_top(true);
-
-        #[cfg(target_os = "linux")]
-        {
-            use gtk::prelude::*;
-            if let Ok(gtk_w) = overlay_window.gtk_window() {
-                if let Some(gdk_win) = gtk_w.window() {
-                    let empty_region = gtk::cairo::Region::create();
-                    gdk_win.input_shape_combine_region(&empty_region, 0, 0);
-                }
-            }
-        }
-
-        let _ = overlay_window.emit("scroll_overlay:active", true);
+    // Dynamically register Space and Escape as global hotkeys while scroll mode is active
+    use std::str::FromStr;
+    use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
+    let global_shortcut = app.global_shortcut();
+    if let Ok(space_sc) = Shortcut::from_str("Space") {
+        let _ = global_shortcut.register(space_sc);
     }
-    println!("[HUD] Closed HUD window for scroll mode, showing fullscreen edge outline");
+    if let Ok(esc_sc) = Shortcut::from_str("Escape") {
+        let _ = global_shortcut.register(esc_sc);
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let _ = std::process::Command::new("notify-send")
+            .args([
+                "-a", "Dial Control",
+                "-h", "string:synchronous:dial",
+                "Scroll Mode Active",
+                "Rotate dial to scroll • Press Space or click dial to exit"
+            ])
+            .spawn();
+    }
+
+    println!("[HUD] Closed HUD window for scroll mode. Underlying application has full focus.");
 }
 
 pub(crate) fn do_show_hud(app: &AppHandle, state: &AppState) {
@@ -214,8 +182,15 @@ pub(crate) fn do_hide_hud(app: &AppHandle, state: &AppState) {
     if let Some(window) = app.get_webview_window("hud") {
         let _ = window.hide();
     }
-    if let Some(overlay) = app.get_webview_window("scroll_overlay") {
-        let _ = overlay.hide();
+    // Also unregister temporary scroll mode hotkeys if any
+    use std::str::FromStr;
+    use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
+    let global_shortcut = app.global_shortcut();
+    if let Ok(space_sc) = Shortcut::from_str("Space") {
+        let _ = global_shortcut.unregister(space_sc);
+    }
+    if let Ok(esc_sc) = Shortcut::from_str("Escape") {
+        let _ = global_shortcut.unregister(esc_sc);
     }
     let _ = app.emit("hud:visibility", false);
     let _ = app.emit("scroll_mode:exit", ());
@@ -612,7 +587,7 @@ pub fn run() {
                         let _ = window.emit("recording:system_close_pressed", ());
                         return;
                     }
-                    if window.label() == "settings" || window.label() == "hud" || window.label() == "scroll_overlay" {
+                    if window.label() == "settings" || window.label() == "hud" {
                         let _ = window.hide();
                         api.prevent_close();
                     }
@@ -713,10 +688,6 @@ pub fn run() {
                     let _ = hud_w.set_icon(icon.clone());
                     let _ = hud_w.set_shadow(false);
                 }
-                if let Some(overlay_w) = app.get_webview_window("scroll_overlay") {
-                    let _ = overlay_w.set_icon(icon.clone());
-                    let _ = overlay_w.set_shadow(false);
-                }
             }
 
             // Build Tray Icon
@@ -775,3 +746,4 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+

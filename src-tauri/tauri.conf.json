@@ -39,20 +39,6 @@
         "visible": true,
         "center": true,
         "url": "index.html?view=settings"
-      },
-      {
-        "title": "Dial Control Scroll Overlay",
-        "label": "scroll_overlay",
-        "fullscreen": true,
-        "resizable": false,
-        "transparent": true,
-        "decorations": false,
-        "alwaysOnTop": true,
-        "visible": false,
-        "shadow": false,
-        "skipTaskbar": true,
-        "focus": false,
-        "url": "index.html?view=scroll_overlay"
       }
     ],
     "security": {
