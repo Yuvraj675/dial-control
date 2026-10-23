@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { DonutRadialHUD } from "./components/hud/DonutRadialHUD";
+import { ScrollPillIndicator } from "./components/hud/ScrollPillIndicator";
 import { SettingsWindow } from "./components/settings/SettingsWindow";
 import { DEFAULT_CONFIG, sanitizeAndMigrateConfig } from "./data/defaultProfiles";
 import { ProfilesConfig, WheelAction, DialProfile, getOrderedProfileIds } from "./types/profile";
-import { Disc, Layers, Sliders, Eye, EyeOff } from "lucide-react";
+import { Disc, Layers, Sliders, Eye, EyeOff, Mouse } from "lucide-react";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 
@@ -25,9 +26,12 @@ export function App() {
     return sanitizeAndMigrateConfig(cfg);
   });
 
-  const [view, setView] = useState<"hud" | "settings">(() => {
+  const [view, setView] = useState<"hud" | "settings" | "scroll_pill">(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.get("view") === "settings" ? "settings" : "hud";
+    const v = params.get("view");
+    if (v === "settings") return "settings";
+    if (v === "scroll_pill") return "scroll_pill";
+    return "hud";
   });
 
   const [activeProfileId, setActiveProfileId] = useState<string>("default");
@@ -601,6 +605,18 @@ export function App() {
             <span>Settings</span>
           </button>
 
+          <button
+            onClick={() => setView("scroll_pill")}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full transition-all text-xs font-mono uppercase tracking-wider ${
+              view === "scroll_pill"
+                ? "bg-white text-black font-bold shadow-md"
+                : "text-neutral-400 hover:text-white"
+            }`}
+          >
+            <Mouse className="w-3.5 h-3.5" />
+            <span>Scroll Pill</span>
+          </button>
+
           {view === "hud" && (
             <div className="flex items-center gap-2 pl-2 border-l border-white/10">
               <div className="flex items-center gap-1.5 bg-[#14161C] px-2.5 py-1 rounded-full border border-white/10">
@@ -659,6 +675,17 @@ export function App() {
                 invoke("set_mode", { mode: "menu" }).catch(console.error);
                 invoke("hide_hud").catch(console.error);
               }
+            }
+            setCurrentMode("menu");
+            setIsHudOpen(false);
+          }}
+        />
+      ) : view === "scroll_pill" ? (
+        <ScrollPillIndicator
+          theme={config.settings.theme}
+          onDismiss={() => {
+            if (isTauri) {
+              invoke("stop_scroll_mode").catch(console.error);
             }
             setCurrentMode("menu");
             setIsHudOpen(false);

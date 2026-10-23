@@ -112,6 +112,9 @@ fn start_input_grabber(
                                             is_scroll_mode.store(false, Ordering::SeqCst);
                                             locked_vol.store(0, Ordering::SeqCst);
                                             is_hud_open.store(false, Ordering::SeqCst);
+                                            if let Some(pill_window) = app.get_webview_window("scroll_pill") {
+                                                let _ = pill_window.hide();
+                                            }
                                             let _ = app.emit("scroll_mode:exit", ());
                                             let _ = app.emit("hud:visibility", false);
                                             continue;
@@ -295,6 +298,7 @@ fn start_bluez_listener(
                                 thread::spawn(move || {
                                     let state: tauri::State<crate::AppState> = app_clone.state();
                                     state.platform.input().emit_scroll(scroll_delta);
+                                    let _ = app_clone.emit("scroll:tick", serde_json::json!({ "direction": direction }));
                                 });
 
                                 let locked_v = locked_vol.load(Ordering::SeqCst);

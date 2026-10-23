@@ -71,6 +71,9 @@ fn stop_scroll_mode(app: AppHandle, state: tauri::State<AppState>) {
     if let Some(window) = app.get_webview_window("hud") {
         let _ = window.hide();
     }
+    if let Some(pill_window) = app.get_webview_window("scroll_pill") {
+        let _ = pill_window.hide();
+    }
     let _ = app.emit("hud:visibility", false);
     let _ = app.emit("scroll_mode:exit", ());
     println!("[HUD] Stopped scroll mode");
@@ -82,7 +85,22 @@ fn close_hud_for_scroll(app: AppHandle) {
         let _ = window.hide();
     }
     let _ = app.emit("hud:visibility", false);
-    println!("[HUD] Closed HUD window for scroll mode (scroll mode remains active)");
+
+    if let Some(pill_window) = app.get_webview_window("scroll_pill") {
+        if let Ok(Some(monitor)) = app.primary_monitor() {
+            let m_size = monitor.size();
+            let scale = monitor.scale_factor();
+            let w = (240.0 * scale) as i32;
+            let x = (m_size.width as i32 - w) / 2;
+            let y = (24.0 * scale) as i32;
+            let _ = pill_window.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(x, y)));
+        }
+        let _ = pill_window.unminimize();
+        let _ = pill_window.show();
+        let _ = pill_window.set_always_on_top(true);
+        let _ = pill_window.emit("scroll_pill:active", true);
+    }
+    println!("[HUD] Closed HUD window for scroll mode, showing floating scroll pill");
 }
 
 #[tauri::command]
@@ -116,6 +134,9 @@ fn hide_hud(app: AppHandle, state: tauri::State<AppState>) {
     state.locked_vol.store(0, Ordering::SeqCst);
     if let Some(window) = app.get_webview_window("hud") {
         let _ = window.hide();
+    }
+    if let Some(pill_window) = app.get_webview_window("scroll_pill") {
+        let _ = pill_window.hide();
     }
     let _ = app.emit("hud:visibility", false);
     let _ = app.emit("scroll_mode:exit", ());
@@ -317,6 +338,7 @@ fn execute_action(
 
 #[tauri::command]
 fn adjust_gauge(
+    app: AppHandle,
     state: tauri::State<AppState>,
     mode: String,
     delta: i32,
@@ -330,6 +352,7 @@ fn adjust_gauge(
         state.platform.audio().set_volume(next_val);
     } else if mode == "scroll" {
         state.platform.input().emit_scroll(if delta > 0 { -1 } else { 1 });
+        let _ = app.emit("scroll:tick", serde_json::json!({ "direction": delta }));
     }
 }
 
@@ -505,7 +528,7 @@ pub fn run() {
                         let _ = window.emit("recording:system_close_pressed", ());
                         return;
                     }
-                    if window.label() == "settings" || window.label() == "hud" {
+                    if window.label() == "settings" || window.label() == "hud" || window.label() == "scroll_pill" {
                         let _ = window.hide();
                         api.prevent_close();
                     }
@@ -604,6 +627,10 @@ pub fn run() {
                 if let Some(hud_w) = app.get_webview_window("hud") {
                     let _ = hud_w.set_icon(icon.clone());
                     let _ = hud_w.set_shadow(false);
+                }
+                if let Some(pill_w) = app.get_webview_window("scroll_pill") {
+                    let _ = pill_w.set_icon(icon.clone());
+                    let _ = pill_w.set_shadow(false);
                 }
             }
 
