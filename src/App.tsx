@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 import { DonutRadialHUD } from "./components/hud/DonutRadialHUD";
 import { SettingsWindow } from "./components/settings/SettingsWindow";
-import { DEFAULT_CONFIG } from "./data/defaultProfiles";
+import { DEFAULT_CONFIG, sanitizeAndMigrateConfig } from "./data/defaultProfiles";
 import { ProfilesConfig, WheelAction, DialProfile, getOrderedProfileIds } from "./types/profile";
 import { Disc, Layers, Sliders, Eye, EyeOff } from "lucide-react";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 
-const CURRENT_CONFIG_KEY = "dial_config_v4";
+const CURRENT_CONFIG_KEY = "dial_config_v5";
 
 export function App() {
   const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -22,28 +22,7 @@ export function App() {
         cfg = DEFAULT_CONFIG;
       }
     }
-    // Ensure every profile has the HOME dial and CLOSE dial options
-    for (const prof of Object.values(cfg.profiles)) {
-      if (!prof.actions.some((a) => a.id === "home_dial" || a.type === "home")) {
-        prof.actions.push({
-          id: "home_dial",
-          label: "HOME",
-          icon: "home",
-          type: "home",
-          desc: "Choose Dial Menu",
-        });
-      }
-      if (!prof.actions.some((a) => a.id === "close_hud" || a.type === "close")) {
-        prof.actions.push({
-          id: "close_hud",
-          label: "CLOSE",
-          icon: "close",
-          type: "close",
-          desc: "Dismiss HUD",
-        });
-      }
-    }
-    return cfg;
+    return sanitizeAndMigrateConfig(cfg);
   });
 
   const [view, setView] = useState<"hud" | "settings">(() => {
@@ -118,8 +97,12 @@ export function App() {
       .then((loaded) => {
         if (loaded && loaded.profiles && loaded.settings) {
           console.log("[Config] Loaded persistent config from backend storage");
-          setConfig(loaded);
-          localStorage.setItem(CURRENT_CONFIG_KEY, JSON.stringify(loaded));
+          const sanitized = sanitizeAndMigrateConfig(loaded);
+          setConfig(sanitized);
+          localStorage.setItem(CURRENT_CONFIG_KEY, JSON.stringify(sanitized));
+          invoke("save_config", { config: sanitized }).catch((e) =>
+            console.error("[Config] Failed to persist migrated config to backend:", e)
+          );
         }
       })
       .catch((e) => console.error("[Config] Failed to load config from backend:", e));
@@ -128,8 +111,9 @@ export function App() {
     listen<ProfilesConfig>("config:update", (event) => {
       console.log("[Config] Live config update broadcast received:", event.payload);
       if (event.payload && event.payload.profiles) {
-        setConfig(event.payload);
-        localStorage.setItem(CURRENT_CONFIG_KEY, JSON.stringify(event.payload));
+        const sanitized = sanitizeAndMigrateConfig(event.payload);
+        setConfig(sanitized);
+        localStorage.setItem(CURRENT_CONFIG_KEY, JSON.stringify(sanitized));
       }
     }).then((unsub) => {
       unlisten = unsub;

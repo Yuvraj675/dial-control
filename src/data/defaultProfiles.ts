@@ -1,4 +1,4 @@
-import { ProfilesConfig } from "../types/profile";
+import { ProfilesConfig, WheelAction } from "../types/profile";
 
 export const DEFAULT_CONFIG: ProfilesConfig = {
   settings: {
@@ -52,6 +52,7 @@ export const DEFAULT_CONFIG: ProfilesConfig = {
       icon: "terminal",
       match_patterns: ["*code*", "*cursor*", "*zed*", "*sublime*", "*nvim*"],
       actions: [
+        { id: "scroll_mode", label: "SCROLL", icon: "scroll", type: "mode", action: "scroll", desc: "Rotate to scroll" },
         { id: "code_save", label: "SAVE ALL", icon: "save", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_S"] },
         { id: "code_format", label: "FORMAT", icon: "format", type: "hotkey", keys: ["KEY_LEFTSHIFT", "KEY_LEFTALT", "KEY_F"] },
         { id: "code_find", label: "FIND IN FILES", icon: "find", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_F"] },
@@ -68,6 +69,7 @@ export const DEFAULT_CONFIG: ProfilesConfig = {
       icon: "folder",
       match_patterns: ["*nautilus*", "*dolphin*", "*thunar*", "*pcmanfm*", "*filee*", "*explorer*"],
       actions: [
+        { id: "scroll_mode", label: "SCROLL", icon: "scroll", type: "mode", action: "scroll", desc: "Rotate to scroll" },
         { id: "file_copy", label: "COPY", icon: "copy", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_C"] },
         { id: "file_paste", label: "PASTE", icon: "paste", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_V"] },
         { id: "file_trash", label: "DELETE", icon: "trash", type: "hotkey", keys: ["KEY_DELETE"] },
@@ -113,3 +115,217 @@ export const DEFAULT_CONFIG: ProfilesConfig = {
     },
   },
 };
+
+export const SYSTEM_ACTION_TEMPLATES: { action: WheelAction; sourceName: string }[] = [
+  {
+    action: {
+      id: "scroll_mode",
+      label: "SCROLL",
+      icon: "scroll",
+      type: "mode",
+      action: "scroll",
+      desc: "Rotate to scroll up or down",
+    },
+    sourceName: "System Template",
+  },
+  {
+    action: {
+      id: "volume_mode",
+      label: "VOLUME",
+      icon: "volume",
+      type: "mode",
+      action: "volume",
+      desc: "Rotate to adjust system volume",
+    },
+    sourceName: "System Template",
+  },
+  {
+    action: {
+      id: "brightness_mode",
+      label: "BRIGHTNESS",
+      icon: "brightness",
+      type: "mode",
+      action: "brightness",
+      desc: "Rotate to adjust display brightness",
+    },
+    sourceName: "System Template",
+  },
+  {
+    action: {
+      id: "media_playpause",
+      label: "PLAY / PAUSE",
+      icon: "playpause",
+      type: "key",
+      action: "playpause",
+      desc: "Toggle audio/video playback",
+    },
+    sourceName: "System Template",
+  },
+  {
+    action: {
+      id: "media_next",
+      label: "NEXT TRACK",
+      icon: "next",
+      type: "key",
+      action: "next",
+      desc: "Skip to next track",
+    },
+    sourceName: "System Template",
+  },
+  {
+    action: {
+      id: "media_prev",
+      label: "PREV TRACK",
+      icon: "prev",
+      type: "key",
+      action: "prev",
+      desc: "Return to previous track",
+    },
+    sourceName: "System Template",
+  },
+  {
+    action: {
+      id: "mute_toggle",
+      label: "MUTE",
+      icon: "mute",
+      type: "mute",
+      desc: "Toggle audio mute",
+    },
+    sourceName: "System Template",
+  },
+];
+
+export function sanitizeAndMigrateConfig(cfg: ProfilesConfig): ProfilesConfig {
+  if (!cfg || !cfg.profiles) return DEFAULT_CONFIG;
+
+  const updatedProfiles = { ...cfg.profiles };
+
+  // 1. Ensure 'default' (System) dial has Scroll Mode
+  if (updatedProfiles.default) {
+    const prof = { ...updatedProfiles.default };
+    const hasScroll = prof.actions.some(
+      (a) =>
+        a.action === "scroll" ||
+        a.id === "scroll_mode" ||
+        a.id?.includes("scroll") ||
+        a.label?.toUpperCase() === "SCROLL"
+    );
+    if (!hasScroll) {
+      const scrollAction: WheelAction = {
+        id: "scroll_mode",
+        label: "SCROLL",
+        icon: "scroll",
+        type: "mode",
+        action: "scroll",
+        desc: "Rotate to scroll",
+      };
+      const volIdx = prof.actions.findIndex(
+        (a) => a.id === "volume_mode" || a.action === "volume"
+      );
+      const insertIdx = volIdx !== -1 ? volIdx + 1 : 3;
+      const newActions = [...prof.actions];
+      newActions.splice(insertIdx, 0, scrollAction);
+      prof.actions = newActions;
+      updatedProfiles.default = prof;
+    }
+  }
+
+  // 2. Ensure 'browser_nav' (Browser) dial has Scroll Mode
+  if (updatedProfiles.browser_nav) {
+    const prof = { ...updatedProfiles.browser_nav };
+    const hasScroll = prof.actions.some(
+      (a) =>
+        a.action === "scroll" ||
+        a.id === "scroll_mode" ||
+        a.id?.includes("scroll") ||
+        a.label?.toUpperCase() === "SCROLL"
+    );
+    if (!hasScroll) {
+      const scrollAction: WheelAction = {
+        id: "scroll_mode",
+        label: "SCROLL",
+        icon: "scroll",
+        type: "mode",
+        action: "scroll",
+        desc: "Rotate to scroll",
+      };
+      prof.actions = [scrollAction, ...prof.actions];
+      updatedProfiles.browser_nav = prof;
+    }
+  }
+
+  // 3. Ensure 'code_editor' (Code) dial has Scroll Mode
+  if (updatedProfiles.code_editor) {
+    const prof = { ...updatedProfiles.code_editor };
+    const hasScroll = prof.actions.some(
+      (a) =>
+        a.action === "scroll" ||
+        a.id === "scroll_mode" ||
+        a.id?.includes("scroll") ||
+        a.label?.toUpperCase() === "SCROLL"
+    );
+    if (!hasScroll) {
+      const scrollAction: WheelAction = {
+        id: "scroll_mode",
+        label: "SCROLL",
+        icon: "scroll",
+        type: "mode",
+        action: "scroll",
+        desc: "Rotate to scroll",
+      };
+      prof.actions = [scrollAction, ...prof.actions];
+      updatedProfiles.code_editor = prof;
+    }
+  }
+
+  // 4. Ensure 'file_manager' (Files) dial has Scroll Mode
+  if (updatedProfiles.file_manager) {
+    const prof = { ...updatedProfiles.file_manager };
+    const hasScroll = prof.actions.some(
+      (a) =>
+        a.action === "scroll" ||
+        a.id === "scroll_mode" ||
+        a.id?.includes("scroll") ||
+        a.label?.toUpperCase() === "SCROLL"
+    );
+    if (!hasScroll) {
+      const scrollAction: WheelAction = {
+        id: "scroll_mode",
+        label: "SCROLL",
+        icon: "scroll",
+        type: "mode",
+        action: "scroll",
+        desc: "Rotate to scroll",
+      };
+      prof.actions = [scrollAction, ...prof.actions];
+      updatedProfiles.file_manager = prof;
+    }
+  }
+
+  // 5. Ensure every profile has HOME and CLOSE dial slices
+  for (const prof of Object.values(updatedProfiles)) {
+    if (!prof.actions.some((a) => a.id === "home_dial" || a.type === "home")) {
+      prof.actions.push({
+        id: "home_dial",
+        label: "HOME",
+        icon: "home",
+        type: "home",
+        desc: "Choose Dial Menu",
+      });
+    }
+    if (!prof.actions.some((a) => a.id === "close_hud" || a.type === "close")) {
+      prof.actions.push({
+        id: "close_hud",
+        label: "CLOSE",
+        icon: "close",
+        type: "close",
+        desc: "Dismiss HUD",
+      });
+    }
+  }
+
+  return {
+    ...cfg,
+    profiles: updatedProfiles,
+  };
+}
