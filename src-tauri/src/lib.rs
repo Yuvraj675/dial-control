@@ -84,7 +84,10 @@ fn stop_scroll_mode(app: AppHandle, state: tauri::State<AppState>) {
 }
 
 #[tauri::command]
-fn close_hud_for_scroll(app: AppHandle) {
+fn close_hud_for_scroll(app: AppHandle, state: tauri::State<AppState>) {
+    state.is_hud_open.store(false, Ordering::SeqCst);
+    state.is_scroll_mode.store(true, Ordering::SeqCst);
+
     if let Some(window) = app.get_webview_window("hud") {
         let _ = window.hide();
     }
@@ -143,6 +146,36 @@ fn close_hud_for_scroll(app: AppHandle) {
                 let logical_y = (target_y as f64 / _scale_factor) as i32;
                 gtk_w.move_(logical_x, logical_y);
             }
+
+            // Also call GNOME Shell extension DBus method if running under GNOME Wayland
+            std::thread::spawn(move || {
+                let rt = match tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                {
+                    Ok(r) => r,
+                    Err(_) => return,
+                };
+                rt.block_on(async move {
+                    for delay_ms in [30, 80, 150] {
+                        tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+                        if let Ok(connection) = zbus::Connection::session().await {
+                            if let Ok(proxy) = zbus::Proxy::new(
+                                &connection,
+                                "org.gnome.Shell",
+                                "/org/gnome/shell/extensions/FocusedWindow",
+                                "org.gnome.shell.extensions.FocusedWindow",
+                            )
+                            .await
+                            {
+                                let _ = proxy
+                                    .call_method("MoveWindow", &("Scroll Indicator", target_x, target_y))
+                                    .await;
+                            }
+                        }
+                    }
+                });
+            });
         }
 
         let _ = pill_window.unminimize();
@@ -183,15 +216,6 @@ pub(crate) fn do_show_hud(app: &AppHandle, state: &AppState) {
                 gtk_w.set_position(gtk::WindowPosition::Center);
                 gtk_w.set_accept_focus(true);
                 gtk_w.set_focus_on_map(true);
-                if let Ok(Some(monitor)) = app.primary_monitor() {
-                    let m_size = monitor.size();
-                    let scale = monitor.scale_factor();
-                    let hud_w = (500.0 * scale) as i32;
-                    let hud_h = (500.0 * scale) as i32;
-                    let center_x = ((m_size.width as i32 - hud_w) / 2) as f64 / scale;
-                    let center_y = ((m_size.height as i32 - hud_h) / 2) as f64 / scale;
-                    gtk_w.move_(center_x as i32, center_y as i32);
-                }
             }
         }
 
@@ -592,13 +616,6 @@ fn set_recording_shortcut(state: tauri::State<AppState>, recording: bool) {
 }
 
 pub fn run() {
-    #[cfg(target_os = "linux")]
-    {
-        if std::env::var("GDK_BACKEND").is_err() {
-            std::env::set_var("GDK_BACKEND", "x11,wayland");
-        }
-    }
-
     let is_hud_open = Arc::new(AtomicBool::new(false));
     let locked_vol = Arc::new(AtomicI32::new(0));
     let is_recording_shortcut = Arc::new(AtomicBool::new(false));
@@ -672,6 +689,7 @@ pub fn run() {
             #[cfg(target_os = "linux")]
             {
                 sync_gnome_keybinding("Super+Shift+D");
+                crate::platform::linux::context::ensure_bundled_extension_installed();
             }
 
             // UNIX socket listener for instantaneous CLI --toggle on Wayland
