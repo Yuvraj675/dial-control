@@ -115,6 +115,25 @@ fn make_key_input(vk: u16, key_up: bool) -> INPUT {
 }
 
 impl VirtualInput for WindowsInput {
+    fn emit_scroll(&self, delta: i32) {
+        let amount = (delta * 120) as i32 as DWORD;
+        let mi = MOUSEINPUT {
+            dx: 0,
+            dy: 0,
+            mouseData: amount,
+            dwFlags: MOUSEEVENTF_WHEEL,
+            time: 0,
+            dwExtraInfo: SYNTHETIC_INPUT_TAG,
+        };
+        let input = INPUT {
+            type_: INPUT_MOUSE,
+            u: INPUT_UNION { mi },
+        };
+        unsafe {
+            SendInput(1, &input, size_of::<INPUT>() as i32);
+        }
+    }
+
     fn emit_hotkey(&self, keys: &[String]) {
         if keys.is_empty() {
             return;

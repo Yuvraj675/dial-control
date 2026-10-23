@@ -14,6 +14,7 @@ pub struct AppState {
     pub is_hud_open: Arc<AtomicBool>,
     pub locked_vol: Arc<AtomicI32>,
     pub is_recording_shortcut: Arc<AtomicBool>,
+    pub is_scroll_mode: Arc<AtomicBool>,
 }
 
 #[tauri::command]
@@ -42,15 +43,46 @@ fn set_system_volume(state: tauri::State<AppState>, pct: i32) -> i32 {
 }
 
 #[tauri::command]
-fn set_mode(state: tauri::State<AppState>, mode: String) {
+fn set_mode(app: AppHandle, state: tauri::State<AppState>, mode: String) {
     if mode == "volume" {
+        state.is_scroll_mode.store(false, Ordering::SeqCst);
         state.locked_vol.store(0, Ordering::SeqCst);
         println!("[HUD] Switched to volume mode (lock released for natural hardware volume control)");
+    } else if mode == "scroll" {
+        let curr_vol = state.platform.audio().get_volume();
+        state.locked_vol.store(curr_vol, Ordering::SeqCst);
+        state.is_scroll_mode.store(true, Ordering::SeqCst);
+        state.is_hud_open.store(true, Ordering::SeqCst);
+        println!("[HUD] Switched to SCROLL MODE (volume locked at {}%)", curr_vol);
+        let _ = app.emit("scroll_mode:active", true);
     } else {
+        state.is_scroll_mode.store(false, Ordering::SeqCst);
         let curr_vol = state.platform.audio().get_volume();
         state.locked_vol.store(curr_vol, Ordering::SeqCst);
         println!("[HUD] Switched to mode: {} (volume locked at {}% for navigation)", mode, curr_vol);
     }
+}
+
+#[tauri::command]
+fn stop_scroll_mode(app: AppHandle, state: tauri::State<AppState>) {
+    state.is_scroll_mode.store(false, Ordering::SeqCst);
+    state.locked_vol.store(0, Ordering::SeqCst);
+    state.is_hud_open.store(false, Ordering::SeqCst);
+    if let Some(window) = app.get_webview_window("hud") {
+        let _ = window.hide();
+    }
+    let _ = app.emit("hud:visibility", false);
+    let _ = app.emit("scroll_mode:exit", ());
+    println!("[HUD] Stopped scroll mode");
+}
+
+#[tauri::command]
+fn close_hud_for_scroll(app: AppHandle) {
+    if let Some(window) = app.get_webview_window("hud") {
+        let _ = window.hide();
+    }
+    let _ = app.emit("hud:visibility", false);
+    println!("[HUD] Closed HUD window for scroll mode (scroll mode remains active)");
 }
 
 #[tauri::command]
@@ -80,15 +112,21 @@ fn show_hud(app: AppHandle, state: tauri::State<AppState>) {
 #[tauri::command]
 fn hide_hud(app: AppHandle, state: tauri::State<AppState>) {
     state.is_hud_open.store(false, Ordering::SeqCst);
+    state.is_scroll_mode.store(false, Ordering::SeqCst);
     state.locked_vol.store(0, Ordering::SeqCst);
     if let Some(window) = app.get_webview_window("hud") {
         let _ = window.hide();
     }
     let _ = app.emit("hud:visibility", false);
+    let _ = app.emit("scroll_mode:exit", ());
 }
 
 #[tauri::command]
 fn toggle_hud(app: AppHandle, state: tauri::State<AppState>) {
+    if state.is_scroll_mode.load(Ordering::SeqCst) {
+        stop_scroll_mode(app, state);
+        return;
+    }
     let currently_open = state.is_hud_open.load(Ordering::SeqCst);
     if currently_open {
         hide_hud(app, state);
@@ -290,6 +328,8 @@ fn adjust_gauge(
         let curr = state.platform.audio().get_volume();
         let next_val = (curr + delta).clamp(0, 100);
         state.platform.audio().set_volume(next_val);
+    } else if mode == "scroll" {
+        state.platform.input().emit_scroll(if delta > 0 { -1 } else { 1 });
     }
 }
 
@@ -432,6 +472,7 @@ pub fn run() {
     let is_hud_open = Arc::new(AtomicBool::new(false));
     let locked_vol = Arc::new(AtomicI32::new(0));
     let is_recording_shortcut = Arc::new(AtomicBool::new(false));
+    let is_scroll_mode = Arc::new(AtomicBool::new(false));
     let platform = Arc::new(Platform::new());
 
     let app_state = AppState {
@@ -439,6 +480,7 @@ pub fn run() {
         is_hud_open: is_hud_open.clone(),
         locked_vol: locked_vol.clone(),
         is_recording_shortcut: is_recording_shortcut.clone(),
+        is_scroll_mode: is_scroll_mode.clone(),
     };
 
     tauri::Builder::default()
@@ -472,7 +514,9 @@ pub fn run() {
                     if window.label() == "hud" {
                         let app = window.app_handle().clone();
                         let state: tauri::State<AppState> = app.state();
-                        hide_hud(app.clone(), state);
+                        if !state.is_scroll_mode.load(Ordering::SeqCst) {
+                            hide_hud(app.clone(), state);
+                        }
                     }
                 }
                 _ => {}
@@ -585,7 +629,12 @@ pub fn run() {
                 .build(app)?;
 
             // Start hardware background threads via unified platform abstractions
-            platform.dial().start_listeners(app.handle().clone(), is_hud_open.clone(), locked_vol.clone());
+            platform.dial().start_listeners(
+                app.handle().clone(),
+                is_hud_open.clone(),
+                locked_vol.clone(),
+                is_scroll_mode.clone(),
+            );
             platform.context().start(app.handle().clone());
 
             println!("[+] Dial Control Daemon initialized with modular platform provider.");
@@ -604,6 +653,8 @@ pub fn run() {
             get_system_volume,
             set_system_volume,
             set_mode,
+            stop_scroll_mode,
+            close_hud_for_scroll,
             register_activation_shortcut,
             set_recording_shortcut,
             load_config,

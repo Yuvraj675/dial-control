@@ -20,7 +20,9 @@ pub const WM_KEYUP: u32 = 0x0101;
 pub const WM_SYSKEYDOWN: u32 = 0x0104;
 pub const WM_SYSKEYUP: u32 = 0x0105;
 
+pub const INPUT_MOUSE: DWORD = 0;
 pub const INPUT_KEYBOARD: DWORD = 1;
+pub const MOUSEEVENTF_WHEEL: DWORD = 0x0800;
 pub const KEYEVENTF_EXTENDEDKEY: DWORD = 0x0001;
 pub const KEYEVENTF_KEYUP: DWORD = 0x0002;
 pub const KEYEVENTF_UNICODE: DWORD = 0x0004;
@@ -90,6 +92,17 @@ pub struct KBDLLHOOKSTRUCT {
 
 #[repr(C)]
 #[derive(Clone, Copy)]
+pub struct MOUSEINPUT {
+    pub dx: i32,
+    pub dy: i32,
+    pub mouseData: DWORD,
+    pub dwFlags: DWORD,
+    pub time: DWORD,
+    pub dwExtraInfo: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
 pub struct KEYBDINPUT {
     pub wVk: u16,
     pub wScan: u16,
@@ -101,6 +114,7 @@ pub struct KEYBDINPUT {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub union INPUT_UNION {
+    pub mi: MOUSEINPUT,
     pub ki: KEYBDINPUT,
     pub padding: [u8; 32],
 }

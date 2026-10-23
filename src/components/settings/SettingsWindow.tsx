@@ -1319,7 +1319,9 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                         </label>
                         <select
                           value={
-                            selectedAction.action === "brightness" || selectedAction.id?.includes("bright")
+                            selectedAction.action === "scroll" || selectedAction.id?.includes("scroll")
+                              ? "scroll"
+                              : selectedAction.action === "brightness" || selectedAction.id?.includes("bright")
                               ? "brightness"
                               : "volume"
                           }
@@ -1327,15 +1329,16 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                             const val = e.target.value;
                             handleUpdateAction({
                               action: val,
-                              icon: val === "brightness" ? "brightness" : "volume",
-                              label: val === "brightness" ? "BRIGHTNESS" : "VOLUME",
-                              desc: val === "brightness" ? "Rotate to adjust brightness" : "Rotate to adjust volume",
+                              icon: val === "scroll" ? "scroll" : val === "brightness" ? "brightness" : "volume",
+                              label: val === "scroll" ? "SCROLL" : val === "brightness" ? "BRIGHTNESS" : "VOLUME",
+                              desc: val === "scroll" ? "Rotate to scroll" : val === "brightness" ? "Rotate to adjust brightness" : "Rotate to adjust volume",
                             });
                           }}
                           className="w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white focus:outline-none focus:border-white font-ndot uppercase tracking-wider"
                         >
                           <option value="volume">VOLUME GAUGE</option>
                           <option value="brightness">BRIGHTNESS GAUGE</option>
+                          <option value="scroll">SCROLL WHEEL EMULATION</option>
                         </select>
                       </div>
                     )}

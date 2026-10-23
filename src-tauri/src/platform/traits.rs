@@ -23,9 +23,10 @@ pub trait MediaControl: Send + Sync {
     fn prev_track(&self);
 }
 
-/// Abstract interface for keyboard emulation (hotkeys, shortcuts).
+/// Abstract interface for keyboard emulation (hotkeys, shortcuts) and mouse scrolling.
 pub trait VirtualInput: Send + Sync {
     fn emit_hotkey(&self, keys: &[String]);
+    fn emit_scroll(&self, delta: i32);
 }
 
 /// Abstract interface for rotary dial hardware listeners and event interceptors.
@@ -35,6 +36,7 @@ pub trait DialBackend: Send + Sync {
         app: AppHandle,
         is_hud_open: Arc<AtomicBool>,
         locked_vol: Arc<AtomicI32>,
+        is_scroll_mode: Arc<AtomicBool>,
     );
 }
 

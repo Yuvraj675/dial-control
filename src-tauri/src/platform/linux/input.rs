@@ -1,6 +1,6 @@
 use crate::platform::traits::VirtualInput;
 use evdev::uinput::{VirtualDevice, VirtualDeviceBuilder};
-use evdev::{AttributeSet, BusType, EventType, InputEvent, InputId, Key};
+use evdev::{AttributeSet, BusType, EventType, InputEvent, InputId, Key, RelativeAxisType};
 use std::sync::Mutex;
 use std::thread::sleep;
 use std::time::Duration;
@@ -16,13 +16,18 @@ impl LinuxInput {
             keys.insert(Key::new(code));
         }
 
+        let mut rel_axes = AttributeSet::<RelativeAxisType>::new();
+        rel_axes.insert(RelativeAxisType::REL_WHEEL);
+        rel_axes.insert(RelativeAxisType::REL_HWHEEL);
+
         let input_id = InputId::new(BusType::BUS_USB, 0x046d, 0xc52b, 1);
         let dev = VirtualDeviceBuilder::new()
             .and_then(|builder| {
                 builder
-                    .name("CMF Buds Pro 2 Virtual Keyboard")
+                    .name("CMF Buds Pro 2 Virtual Device")
                     .input_id(input_id)
                     .with_keys(&keys)?
+                    .with_relative_axes(&rel_axes)?
                     .build()
             })
             .map_err(|e| {
@@ -73,9 +78,23 @@ impl LinuxInput {
     pub fn emit_prev_track(&self) {
         self.emit_key(Key::KEY_PREVIOUSSONG);
     }
+
+    pub fn emit_scroll(&self, delta: i32) {
+        if let Ok(mut guard) = self.device.lock() {
+            if let Some(ref mut dev) = *guard {
+                let ev = InputEvent::new(EventType::RELATIVE, RelativeAxisType::REL_WHEEL.0, delta);
+                let syn = InputEvent::new(EventType::SYNCHRONIZATION, 0, 0);
+                let _ = dev.emit(&[ev, syn]);
+            }
+        }
+    }
 }
 
 impl VirtualInput for LinuxInput {
+    fn emit_scroll(&self, delta: i32) {
+        self.emit_scroll(delta);
+    }
+
     fn emit_hotkey(&self, key_names: &[String]) {
         if let Ok(mut guard) = self.device.lock() {
             if let Some(ref mut dev) = *guard {
