@@ -61,7 +61,7 @@ pub fn find_cmf_input_device() -> Option<PathBuf> {
 fn start_input_grabber(
     app: AppHandle,
     is_hud_open: Arc<AtomicBool>,
-    locked_vol: Arc<AtomicI32>,
+    _locked_vol: Arc<AtomicI32>,
     is_scroll_mode: Arc<AtomicBool>,
 ) {
     thread::spawn(move || {
@@ -107,43 +107,18 @@ fn start_input_grabber(
                                     if now.duration_since(last_click_time) > Duration::from_millis(500) {
                                         last_click_time = now;
 
+                                        let state: tauri::State<crate::AppState> = app.state();
                                         if is_scroll_mode.load(Ordering::SeqCst) {
                                             println!(">> [NATIVE DIAL CLICK] -> Exiting Scroll Mode");
-                                            is_scroll_mode.store(false, Ordering::SeqCst);
-                                            locked_vol.store(0, Ordering::SeqCst);
-                                            is_hud_open.store(false, Ordering::SeqCst);
-                                            if let Some(pill_window) = app.get_webview_window("scroll_pill") {
-                                                let _ = pill_window.hide();
-                                            }
-                                            let _ = app.emit("scroll_mode:exit", ());
-                                            let _ = app.emit("hud:visibility", false);
+                                            crate::do_stop_scroll_mode(&app, &state);
                                             continue;
                                         }
 
                                         let was_open = is_hud_open.load(Ordering::SeqCst);
 
                                         if !was_open {
-                                            println!(">> [NATIVE DIAL CLICK] -> Opening HUD on Wayland");
-                                            let state: tauri::State<crate::AppState> = app.state();
-                                            let curr_vol = state.platform.audio().get_volume();
-                                            let curr_bright = state.platform.brightness().get_brightness();
-
-                                            is_hud_open.store(true, Ordering::SeqCst);
-                                            locked_vol.store(curr_vol, Ordering::SeqCst);
-                                            if let Some(window) = app.get_webview_window("hud") {
-                                                let _ = window.show();
-                                                let _ = window.unminimize();
-                                                let _ = window.set_focus();
-                                                let _ = window.set_always_on_top(true);
-                                                let _ = window.emit("hud:visibility", true);
-                                                let _ = window.emit(
-                                                    "sync:state",
-                                                    serde_json::json!({
-                                                        "volume": curr_vol,
-                                                        "brightness": curr_bright,
-                                                    }),
-                                                );
-                                            }
+                                            println!(">> [NATIVE DIAL CLICK] -> Opening HUD");
+                                            crate::do_show_hud(&app, &state);
                                         } else {
                                             println!(">> [NATIVE DIAL CLICK] -> Dispatched action select to HUD");
                                             if let Some(window) = app.get_webview_window("hud") {
