@@ -298,17 +298,19 @@ export function App() {
             setGaugeValue(vol);
           }
         } else if (currentMode === "brightness") {
+          // Emulate hardware Fn+F5 / Fn+F6 keys via uinput (5% per step matching GNOME's native scale)
           const step = dir * 5;
           setBrightnessLevel((prev) => {
             const next = Math.max(0, Math.min(100, prev + step));
             setGaugeValue(next);
             stateRef.current.gaugeValue = next;
             localStorage.setItem("dial_brightness_level", String(next));
-            if (isTauri) {
-              invoke("set_system_brightness", { pct: next }).catch(console.error);
-            }
             return next;
           });
+
+          if (isTauri) {
+            invoke("step_brightness", { direction: dir }).catch(console.error);
+          }
         }
       });
       unlistenList.push(unlistenRotate);
@@ -493,11 +495,11 @@ export function App() {
             setGaugeValue(next);
             stateRef.current.gaugeValue = next;
             localStorage.setItem("dial_brightness_level", String(next));
-            if (isTauri) {
-              invoke("set_system_brightness", { pct: next }).catch(console.error);
-            }
             return next;
           });
+          if (isTauri) {
+            invoke("step_brightness", { direction: 1 }).catch(console.error);
+          }
         } else if (currentMode === "volume") {
           setGaugeValue((prev) => {
             const next = Math.min(100, prev + 5);
@@ -526,11 +528,11 @@ export function App() {
             setGaugeValue(next);
             stateRef.current.gaugeValue = next;
             localStorage.setItem("dial_brightness_level", String(next));
-            if (isTauri) {
-              invoke("set_system_brightness", { pct: next }).catch(console.error);
-            }
             return next;
           });
+          if (isTauri) {
+            invoke("step_brightness", { direction: -1 }).catch(console.error);
+          }
         } else if (currentMode === "volume") {
           setGaugeValue((prev) => {
             const next = Math.max(0, prev - 5);
@@ -586,9 +588,9 @@ export function App() {
             setGaugeValue(next);
             stateRef.current.gaugeValue = next;
             localStorage.setItem("dial_brightness_level", String(next));
-            if (isTauri) invoke("set_system_brightness", { pct: next }).catch(console.error);
             return next;
           });
+          if (isTauri) invoke("step_brightness", { direction: 1 }).catch(console.error);
         } else {
           setGaugeValue((prev) => {
             const next = Math.min(100, prev + 3);
@@ -609,9 +611,9 @@ export function App() {
             setGaugeValue(next);
             stateRef.current.gaugeValue = next;
             localStorage.setItem("dial_brightness_level", String(next));
-            if (isTauri) invoke("set_system_brightness", { pct: next }).catch(console.error);
             return next;
           });
+          if (isTauri) invoke("step_brightness", { direction: -1 }).catch(console.error);
         } else {
           setGaugeValue((prev) => {
             const next = Math.max(0, prev - 3);
