@@ -63,6 +63,33 @@ fn set_mode(app: AppHandle, state: tauri::State<AppState>, mode: String) {
     }
 }
 
+pub fn send_os_notification(title: &str, body: &str) {
+    #[cfg(target_os = "linux")]
+    {
+        let _ = std::process::Command::new("notify-send")
+            .args([
+                "-a", "Dial Control",
+                "-h", "string:synchronous:dial",
+                title,
+                body,
+            ])
+            .spawn();
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        let script = format!(
+            r#"[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null; $template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02); $text = $template.GetElementsByTagName('text'); $text.Item(0).AppendChild($template.CreateTextNode('{title}')) > $null; $text.Item(1).AppendChild($template.CreateTextNode('{body}')) > $null; [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('Dial Control').Show([Windows.UI.Notifications.ToastNotification]::new($template));"#,
+            title = title.replace('\'', "''"),
+            body = body.replace('\'', "''")
+        );
+        let mut cmd = std::process::Command::new("powershell");
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        let _ = cmd.args(["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", &script]).spawn();
+    }
+}
+
 pub(crate) fn do_stop_scroll_mode(app: &AppHandle, state: &AppState) {
     state.is_scroll_mode.store(false, Ordering::SeqCst);
     state.locked_vol.store(0, Ordering::SeqCst);
@@ -71,19 +98,9 @@ pub(crate) fn do_stop_scroll_mode(app: &AppHandle, state: &AppState) {
         let _ = window.hide();
     }
 
-    // Unregister temporary scroll mode hotkeys (Space & Escape)
-    use std::str::FromStr;
-    use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
-    let global_shortcut = app.global_shortcut();
-    if let Ok(space_sc) = Shortcut::from_str("Space") {
-        let _ = global_shortcut.unregister(space_sc);
-    }
-    if let Ok(esc_sc) = Shortcut::from_str("Escape") {
-        let _ = global_shortcut.unregister(esc_sc);
-    }
-
     let _ = app.emit("hud:visibility", false);
     let _ = app.emit("scroll_mode:exit", ());
+    send_os_notification("Scroll Mode Exited", "Dial returned to standard mode");
     println!("[HUD] Stopped scroll mode");
 }
 
@@ -102,28 +119,10 @@ fn close_hud_for_scroll(app: AppHandle, state: tauri::State<AppState>) {
     }
     let _ = app.emit("hud:visibility", false);
 
-    // Dynamically register Space and Escape as global hotkeys while scroll mode is active
-    use std::str::FromStr;
-    use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
-    let global_shortcut = app.global_shortcut();
-    if let Ok(space_sc) = Shortcut::from_str("Space") {
-        let _ = global_shortcut.register(space_sc);
-    }
-    if let Ok(esc_sc) = Shortcut::from_str("Escape") {
-        let _ = global_shortcut.register(esc_sc);
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        let _ = std::process::Command::new("notify-send")
-            .args([
-                "-a", "Dial Control",
-                "-h", "string:synchronous:dial",
-                "Scroll Mode Active",
-                "Rotate dial to scroll • Press Space or click dial to exit"
-            ])
-            .spawn();
-    }
+    send_os_notification(
+        "Scroll Mode Active",
+        "Rotate dial to scroll • Click dial or shortcut to exit",
+    );
 
     println!("[HUD] Closed HUD window for scroll mode. Underlying application has full focus.");
 }
@@ -181,16 +180,6 @@ pub(crate) fn do_hide_hud(app: &AppHandle, state: &AppState) {
     state.locked_vol.store(0, Ordering::SeqCst);
     if let Some(window) = app.get_webview_window("hud") {
         let _ = window.hide();
-    }
-    // Also unregister temporary scroll mode hotkeys if any
-    use std::str::FromStr;
-    use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
-    let global_shortcut = app.global_shortcut();
-    if let Ok(space_sc) = Shortcut::from_str("Space") {
-        let _ = global_shortcut.unregister(space_sc);
-    }
-    if let Ok(esc_sc) = Shortcut::from_str("Escape") {
-        let _ = global_shortcut.unregister(esc_sc);
     }
     let _ = app.emit("hud:visibility", false);
     let _ = app.emit("scroll_mode:exit", ());
