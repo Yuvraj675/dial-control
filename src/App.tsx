@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { DonutRadialHUD } from "./components/hud/DonutRadialHUD";
-import { ScrollPillIndicator } from "./components/hud/ScrollPillIndicator";
+import { ScrollEdgeOverlay } from "./components/hud/ScrollEdgeOverlay";
 import { SettingsWindow } from "./components/settings/SettingsWindow";
 import { DEFAULT_CONFIG, sanitizeAndMigrateConfig } from "./data/defaultProfiles";
 import { ProfilesConfig, WheelAction, DialProfile, getOrderedProfileIds } from "./types/profile";
@@ -26,11 +26,11 @@ export function App() {
     return sanitizeAndMigrateConfig(cfg);
   });
 
-  const [view, setView] = useState<"hud" | "settings" | "scroll_pill">(() => {
+  const [view, setView] = useState<"hud" | "settings" | "scroll_overlay" | "scroll_pill">(() => {
     const params = new URLSearchParams(window.location.search);
     const v = params.get("view");
     if (v === "settings") return "settings";
-    if (v === "scroll_pill") return "scroll_pill";
+    if (v === "scroll_overlay" || v === "scroll_pill") return "scroll_overlay";
     return "hud";
   });
 
@@ -233,15 +233,16 @@ export function App() {
       if (isTauri) {
         invoke("set_mode", { mode }).catch(console.error);
         if (mode === "brightness") {
+          setGaugeValue(brightnessLevel);
+          stateRef.current.gaugeValue = brightnessLevel;
           invoke<number>("get_system_brightness")
             .then((b) => {
-              console.log("[Brightness] Loaded initial system brightness:", b);
+              console.log("[Brightness] Loaded live system brightness:", b);
               if (typeof b === "number" && !isNaN(b)) {
                 setBrightnessLevel(b);
                 setGaugeValue(b);
+                stateRef.current.gaugeValue = b;
                 localStorage.setItem("dial_brightness_level", String(b));
-              } else {
-                setGaugeValue(brightnessLevel);
               }
             })
             .catch(() => setGaugeValue(brightnessLevel));
@@ -250,6 +251,7 @@ export function App() {
             .then((v) => {
               if (typeof v === "number" && !isNaN(v)) {
                 setGaugeValue(v);
+                stateRef.current.gaugeValue = v;
               }
             })
             .catch(console.error);
@@ -257,6 +259,7 @@ export function App() {
       } else {
         if (mode === "brightness") {
           setGaugeValue(brightnessLevel);
+          stateRef.current.gaugeValue = brightnessLevel;
         }
       }
     } else {
@@ -295,18 +298,17 @@ export function App() {
             setGaugeValue(vol);
           }
         } else if (currentMode === "brightness") {
-          // Emulate hardware Fn+F5 / Fn+F6 keys via uinput (5% per step matching GNOME's native scale)
           const step = dir * 5;
           setBrightnessLevel((prev) => {
             const next = Math.max(0, Math.min(100, prev + step));
             setGaugeValue(next);
+            stateRef.current.gaugeValue = next;
             localStorage.setItem("dial_brightness_level", String(next));
+            if (isTauri) {
+              invoke("set_system_brightness", { pct: next }).catch(console.error);
+            }
             return next;
           });
-
-          if (isTauri) {
-            invoke("step_brightness", { direction: dir }).catch(console.error);
-          }
         }
       });
       unlistenList.push(unlistenRotate);
@@ -408,12 +410,11 @@ export function App() {
               })
               .catch(console.error);
 
-            // Pre-fetch actual system brightness
+            // Pre-fetch actual system brightness (syncs brightnessLevel without overwriting menu volume gauge)
             invoke<number>("get_system_brightness")
               .then((b) => {
                 if (typeof b === "number" && !isNaN(b)) {
                   setBrightnessLevel(b);
-                  stateRef.current.gaugeValue = b;
                   localStorage.setItem("dial_brightness_level", String(b));
                 }
               })
@@ -492,11 +493,11 @@ export function App() {
             setGaugeValue(next);
             stateRef.current.gaugeValue = next;
             localStorage.setItem("dial_brightness_level", String(next));
+            if (isTauri) {
+              invoke("set_system_brightness", { pct: next }).catch(console.error);
+            }
             return next;
           });
-          if (isTauri) {
-            invoke("step_brightness", { direction: 1 }).catch(console.error);
-          }
         } else if (currentMode === "volume") {
           setGaugeValue((prev) => {
             const next = Math.min(100, prev + 5);
@@ -525,11 +526,11 @@ export function App() {
             setGaugeValue(next);
             stateRef.current.gaugeValue = next;
             localStorage.setItem("dial_brightness_level", String(next));
+            if (isTauri) {
+              invoke("set_system_brightness", { pct: next }).catch(console.error);
+            }
             return next;
           });
-          if (isTauri) {
-            invoke("step_brightness", { direction: -1 }).catch(console.error);
-          }
         } else if (currentMode === "volume") {
           setGaugeValue((prev) => {
             const next = Math.max(0, prev - 5);
@@ -585,9 +586,9 @@ export function App() {
             setGaugeValue(next);
             stateRef.current.gaugeValue = next;
             localStorage.setItem("dial_brightness_level", String(next));
+            if (isTauri) invoke("set_system_brightness", { pct: next }).catch(console.error);
             return next;
           });
-          if (isTauri) invoke("step_brightness", { direction: 1 }).catch(console.error);
         } else {
           setGaugeValue((prev) => {
             const next = Math.min(100, prev + 3);
@@ -608,9 +609,9 @@ export function App() {
             setGaugeValue(next);
             stateRef.current.gaugeValue = next;
             localStorage.setItem("dial_brightness_level", String(next));
+            if (isTauri) invoke("set_system_brightness", { pct: next }).catch(console.error);
             return next;
           });
-          if (isTauri) invoke("step_brightness", { direction: -1 }).catch(console.error);
         } else {
           setGaugeValue((prev) => {
             const next = Math.max(0, prev - 3);
@@ -659,15 +660,15 @@ export function App() {
           </button>
 
           <button
-            onClick={() => setView("scroll_pill")}
+            onClick={() => setView("scroll_overlay")}
             className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full transition-all text-xs font-mono uppercase tracking-wider ${
-              view === "scroll_pill"
+              view === "scroll_overlay" || view === "scroll_pill"
                 ? "bg-white text-black font-bold shadow-md"
                 : "text-neutral-400 hover:text-white"
             }`}
           >
             <Mouse className="w-3.5 h-3.5" />
-            <span>Scroll Pill</span>
+            <span>Scroll Outline</span>
           </button>
 
           {view === "hud" && (
@@ -733,16 +734,9 @@ export function App() {
             setIsHudOpen(false);
           }}
         />
-      ) : view === "scroll_pill" ? (
-        <ScrollPillIndicator
+      ) : view === "scroll_overlay" || view === "scroll_pill" ? (
+        <ScrollEdgeOverlay
           theme={config.settings.theme}
-          onDismiss={() => {
-            if (isTauri) {
-              invoke("stop_scroll_mode").catch(console.error);
-            }
-            setCurrentMode("menu");
-            setIsHudOpen(false);
-          }}
         />
       ) : (
         <SettingsWindow config={config} onSaveConfig={handleSaveConfig} />

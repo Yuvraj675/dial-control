@@ -21,6 +21,10 @@ pub const SWP_NOZORDER: DWORD = 0x0004;
 pub const SWP_NOACTIVATE: DWORD = 0x0010;
 pub const SWP_SHOWWINDOW: DWORD = 0x0040;
 
+pub const GWL_EXSTYLE: i32 = -20;
+pub const WS_EX_TRANSPARENT: u32 = 0x00000020;
+pub const WS_EX_LAYERED: u32 = 0x00080000;
+
 pub const WH_KEYBOARD_LL: i32 = 13;
 pub const WM_KEYDOWN: u32 = 0x0100;
 pub const WM_KEYUP: u32 = 0x0101;
@@ -184,6 +188,8 @@ pub type MONITORENUMPROC = Option<unsafe extern "system" fn(hMonitor: HMONITOR, 
 extern "system" {
     pub fn GetForegroundWindow() -> HWND;
     pub fn SetForegroundWindow(hWnd: HWND) -> BOOL;
+    pub fn GetWindowLongW(hWnd: HWND, nIndex: i32) -> i32;
+    pub fn SetWindowLongW(hWnd: HWND, nIndex: i32, dwNewLong: i32) -> i32;
     pub fn SetWindowPos(
         hWnd: HWND,
         hWndInsertAfter: HWND,
