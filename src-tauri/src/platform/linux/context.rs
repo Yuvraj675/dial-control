@@ -14,6 +14,22 @@ struct FocusedWindowJson {
     pid: Option<u32>,
 }
 
+pub fn ensure_bundled_extension_installed() {
+    if let Ok(home) = std::env::var("HOME") {
+        let ext_dir = std::path::PathBuf::from(home)
+            .join(".local/share/gnome-shell/extensions/focused-window-dbus@flexagoon.com");
+        let _ = std::fs::create_dir_all(&ext_dir);
+        let ext_js_path = ext_dir.join("extension.js");
+        let meta_json_path = ext_dir.join("metadata.json");
+
+        const EXT_JS: &str = include_str!("../../../../resources/gnome-extension/focused-window-dbus@flexagoon.com/extension.js");
+        const META_JSON: &str = include_str!("../../../../resources/gnome-extension/focused-window-dbus@flexagoon.com/metadata.json");
+
+        let _ = std::fs::write(&ext_js_path, EXT_JS);
+        let _ = std::fs::write(&meta_json_path, META_JSON);
+    }
+}
+
 pub struct LinuxContext;
 
 impl LinuxContext {
@@ -184,9 +200,11 @@ impl ContextDetector for LinuxContext {
                             false
                         };
 
-                        // Auto-install extension if missing on GNOME Wayland
+                        // Ensure our bundled extension (with MoveWindow support) is installed on GNOME Wayland
+                        ensure_bundled_extension_installed();
+
                         if !has_extension {
-                            println!("[Linux Context] FocusedWindow extension not detected. Auto-enabling via GNOME Shell D-Bus...");
+                            println!("[Linux Context] Enabling FocusedWindow extension via GNOME Shell D-Bus...");
                             if let Ok(shell_proxy) = zbus::Proxy::new(
                                 conn,
                                 "org.gnome.Shell",
@@ -197,19 +215,13 @@ impl ContextDetector for LinuxContext {
                             {
                                 let _ = shell_proxy
                                     .call_method(
-                                        "InstallRemoteExtension",
-                                        &("focused-window-dbus@flexagoon.com",),
-                                    )
-                                    .await;
-                                let _ = shell_proxy
-                                    .call_method(
                                         "EnableExtension",
                                         &("focused-window-dbus@flexagoon.com",),
                                     )
                                     .await;
                             }
 
-                            tokio::time::sleep(Duration::from_millis(800)).await;
+                            tokio::time::sleep(Duration::from_millis(500)).await;
 
                             if let Ok(ref p) = proxy {
                                 has_extension = p.call_method("Get", &()).await.is_ok();

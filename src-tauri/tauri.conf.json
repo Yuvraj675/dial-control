@@ -53,6 +53,7 @@
         "center": false,
         "shadow": false,
         "skipTaskbar": true,
+        "focus": false,
         "url": "index.html?view=scroll_pill"
       }
     ],
