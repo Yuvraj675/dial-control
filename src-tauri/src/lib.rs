@@ -162,7 +162,6 @@ fn close_hud_for_scroll(app: AppHandle, state: tauri::State<AppState>) {
 
 pub(crate) fn do_show_hud(app: &AppHandle, state: &AppState) {
     let curr_vol = state.platform.audio().get_volume();
-    let curr_bright = state.platform.brightness().get_brightness();
 
     state.is_hud_open.store(true, Ordering::SeqCst);
     state.locked_vol.store(curr_vol, Ordering::SeqCst);
@@ -199,7 +198,6 @@ pub(crate) fn do_show_hud(app: &AppHandle, state: &AppState) {
         "sync:state",
         serde_json::json!({
             "volume": curr_vol,
-            "brightness": curr_bright,
         }),
     );
 }
