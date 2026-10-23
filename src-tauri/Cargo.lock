@@ -760,6 +760,7 @@ version = "1.0.0"
 dependencies = [
  "evdev",
  "futures-lite",
+ "gtk",
  "serde",
  "serde_json",
  "tauri",

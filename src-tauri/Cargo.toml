@@ -24,3 +24,4 @@ evdev = "0.12"
 zbus = "4.4"
 tokio = { version = "1", features = ["rt", "macros"] }
 futures-lite = "2"
+gtk = "0.18"
