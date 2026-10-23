@@ -41,20 +41,18 @@
         "url": "index.html?view=settings"
       },
       {
-        "title": "Dial Control Scroll Indicator",
-        "label": "scroll_pill",
-        "width": 240,
-        "height": 48,
+        "title": "Dial Control Scroll Overlay",
+        "label": "scroll_overlay",
+        "fullscreen": true,
         "resizable": false,
         "transparent": true,
         "decorations": false,
         "alwaysOnTop": true,
         "visible": false,
-        "center": false,
         "shadow": false,
         "skipTaskbar": true,
         "focus": false,
-        "url": "index.html?view=scroll_pill"
+        "url": "index.html?view=scroll_overlay"
       }
     ],
     "security": {

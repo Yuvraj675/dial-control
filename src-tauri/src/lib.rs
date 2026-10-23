@@ -70,8 +70,8 @@ pub(crate) fn do_stop_scroll_mode(app: &AppHandle, state: &AppState) {
     if let Some(window) = app.get_webview_window("hud") {
         let _ = window.hide();
     }
-    if let Some(pill_window) = app.get_webview_window("scroll_pill") {
-        let _ = pill_window.hide();
+    if let Some(overlay) = app.get_webview_window("scroll_overlay") {
+        let _ = overlay.hide();
     }
     let _ = app.emit("hud:visibility", false);
     let _ = app.emit("scroll_mode:exit", ());
@@ -93,41 +93,28 @@ fn close_hud_for_scroll(app: AppHandle, state: tauri::State<AppState>) {
     }
     let _ = app.emit("hud:visibility", false);
 
-    if let Some(pill_window) = app.get_webview_window("scroll_pill") {
-        let mut target_x = 0;
-        let mut target_y = 0;
-        let mut _target_w = 240;
-        let mut _target_h = 48;
-        let mut _scale_factor = 1.0f64;
-
-        if let Ok(Some(monitor)) = app.primary_monitor() {
-            let m_size = monitor.size();
-            let scale = monitor.scale_factor();
-            _scale_factor = scale;
-            let w = (240.0 * scale) as i32;
-            let h = (48.0 * scale) as i32;
-            let margin_x = (24.0 * scale) as i32;
-            let margin_y = (24.0 * scale) as i32;
-            target_x = m_size.width as i32 - w - margin_x;
-            target_y = m_size.height as i32 - h - margin_y;
-            _target_w = w;
-            _target_h = h;
-            let _ = pill_window.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(target_x, target_y)));
-        }
+    if let Some(overlay_window) = app.get_webview_window("scroll_overlay") {
+        let _ = overlay_window.set_fullscreen(true);
 
         #[cfg(target_os = "windows")]
         {
-            if let Ok(hwnd) = pill_window.hwnd() {
+            if let Ok(hwnd) = overlay_window.hwnd() {
                 use crate::platform::windows::ffi::*;
                 unsafe {
+                    let ex_style = GetWindowLongW(hwnd.0 as HWND, GWL_EXSTYLE);
+                    SetWindowLongW(
+                        hwnd.0 as HWND,
+                        GWL_EXSTYLE,
+                        ex_style | (WS_EX_TRANSPARENT as i32) | (WS_EX_LAYERED as i32),
+                    );
                     SetWindowPos(
                         hwnd.0 as HWND,
                         HWND_TOPMOST,
-                        target_x,
-                        target_y,
-                        _target_w,
-                        _target_h,
-                        SWP_NOACTIVATE | SWP_SHOWWINDOW,
+                        0,
+                        0,
+                        0,
+                        0,
+                        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW,
                     );
                 }
             }
@@ -136,66 +123,41 @@ fn close_hud_for_scroll(app: AppHandle, state: tauri::State<AppState>) {
         #[cfg(target_os = "linux")]
         {
             use gtk::prelude::*;
-            if let Ok(gtk_w) = pill_window.gtk_window() {
-                gtk_w.set_gravity(gtk::gdk::Gravity::SouthEast);
-                gtk_w.set_type_hint(gtk::gdk::WindowTypeHint::Notification);
-                // Prevent scroll pill from stealing keyboard or window focus from background apps
+            if let Ok(gtk_w) = overlay_window.gtk_window() {
                 gtk_w.set_accept_focus(false);
                 gtk_w.set_focus_on_map(false);
-                let logical_x = (target_x as f64 / _scale_factor) as i32;
-                let logical_y = (target_y as f64 / _scale_factor) as i32;
-                gtk_w.move_(logical_x, logical_y);
-            }
-
-            // Also call GNOME Shell extension DBus method if running under GNOME Wayland
-            std::thread::spawn(move || {
-                let rt = match tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                {
-                    Ok(r) => r,
-                    Err(_) => return,
-                };
-                rt.block_on(async move {
-                    for delay_ms in [30, 80, 150] {
-                        tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
-                        if let Ok(connection) = zbus::Connection::session().await {
-                            if let Ok(proxy) = zbus::Proxy::new(
-                                &connection,
-                                "org.gnome.Shell",
-                                "/org/gnome/shell/extensions/FocusedWindow",
-                                "org.gnome.shell.extensions.FocusedWindow",
-                            )
-                            .await
-                            {
-                                let _ = proxy
-                                    .call_method("MoveWindow", &("Scroll Indicator", target_x, target_y))
-                                    .await;
-                            }
-                        }
+                gtk_w.realize();
+                if let Some(gdk_win) = gtk_w.window() {
+                    let empty_region = gtk::cairo::Region::create();
+                    gdk_win.input_shape_combine_region(&empty_region, 0, 0);
+                }
+                gtk_w.connect_map(|w| {
+                    if let Some(gdk_win) = w.window() {
+                        let empty_region = gtk::cairo::Region::create();
+                        gdk_win.input_shape_combine_region(&empty_region, 0, 0);
                     }
                 });
-            });
+            }
         }
 
-        let _ = pill_window.unminimize();
-        let _ = pill_window.show();
-        let _ = pill_window.set_always_on_top(true);
+        let _ = overlay_window.unminimize();
+        let _ = overlay_window.show();
+        let _ = overlay_window.set_always_on_top(true);
 
         #[cfg(target_os = "linux")]
         {
             use gtk::prelude::*;
-            if let Ok(gtk_w) = pill_window.gtk_window() {
-                let logical_x = (target_x as f64 / _scale_factor) as i32;
-                let logical_y = (target_y as f64 / _scale_factor) as i32;
-                gtk_w.move_(logical_x, logical_y);
+            if let Ok(gtk_w) = overlay_window.gtk_window() {
+                if let Some(gdk_win) = gtk_w.window() {
+                    let empty_region = gtk::cairo::Region::create();
+                    gdk_win.input_shape_combine_region(&empty_region, 0, 0);
+                }
             }
         }
-        let _ = pill_window.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(target_x, target_y)));
 
-        let _ = pill_window.emit("scroll_pill:active", true);
+        let _ = overlay_window.emit("scroll_overlay:active", true);
     }
-    println!("[HUD] Closed HUD window for scroll mode, showing floating scroll pill in bottom right");
+    println!("[HUD] Closed HUD window for scroll mode, showing fullscreen edge outline");
 }
 
 pub(crate) fn do_show_hud(app: &AppHandle, state: &AppState) {
@@ -254,8 +216,8 @@ pub(crate) fn do_hide_hud(app: &AppHandle, state: &AppState) {
     if let Some(window) = app.get_webview_window("hud") {
         let _ = window.hide();
     }
-    if let Some(pill_window) = app.get_webview_window("scroll_pill") {
-        let _ = pill_window.hide();
+    if let Some(overlay) = app.get_webview_window("scroll_overlay") {
+        let _ = overlay.hide();
     }
     let _ = app.emit("hud:visibility", false);
     let _ = app.emit("scroll_mode:exit", ());
@@ -652,7 +614,7 @@ pub fn run() {
                         let _ = window.emit("recording:system_close_pressed", ());
                         return;
                     }
-                    if window.label() == "settings" || window.label() == "hud" || window.label() == "scroll_pill" {
+                    if window.label() == "settings" || window.label() == "hud" || window.label() == "scroll_overlay" {
                         let _ = window.hide();
                         api.prevent_close();
                     }
@@ -753,9 +715,9 @@ pub fn run() {
                     let _ = hud_w.set_icon(icon.clone());
                     let _ = hud_w.set_shadow(false);
                 }
-                if let Some(pill_w) = app.get_webview_window("scroll_pill") {
-                    let _ = pill_w.set_icon(icon.clone());
-                    let _ = pill_w.set_shadow(false);
+                if let Some(overlay_w) = app.get_webview_window("scroll_overlay") {
+                    let _ = overlay_w.set_icon(icon.clone());
+                    let _ = overlay_w.set_shadow(false);
                 }
             }
 
