@@ -91,10 +91,12 @@ fn close_hud_for_scroll(app: AppHandle) {
         let mut target_y = 0;
         let mut _target_w = 240;
         let mut _target_h = 48;
+        let mut _scale_factor = 1.0f64;
 
         if let Ok(Some(monitor)) = app.primary_monitor() {
             let m_size = monitor.size();
             let scale = monitor.scale_factor();
+            _scale_factor = scale;
             let w = (240.0 * scale) as i32;
             let h = (48.0 * scale) as i32;
             let margin_x = (24.0 * scale) as i32;
@@ -126,11 +128,13 @@ fn close_hud_for_scroll(app: AppHandle) {
 
         #[cfg(target_os = "linux")]
         {
-            use gtk::prelude::GtkWindowExt;
+            use gtk::prelude::*;
             if let Ok(gtk_w) = pill_window.gtk_window() {
                 gtk_w.set_gravity(gtk::gdk::Gravity::SouthEast);
                 gtk_w.set_type_hint(gtk::gdk::WindowTypeHint::Notification);
-                gtk_w.move_(target_x, target_y);
+                let logical_x = (target_x as f64 / _scale_factor) as i32;
+                let logical_y = (target_y as f64 / _scale_factor) as i32;
+                gtk_w.move_(logical_x, logical_y);
             }
 
             // Also call GNOME Shell extension DBus method if running under GNOME Wayland
@@ -165,11 +169,14 @@ fn close_hud_for_scroll(app: AppHandle) {
 
         #[cfg(target_os = "linux")]
         {
-            use gtk::prelude::GtkWindowExt;
+            use gtk::prelude::*;
             if let Ok(gtk_w) = pill_window.gtk_window() {
-                gtk_w.move_(target_x, target_y);
+                let logical_x = (target_x as f64 / _scale_factor) as i32;
+                let logical_y = (target_y as f64 / _scale_factor) as i32;
+                gtk_w.move_(logical_x, logical_y);
             }
         }
+        let _ = pill_window.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(target_x, target_y)));
 
         let _ = pill_window.emit("scroll_pill:active", true);
     }
@@ -565,6 +572,13 @@ fn set_recording_shortcut(state: tauri::State<AppState>, recording: bool) {
 }
 
 pub fn run() {
+    #[cfg(target_os = "linux")]
+    {
+        if std::env::var("GDK_BACKEND").is_err() {
+            std::env::set_var("GDK_BACKEND", "x11,wayland");
+        }
+    }
+
     let is_hud_open = Arc::new(AtomicBool::new(false));
     let locked_vol = Arc::new(AtomicI32::new(0));
     let is_recording_shortcut = Arc::new(AtomicBool::new(false));
