@@ -1,5 +1,6 @@
 import React, { useState, useRef } from "react";
 import { ProfilesConfig, WheelAction, ActionType, DialProfile, getOrderedProfileIds } from "../../types/profile";
+import { SYSTEM_ACTION_TEMPLATES } from "../../data/defaultProfiles";
 import { DonutRadialHUD } from "../hud/DonutRadialHUD";
 import { getActionIcon, ICON_MAP } from "../../utils/iconMap";
 import {
@@ -856,9 +857,9 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
 
   const availableIcons = Object.keys(ICON_MAP);
 
-  // Pool of all existing actions across all profiles for importing
-  const allExistingActions: { action: WheelAction; sourceName: string }[] = [];
-  const seenIds = new Set<string>();
+  // Pool of all existing actions across all profiles and system templates for importing
+  const allExistingActions: { action: WheelAction; sourceName: string }[] = [...SYSTEM_ACTION_TEMPLATES];
+  const seenIds = new Set<string>(SYSTEM_ACTION_TEMPLATES.map((t) => t.action.id));
   for (const [, prof] of Object.entries(currentConfig.profiles)) {
     for (const act of prof.actions) {
       if (act.id !== "home_dial" && act.id !== "close_hud" && !seenIds.has(act.id)) {
@@ -1284,8 +1285,10 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                           const newType = e.target.value as ActionType;
                           const updates: Partial<WheelAction> = { type: newType };
                           if (newType === "mode") {
-                            updates.action = "volume";
-                            updates.icon = "volume";
+                            updates.action = "scroll";
+                            updates.icon = "scroll";
+                            updates.label = "SCROLL";
+                            updates.desc = "Rotate to scroll";
                           } else if (newType === "key") {
                             updates.action = "playpause";
                             updates.icon = "playpause";
@@ -1301,7 +1304,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                         className="w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white focus:outline-none focus:border-white font-ndot uppercase tracking-wider"
                       >
                         <option value="hotkey">HOTKEY KEYPRESS</option>
-                        <option value="mode">INTERACTIVE MODE (VOLUME/BACKLIGHT)</option>
+                        <option value="mode">INTERACTIVE MODE (SCROLL / VOLUME / BRIGHTNESS)</option>
                         <option value="key">MEDIA KEY (PLAY/NEXT/PREV)</option>
                         <option value="command">SHELL COMMAND</option>
                         <option value="mute">MUTE AUDIO TOGGLE</option>
@@ -1336,9 +1339,9 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                           }}
                           className="w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white focus:outline-none focus:border-white font-ndot uppercase tracking-wider"
                         >
+                          <option value="scroll">SCROLL WHEEL EMULATION</option>
                           <option value="volume">VOLUME GAUGE</option>
                           <option value="brightness">BRIGHTNESS GAUGE</option>
-                          <option value="scroll">SCROLL WHEEL EMULATION</option>
                         </select>
                       </div>
                     )}
