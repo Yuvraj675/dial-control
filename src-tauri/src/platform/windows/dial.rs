@@ -90,6 +90,9 @@ unsafe extern "system" fn low_level_keyboard_proc(
                                 state.is_scroll_mode.store(false, Ordering::SeqCst);
                                 state.locked_vol.store(0, Ordering::SeqCst);
                                 state.is_hud_open.store(false, Ordering::SeqCst);
+                                if let Some(pill_window) = app.get_webview_window("scroll_pill") {
+                                    let _ = pill_window.hide();
+                                }
                                 let _ = app.emit("scroll_mode:exit", ());
                                 let _ = app.emit("hud:visibility", false);
                             });
@@ -172,6 +175,7 @@ unsafe extern "system" fn low_level_keyboard_proc(
                             thread::spawn(move || {
                                 let state: tauri::State<AppState> = app.state();
                                 state.platform.input().emit_scroll(scroll_delta);
+                                let _ = app.emit("scroll:tick", serde_json::json!({ "direction": dir }));
                             });
                         }
                     }

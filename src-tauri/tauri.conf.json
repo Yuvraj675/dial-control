@@ -39,6 +39,21 @@
         "visible": true,
         "center": true,
         "url": "index.html?view=settings"
+      },
+      {
+        "title": "Dial Control Scroll Indicator",
+        "label": "scroll_pill",
+        "width": 240,
+        "height": 48,
+        "resizable": false,
+        "transparent": true,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "visible": false,
+        "center": false,
+        "shadow": false,
+        "skipTaskbar": true,
+        "url": "index.html?view=scroll_pill"
       }
     ],
     "security": {
