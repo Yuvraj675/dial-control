@@ -382,6 +382,7 @@ export function App() {
         if (event.payload) {
           setCurrentMode("menu");
           setSelectedIndex(0);
+          window.focus();
           if (isTauri) {
             invoke("set_mode", { mode: "menu" }).catch(console.error);
 
@@ -441,6 +442,7 @@ export function App() {
     if (view !== "hud") return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (!stateRef.current.isHudOpen) return;
       if (e.key === "Escape") {
         if (isTauri) {
           if (currentMode === "scroll") {

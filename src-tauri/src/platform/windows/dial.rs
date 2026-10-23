@@ -87,14 +87,7 @@ unsafe extern "system" fn low_level_keyboard_proc(
                             let app = app.clone();
                             thread::spawn(move || {
                                 let state: tauri::State<AppState> = app.state();
-                                state.is_scroll_mode.store(false, Ordering::SeqCst);
-                                state.locked_vol.store(0, Ordering::SeqCst);
-                                state.is_hud_open.store(false, Ordering::SeqCst);
-                                if let Some(pill_window) = app.get_webview_window("scroll_pill") {
-                                    let _ = pill_window.hide();
-                                }
-                                let _ = app.emit("scroll_mode:exit", ());
-                                let _ = app.emit("hud:visibility", false);
+                                crate::do_stop_scroll_mode(&app, &state);
                             });
                         }
                     }
@@ -117,31 +110,7 @@ unsafe extern "system" fn low_level_keyboard_proc(
                             thread::spawn(move || {
                                 println!("[Windows Dial] Intercepted Earbuds Dial Click -> Opening HUD");
                                 let state: tauri::State<AppState> = app.state();
-                                let curr_vol = state.platform.audio().get_volume();
-                                let curr_bright = state.platform.brightness().get_brightness();
-
-                                state.is_hud_open.store(true, Ordering::SeqCst);
-                                state.locked_vol.store(curr_vol, Ordering::SeqCst);
-                                if let Ok(locked_guard) = LOCKED_VOL_REF.read() {
-                                    if let Some(ref locked) = *locked_guard {
-                                        locked.store(curr_vol, Ordering::SeqCst);
-                                    }
-                                }
-
-                                if let Some(window) = app.get_webview_window("hud") {
-                                    let _ = window.unminimize();
-                                    let _ = window.show();
-                                    let _ = window.set_focus();
-                                    let _ = window.set_always_on_top(true);
-                                    let _ = window.emit("hud:visibility", true);
-                                    let _ = window.emit(
-                                        "sync:state",
-                                        serde_json::json!({
-                                            "volume": curr_vol,
-                                            "brightness": curr_bright,
-                                        }),
-                                    );
-                                }
+                                crate::do_show_hud(&app, &state);
                             });
                         }
                     }

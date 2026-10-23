@@ -63,8 +63,7 @@ fn set_mode(app: AppHandle, state: tauri::State<AppState>, mode: String) {
     }
 }
 
-#[tauri::command]
-fn stop_scroll_mode(app: AppHandle, state: tauri::State<AppState>) {
+pub(crate) fn do_stop_scroll_mode(app: &AppHandle, state: &AppState) {
     state.is_scroll_mode.store(false, Ordering::SeqCst);
     state.locked_vol.store(0, Ordering::SeqCst);
     state.is_hud_open.store(false, Ordering::SeqCst);
@@ -77,6 +76,11 @@ fn stop_scroll_mode(app: AppHandle, state: tauri::State<AppState>) {
     let _ = app.emit("hud:visibility", false);
     let _ = app.emit("scroll_mode:exit", ());
     println!("[HUD] Stopped scroll mode");
+}
+
+#[tauri::command]
+fn stop_scroll_mode(app: AppHandle, state: tauri::State<AppState>) {
+    do_stop_scroll_mode(&app, &state);
 }
 
 #[tauri::command]
@@ -132,35 +136,13 @@ fn close_hud_for_scroll(app: AppHandle) {
             if let Ok(gtk_w) = pill_window.gtk_window() {
                 gtk_w.set_gravity(gtk::gdk::Gravity::SouthEast);
                 gtk_w.set_type_hint(gtk::gdk::WindowTypeHint::Notification);
+                // Prevent scroll pill from stealing keyboard or window focus from background apps
+                gtk_w.set_accept_focus(false);
+                gtk_w.set_focus_on_map(false);
                 let logical_x = (target_x as f64 / _scale_factor) as i32;
                 let logical_y = (target_y as f64 / _scale_factor) as i32;
                 gtk_w.move_(logical_x, logical_y);
             }
-
-            // Also call GNOME Shell extension DBus method if running under GNOME Wayland
-            std::thread::spawn(move || {
-                let rt = tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build();
-                if let Ok(rt) = rt {
-                    rt.block_on(async move {
-                        if let Ok(connection) = zbus::Connection::session().await {
-                            let proxy = zbus::Proxy::new(
-                                &connection,
-                                "org.gnome.Shell",
-                                "/org/gnome/shell/extensions/FocusedWindow",
-                                "org.gnome.shell.extensions.FocusedWindow",
-                            )
-                            .await;
-                            if let Ok(proxy) = proxy {
-                                let _ = proxy
-                                    .call_method("MoveWindow", &("Scroll Indicator", target_x, target_y))
-                                    .await;
-                            }
-                        }
-                    });
-                }
-            });
         }
 
         let _ = pill_window.unminimize();
@@ -183,8 +165,7 @@ fn close_hud_for_scroll(app: AppHandle) {
     println!("[HUD] Closed HUD window for scroll mode, showing floating scroll pill in bottom right");
 }
 
-#[tauri::command]
-fn show_hud(app: AppHandle, state: tauri::State<AppState>) {
+pub(crate) fn do_show_hud(app: &AppHandle, state: &AppState) {
     let curr_vol = state.platform.audio().get_volume();
     let curr_bright = state.platform.brightness().get_brightness();
 
@@ -192,10 +173,40 @@ fn show_hud(app: AppHandle, state: tauri::State<AppState>) {
     state.locked_vol.store(curr_vol, Ordering::SeqCst);
 
     if let Some(window) = app.get_webview_window("hud") {
+        // Guarantee HUD window is centered on screen every time it is shown
+        let _ = window.center();
+
+        #[cfg(target_os = "linux")]
+        {
+            use gtk::prelude::*;
+            if let Ok(gtk_w) = window.gtk_window() {
+                gtk_w.set_position(gtk::WindowPosition::Center);
+                gtk_w.set_accept_focus(true);
+                gtk_w.set_focus_on_map(true);
+                if let Ok(Some(monitor)) = app.primary_monitor() {
+                    let m_size = monitor.size();
+                    let scale = monitor.scale_factor();
+                    let hud_w = (500.0 * scale) as i32;
+                    let hud_h = (500.0 * scale) as i32;
+                    let center_x = ((m_size.width as i32 - hud_w) / 2) as f64 / scale;
+                    let center_y = ((m_size.height as i32 - hud_h) / 2) as f64 / scale;
+                    gtk_w.move_(center_x as i32, center_y as i32);
+                }
+            }
+        }
+
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
         let _ = window.set_always_on_top(true);
+
+        #[cfg(target_os = "linux")]
+        {
+            use gtk::prelude::*;
+            if let Ok(gtk_w) = window.gtk_window() {
+                gtk_w.present();
+            }
+        }
     }
     let _ = app.emit("hud:visibility", true);
     let _ = app.emit(
@@ -208,7 +219,11 @@ fn show_hud(app: AppHandle, state: tauri::State<AppState>) {
 }
 
 #[tauri::command]
-fn hide_hud(app: AppHandle, state: tauri::State<AppState>) {
+fn show_hud(app: AppHandle, state: tauri::State<AppState>) {
+    do_show_hud(&app, &state);
+}
+
+pub(crate) fn do_hide_hud(app: &AppHandle, state: &AppState) {
     state.is_hud_open.store(false, Ordering::SeqCst);
     state.is_scroll_mode.store(false, Ordering::SeqCst);
     state.locked_vol.store(0, Ordering::SeqCst);
@@ -223,16 +238,21 @@ fn hide_hud(app: AppHandle, state: tauri::State<AppState>) {
 }
 
 #[tauri::command]
+fn hide_hud(app: AppHandle, state: tauri::State<AppState>) {
+    do_hide_hud(&app, &state);
+}
+
+#[tauri::command]
 fn toggle_hud(app: AppHandle, state: tauri::State<AppState>) {
     if state.is_scroll_mode.load(Ordering::SeqCst) {
-        stop_scroll_mode(app, state);
+        do_stop_scroll_mode(&app, &state);
         return;
     }
     let currently_open = state.is_hud_open.load(Ordering::SeqCst);
     if currently_open {
-        hide_hud(app, state);
+        do_hide_hud(&app, &state);
     } else {
-        show_hud(app, state);
+        do_show_hud(&app, &state);
     }
 }
 
