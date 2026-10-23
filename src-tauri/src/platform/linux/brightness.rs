@@ -248,11 +248,9 @@ impl LinuxBrightness {
 
 impl SystemBrightness for LinuxBrightness {
     fn get_brightness(&self) -> i32 {
-        // 1. GNOME Mutter D-Bus (true live brightness on GNOME Wayland & X11)
-        if let Some(b) = self.get_backlight_info() {
-            let range = (b.max - b.min).max(1);
-            let pct = (((b.value - b.min) as f64 / range as f64) * 100.0).round() as i32;
-            return pct.clamp(0, 100);
+        // 1. Dynamic sysfs scanner: true kernel hardware backlight level across all DEs & GPUs
+        if let Some(pct) = self.get_sysfs_backlight() {
+            return pct;
         }
 
         // 2. KDE Plasma PowerDevil D-Bus
@@ -265,9 +263,11 @@ impl SystemBrightness for LinuxBrightness {
             return pct;
         }
 
-        // 4. Dynamic sysfs scanner: hardware fallback for non-DE setups
-        if let Some(pct) = self.get_sysfs_backlight() {
-            return pct;
+        // 4. GNOME Mutter D-Bus fallback
+        if let Some(b) = self.get_backlight_info() {
+            let range = (b.max - b.min).max(1);
+            let pct = (((b.value - b.min) as f64 / range as f64) * 100.0).round() as i32;
+            return pct.clamp(0, 100);
         }
 
         50
