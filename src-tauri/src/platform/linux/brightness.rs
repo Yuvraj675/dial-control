@@ -244,30 +244,67 @@ impl LinuxBrightness {
         }
         None
     }
+
+    /// Query GNOME Mutter GetResources (direct live backlight percentage, works on OLED & LCD)
+    fn get_mutter_resources_brightness(&self) -> Option<i32> {
+        let out = Command::new("busctl")
+            .args([
+                "--user",
+                "call",
+                "org.gnome.Mutter.DisplayConfig",
+                "/org/gnome/Mutter/DisplayConfig",
+                "org.gnome.Mutter.DisplayConfig",
+                "GetResources",
+            ])
+            .output()
+            .ok()?;
+
+        if !out.status.success() {
+            return None;
+        }
+
+        let text = String::from_utf8_lossy(&out.stdout);
+        if let Some(idx) = text.find("\"backlight\"") {
+            let rest = &text[idx + 11..];
+            for token in rest.split_whitespace().take(5) {
+                if let Ok(val) = token.parse::<i32>() {
+                    if (0..=100).contains(&val) {
+                        return Some(val);
+                    }
+                }
+            }
+        }
+        None
+    }
 }
 
 impl SystemBrightness for LinuxBrightness {
     fn get_brightness(&self) -> i32 {
-        // 1. Dynamic sysfs scanner: true kernel hardware backlight level across all DEs & GPUs
-        if let Some(pct) = self.get_sysfs_backlight() {
+        // 1. GNOME Mutter GetResources (canonical live percentage on GNOME Wayland & X11, accurate for OLED & LCD)
+        if let Some(pct) = self.get_mutter_resources_brightness() {
             return pct;
         }
 
-        // 2. KDE Plasma PowerDevil D-Bus
-        if let Some(pct) = self.get_kde_brightness() {
-            return pct;
-        }
-
-        // 3. brightnessctl (standard on Arch Linux, Hyprland, Sway, etc.)
-        if let Some(pct) = self.get_brightnessctl() {
-            return pct;
-        }
-
-        // 4. GNOME Mutter D-Bus fallback
+        // 2. GNOME Mutter DisplayConfig Backlight property fallback
         if let Some(b) = self.get_backlight_info() {
             let range = (b.max - b.min).max(1);
             let pct = (((b.value - b.min) as f64 / range as f64) * 100.0).round() as i32;
             return pct.clamp(0, 100);
+        }
+
+        // 3. KDE Plasma PowerDevil D-Bus
+        if let Some(pct) = self.get_kde_brightness() {
+            return pct;
+        }
+
+        // 4. brightnessctl (standard on Arch Linux, Hyprland, Sway, etc.)
+        if let Some(pct) = self.get_brightnessctl() {
+            return pct;
+        }
+
+        // 5. Dynamic sysfs scanner: hardware fallback for non-DE setups
+        if let Some(pct) = self.get_sysfs_backlight() {
+            return pct;
         }
 
         50
@@ -328,3 +365,4 @@ impl SystemBrightness for LinuxBrightness {
         }
     }
 }
+
