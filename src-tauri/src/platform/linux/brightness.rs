@@ -6,8 +6,8 @@ use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 struct BacklightInfo {
-    serial: u32,
-    connector: String,
+    _serial: u32,
+    _connector: String,
     min: i32,
     max: i32,
     value: i32,
@@ -48,8 +48,8 @@ fn parse_mutter_busctl(text: &str) -> Option<BacklightInfo> {
     if let (Some(min), Some(max), Some(value)) = (min, max, value) {
         if max > min {
             return Some(BacklightInfo {
-                serial,
-                connector,
+                _serial: serial,
+                _connector: connector,
                 min,
                 max,
                 value,
@@ -87,8 +87,8 @@ fn parse_mutter_gdbus(text: &str) -> Option<BacklightInfo> {
 
     if max > min {
         Some(BacklightInfo {
-            serial,
-            connector,
+            _serial: serial,
+            _connector: connector,
             min,
             max,
             value,
@@ -99,12 +99,12 @@ fn parse_mutter_gdbus(text: &str) -> Option<BacklightInfo> {
 }
 
 pub struct LinuxBrightness {
-    _input: Arc<LinuxInput>,
+    input: Arc<LinuxInput>,
 }
 
 impl LinuxBrightness {
     pub fn new(input: Arc<LinuxInput>) -> Self {
-        Self { _input: input }
+        Self { input }
     }
 
     /// Query GNOME Mutter Backlight property via busctl or gdbus
@@ -276,48 +276,13 @@ impl SystemBrightness for LinuxBrightness {
     fn set_brightness(&self, pct: i32) -> i32 {
         let pct = pct.clamp(0, 100);
 
-        // 1. Try GNOME Mutter D-Bus
-        if let Some(b) = self.get_backlight_info() {
-            let range = (b.max - b.min).max(1);
-            let raw = b.min + (pct * range) / 100;
-            let status = Command::new("busctl")
-                .args([
-                    "--user",
-                    "call",
-                    "org.gnome.Mutter.DisplayConfig",
-                    "/org/gnome/Mutter/DisplayConfig",
-                    "org.gnome.Mutter.DisplayConfig",
-                    "SetBacklight",
-                    "usi",
-                    &b.serial.to_string(),
-                    &b.connector,
-                    &raw.to_string(),
-                ])
-                .status();
-
-            let ok = status.map(|s| s.success()).unwrap_or(false);
-            if !ok {
-                let _ = Command::new("gdbus")
-                    .args([
-                        "call",
-                        "--session",
-                        "--dest",
-                        "org.gnome.Mutter.DisplayConfig",
-                        "--object-path",
-                        "/org/gnome/Mutter/DisplayConfig",
-                        "--method",
-                        "org.gnome.Mutter.DisplayConfig.SetBacklight",
-                        &b.serial.to_string(),
-                        &b.connector,
-                        &raw.to_string(),
-                    ])
-                    .output();
-            }
-            return pct;
-        }
+        // 1. Try brightnessctl
+        let _ = Command::new("brightnessctl")
+            .args(["set", &format!("{}%", pct)])
+            .output();
 
         // 2. Try KDE PowerDevil D-Bus
-        let kde_res = Command::new("busctl")
+        let _ = Command::new("busctl")
             .args([
                 "--user",
                 "call",
@@ -329,23 +294,37 @@ impl SystemBrightness for LinuxBrightness {
                 &pct.to_string(),
             ])
             .output();
-        if let Ok(out) = kde_res {
-            if out.status.success() {
-                return pct;
-            }
-        }
-
-        // 3. Try brightnessctl
-        let _ = Command::new("brightnessctl")
-            .args(["set", &format!("{}%", pct)])
-            .output();
 
         pct
     }
 
     fn step_brightness(&self, direction: i32) {
-        let cur = self.get_brightness();
-        let target = (cur + direction * 5).clamp(0, 100);
-        let _ = self.set_brightness(target);
+        let mut handled = false;
+
+        // Try brightnessctl first
+        if direction > 0 {
+            if let Ok(status) = Command::new("brightnessctl").args(["set", "+5%"]).status() {
+                if status.success() {
+                    handled = true;
+                }
+            }
+        } else if direction < 0 {
+            if let Ok(status) = Command::new("brightnessctl").args(["set", "5%-"]).status() {
+                if status.success() {
+                    handled = true;
+                }
+            }
+        }
+
+        // Fallback to uinput virtual keyboard brightness keys (emits hardware Fn+F5 / Fn+F6 keys to GNOME)
+        if !handled {
+            if direction > 0 {
+                self.input.emit_brightness_up();
+                println!("[Linux Brightness] Emitted KEY_BRIGHTNESSUP (Fn+F6) through GNOME");
+            } else if direction < 0 {
+                self.input.emit_brightness_down();
+                println!("[Linux Brightness] Emitted KEY_BRIGHTNESSDOWN (Fn+F5) through GNOME");
+            }
+        }
     }
 }
