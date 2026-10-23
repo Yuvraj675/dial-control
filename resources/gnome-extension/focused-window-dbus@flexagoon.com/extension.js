@@ -83,10 +83,11 @@ export default class FocusedWindowDbus extends Extension {
     let window_list = global.get_window_actors();
     let winActor = window_list.find((actor) => {
       let t = actor.meta_window ? actor.meta_window.get_title() : '';
-      return t && t.includes(title);
+      let c = actor.meta_window ? actor.meta_window.get_wm_class() : '';
+      return (t && t.includes(title)) || (c && c.includes('dial-control') && t && t.includes('Scroll'));
     });
     if (winActor && winActor.meta_window) {
-      winActor.meta_window.move_frame(true, x, y);
+      winActor.meta_window.move_frame(false, x, y);
     }
   }
 

@@ -2,6 +2,16 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
+    #[cfg(target_os = "linux")]
+    {
+        // On Linux, use X11/XWayland if available so that the HUD and floating status pill
+        // can be precisely positioned on screen (e.g. bottom-right corner for scroll indicator).
+        // Standard Wayland xdg_toplevel explicitly ignores client-side positioning requests.
+        if std::env::var("GDK_BACKEND").is_err() {
+            std::env::set_var("GDK_BACKEND", "x11,wayland");
+        }
+    }
+
     let args: Vec<String> = std::env::args().collect();
     if args.iter().any(|a| a == "--toggle" || a == "-t" || a == "toggle") {
         #[cfg(unix)]
