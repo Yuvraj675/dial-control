@@ -100,7 +100,7 @@ fn close_hud_for_scroll(app: AppHandle) {
             let w = (240.0 * scale) as i32;
             let h = (48.0 * scale) as i32;
             let margin_x = (24.0 * scale) as i32;
-            let margin_y = (48.0 * scale) as i32;
+            let margin_y = (24.0 * scale) as i32;
             target_x = m_size.width as i32 - w - margin_x;
             target_y = m_size.height as i32 - h - margin_y;
             _target_w = w;
