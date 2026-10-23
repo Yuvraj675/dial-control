@@ -31,6 +31,7 @@ import {
   ZoomOut,
   Hand,
   MousePointer,
+  Mouse,
   Sliders,
   Settings,
   Disc,
@@ -47,6 +48,8 @@ export const ICON_MAP: Record<string, React.FC<{ className?: string; size?: numb
   // Mode / System
   volume: Volume2,
   brightness: Sun,
+  scroll: Mouse,
+  mouse: Mouse,
   mute: VolumeX,
   settings: Settings,
   sliders: Sliders,

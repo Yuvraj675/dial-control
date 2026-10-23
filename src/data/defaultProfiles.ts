@@ -22,6 +22,7 @@ export const DEFAULT_CONFIG: ProfilesConfig = {
         { id: "media_playpause", label: "PLAY / PAUSE", icon: "playpause", type: "key", action: "playpause" },
         { id: "brightness_mode", label: "BRIGHTNESS", icon: "brightness", type: "mode" },
         { id: "volume_mode", label: "VOLUME", icon: "volume", type: "mode" },
+        { id: "scroll_mode", label: "SCROLL", icon: "scroll", type: "mode", action: "scroll", desc: "Rotate to scroll" },
         { id: "media_next", label: "NEXT TRACK", icon: "next", type: "key", action: "next" },
         { id: "media_prev", label: "PREV TRACK", icon: "prev", type: "key", action: "prev" },
         { id: "mute_toggle", label: "MUTE", icon: "mute", type: "mute" },
@@ -83,6 +84,7 @@ export const DEFAULT_CONFIG: ProfilesConfig = {
       icon: "globe",
       match_patterns: ["*firefox*", "*chrome*", "*zen*", "*brave*", "*edge*"],
       actions: [
+        { id: "scroll_mode", label: "SCROLL", icon: "scroll", type: "mode", action: "scroll", desc: "Rotate to scroll" },
         { id: "nav_back", label: "BACK", icon: "back", type: "hotkey", keys: ["KEY_LEFTALT", "KEY_LEFT"] },
         { id: "nav_fwd", label: "FORWARD", icon: "forward", type: "hotkey", keys: ["KEY_LEFTALT", "KEY_RIGHT"] },
         { id: "nav_reload", label: "RELOAD", icon: "reload", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_R"] },

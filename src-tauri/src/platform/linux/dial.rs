@@ -62,6 +62,7 @@ fn start_input_grabber(
     app: AppHandle,
     is_hud_open: Arc<AtomicBool>,
     locked_vol: Arc<AtomicI32>,
+    is_scroll_mode: Arc<AtomicBool>,
 ) {
     thread::spawn(move || {
         let mut last_click_time = Instant::now() - Duration::from_secs(1);
@@ -105,6 +106,17 @@ fn start_input_grabber(
                                     let now = Instant::now();
                                     if now.duration_since(last_click_time) > Duration::from_millis(500) {
                                         last_click_time = now;
+
+                                        if is_scroll_mode.load(Ordering::SeqCst) {
+                                            println!(">> [NATIVE DIAL CLICK] -> Exiting Scroll Mode");
+                                            is_scroll_mode.store(false, Ordering::SeqCst);
+                                            locked_vol.store(0, Ordering::SeqCst);
+                                            is_hud_open.store(false, Ordering::SeqCst);
+                                            let _ = app.emit("scroll_mode:exit", ());
+                                            let _ = app.emit("hud:visibility", false);
+                                            continue;
+                                        }
+
                                         let was_open = is_hud_open.load(Ordering::SeqCst);
 
                                         if !was_open {
@@ -156,6 +168,7 @@ fn start_bluez_listener(
     app: AppHandle,
     is_hud_open: Arc<AtomicBool>,
     locked_vol: Arc<AtomicI32>,
+    is_scroll_mode: Arc<AtomicBool>,
 ) {
     thread::spawn(move || {
         let rt = match tokio::runtime::Builder::new_current_thread()
@@ -272,6 +285,52 @@ fn start_bluez_listener(
                                 dir_name, new_vol, mapped_pct
                             );
 
+                            let is_scroll = is_scroll_mode.load(Ordering::SeqCst);
+                            if is_scroll {
+                                // direction > 0 is clockwise -> scroll down (-1)
+                                // direction < 0 is counter-clockwise -> scroll up (1)
+                                let scroll_delta = if direction > 0 { -1 } else { 1 };
+                                println!(">> [NATIVE SCROLL EMULATION] direction: {}, scroll_delta: {}", direction, scroll_delta);
+                                let app_clone = app.clone();
+                                thread::spawn(move || {
+                                    let state: tauri::State<crate::AppState> = app_clone.state();
+                                    state.platform.input().emit_scroll(scroll_delta);
+                                });
+
+                                let locked_v = locked_vol.load(Ordering::SeqCst);
+                                if locked_v > 0 {
+                                    let expected_raw = ((locked_v as f64 * 127.0) / 100.0)
+                                        .round()
+                                        .clamp(0.0, 127.0) as i32;
+                                    ignore_restore = Some((expected_raw, Instant::now()));
+
+                                    let app_clone = app.clone();
+                                    thread::spawn(move || {
+                                        let state: tauri::State<crate::AppState> = app_clone.state();
+                                        state.platform.audio().set_volume(locked_v);
+                                    });
+
+                                    let proxy = zbus::Proxy::new(
+                                        &connection,
+                                        "org.bluez",
+                                        path.clone(),
+                                        "org.freedesktop.DBus.Properties",
+                                    )
+                                    .await;
+
+                                    if let Ok(proxy) = proxy {
+                                        let val: zvariant::Value = zvariant::Value::U16(expected_raw as u16);
+                                        let _ = proxy
+                                            .call_method(
+                                                "Set",
+                                                &("org.bluez.MediaTransport1", "Volume", val),
+                                            )
+                                            .await;
+                                    }
+                                }
+                                continue;
+                            }
+
                             if let Some(window) = app.get_webview_window("hud") {
                                 let _ = window.emit(
                                     "dial:rotate",
@@ -289,8 +348,8 @@ fn start_bluez_listener(
 
                             if hud_open && locked_v > 0 {
                                 let expected_raw = ((locked_v as f64 * 127.0) / 100.0)
-                                    .round()
-                                    .clamp(0.0, 127.0) as i32;
+                                        .round()
+                                        .clamp(0.0, 127.0) as i32;
                                 ignore_restore = Some((expected_raw, Instant::now()));
 
                                 // 1. Restore system audio sink volume via WirePlumber/PipeWire/PulseAudio
@@ -333,8 +392,9 @@ impl DialBackend for LinuxDial {
         app: AppHandle,
         is_hud_open: Arc<AtomicBool>,
         locked_vol: Arc<AtomicI32>,
+        is_scroll_mode: Arc<AtomicBool>,
     ) {
-        start_input_grabber(app.clone(), is_hud_open.clone(), locked_vol.clone());
-        start_bluez_listener(app, is_hud_open, locked_vol);
+        start_input_grabber(app.clone(), is_hud_open.clone(), locked_vol.clone(), is_scroll_mode.clone());
+        start_bluez_listener(app, is_hud_open, locked_vol, is_scroll_mode);
     }
 }

@@ -54,7 +54,7 @@ export function App() {
   const [activeProfileId, setActiveProfileId] = useState<string>("default");
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const [isHudOpen, setIsHudOpen] = useState<boolean>(true);
-  const [currentMode, setCurrentMode] = useState<"menu" | "volume" | "brightness">("menu");
+  const [currentMode, setCurrentMode] = useState<"menu" | "volume" | "brightness" | "scroll">("menu");
   const [gaugeValue, setGaugeValue] = useState<number>(50);
   const [brightnessLevel, setBrightnessLevel] = useState<number>(() => {
     const saved = localStorage.getItem("dial_brightness_level");
@@ -201,13 +201,36 @@ export function App() {
       return;
     }
 
-    // 4. Continuous Mode switches (Volume / Brightness)
+    // 4. Continuous Mode switches (Volume / Brightness / Scroll)
     if (action.type === "mode") {
+      const isScroll =
+        action.action === "scroll" ||
+        action.id === "scroll_mode" ||
+        action.id?.includes("scroll") ||
+        action.label?.toUpperCase().includes("SCROLL");
       const isVolume =
         action.action === "volume" ||
         action.id === "volume_mode" ||
         action.id.startsWith("vol_") ||
         action.label?.toUpperCase().includes("VOL");
+
+      if (isScroll) {
+        setCurrentMode("scroll");
+        if (isTauri) {
+          invoke("set_mode", { mode: "scroll" }).catch(console.error);
+        }
+        // Show "ROTATE TO SCROLL" briefly, then hide the HUD window so the underlying app receives mouse wheel scrolls
+        setTimeout(() => {
+          if (stateRef.current.currentMode === "scroll") {
+            setIsHudOpen(false);
+            if (isTauri) {
+              invoke("close_hud_for_scroll").catch(console.error);
+            }
+          }
+        }, 850);
+        return;
+      }
+
       const mode = isVolume ? "volume" : "brightness";
       setCurrentMode(mode);
       if (isTauri) {
@@ -301,13 +324,17 @@ export function App() {
 
         const { currentMode, selectedIndex, activeProfile } = stateRef.current;
 
-        // When in active volume/brightness adjustment mode, click confirms and dismisses HUD
+        // When in active volume/brightness adjustment mode or scroll mode, click confirms and dismisses HUD / exits scroll
         if (currentMode !== "menu") {
           setCurrentMode("menu");
           setIsHudOpen(false);
           if (isTauri) {
-            invoke("set_mode", { mode: "menu" }).catch(console.error);
-            invoke("hide_hud").catch(console.error);
+            if (currentMode === "scroll") {
+              invoke("stop_scroll_mode").catch(console.error);
+            } else {
+              invoke("set_mode", { mode: "menu" }).catch(console.error);
+              invoke("hide_hud").catch(console.error);
+            }
           }
           return;
         }
@@ -405,6 +432,13 @@ export function App() {
         }
       });
       unlistenList.push(unlistenSync);
+
+      // 6. Scroll Mode Exit broadcast from backend
+      const unlistenScrollExit = await listen("scroll_mode:exit", () => {
+        setCurrentMode("menu");
+        setIsHudOpen(false);
+      });
+      unlistenList.push(unlistenScrollExit);
     }
 
     setupTauriListeners().catch(console.error);
@@ -421,8 +455,12 @@ export function App() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         if (isTauri) {
-          invoke("set_mode", { mode: "menu" }).catch(console.error);
-          invoke("hide_hud").catch(console.error);
+          if (currentMode === "scroll") {
+            invoke("stop_scroll_mode").catch(console.error);
+          } else {
+            invoke("set_mode", { mode: "menu" }).catch(console.error);
+            invoke("hide_hud").catch(console.error);
+          }
         }
         setCurrentMode("menu");
         setIsHudOpen(false);
@@ -430,6 +468,10 @@ export function App() {
         e.preventDefault();
         if (currentMode === "menu") {
           setSelectedIndex((prev) => (prev + 1) % actionsCount);
+        } else if (currentMode === "scroll") {
+          if (isTauri) {
+            invoke("adjust_gauge", { mode: "scroll", delta: 1 }).catch(console.error);
+          }
         } else if (currentMode === "brightness") {
           setBrightnessLevel((prev) => {
             const next = Math.min(100, prev + 5);
@@ -453,6 +495,10 @@ export function App() {
         e.preventDefault();
         if (currentMode === "menu") {
           setSelectedIndex((prev) => (prev - 1 + actionsCount) % actionsCount);
+        } else if (currentMode === "scroll") {
+          if (isTauri) {
+            invoke("adjust_gauge", { mode: "scroll", delta: -1 }).catch(console.error);
+          }
         } else if (currentMode === "brightness") {
           setBrightnessLevel((prev) => {
             const next = Math.max(0, prev - 5);
@@ -477,8 +523,12 @@ export function App() {
         const { currentMode, selectedIndex, activeProfile } = stateRef.current;
         if (currentMode !== "menu") {
           if (isTauri) {
-            invoke("set_mode", { mode: "menu" }).catch(console.error);
-            invoke("hide_hud").catch(console.error);
+            if (currentMode === "scroll") {
+              invoke("stop_scroll_mode").catch(console.error);
+            } else {
+              invoke("set_mode", { mode: "menu" }).catch(console.error);
+              invoke("hide_hud").catch(console.error);
+            }
           }
           setCurrentMode("menu");
           setIsHudOpen(false);
@@ -493,6 +543,12 @@ export function App() {
 
     const handleWheel = (e: WheelEvent) => {
       if (!isHudOpen) return;
+      if (currentMode === "scroll") {
+        if (isTauri) {
+          invoke("adjust_gauge", { mode: "scroll", delta: e.deltaY > 0 ? 1 : -1 }).catch(console.error);
+        }
+        return;
+      }
       if (e.deltaY > 0) {
         if (currentMode === "menu") {
           setSelectedIndex((prev) => (prev + 1) % actionsCount);
@@ -613,8 +669,12 @@ export function App() {
           onSelectAction={handleExecuteAction}
           onDismiss={() => {
             if (isTauri) {
-              invoke("set_mode", { mode: "menu" }).catch(console.error);
-              invoke("hide_hud").catch(console.error);
+              if (currentMode === "scroll") {
+                invoke("stop_scroll_mode").catch(console.error);
+              } else {
+                invoke("set_mode", { mode: "menu" }).catch(console.error);
+                invoke("hide_hud").catch(console.error);
+              }
             }
             setCurrentMode("menu");
             setIsHudOpen(false);

@@ -9,6 +9,7 @@ use tauri::{AppHandle, Emitter, Manager};
 
 static IS_HUD_OPEN_REF: RwLock<Option<Arc<AtomicBool>>> = RwLock::new(None);
 static LOCKED_VOL_REF: RwLock<Option<Arc<AtomicI32>>> = RwLock::new(None);
+static IS_SCROLL_MODE_REF: RwLock<Option<Arc<AtomicBool>>> = RwLock::new(None);
 static APP_HANDLE_REF: RwLock<Option<AppHandle>> = RwLock::new(None);
 static HOOK_HANDLE: AtomicUsize = AtomicUsize::new(0);
 static LAST_DIAL_CLICK_TIME: AtomicUsize = AtomicUsize::new(0);
@@ -44,6 +45,12 @@ unsafe extern "system" fn low_level_keyboard_proc(
             false
         };
 
+        let is_scroll_mode = if let Ok(guard) = IS_SCROLL_MODE_REF.read() {
+            guard.as_ref().map(|arc| arc.load(Ordering::SeqCst)).unwrap_or(false)
+        } else {
+            false
+        };
+
         match vk {
             VK_MEDIA_PLAY_PAUSE | VK_PAUSE | VK_MEDIA_STOP => {
                 let now = std::time::SystemTime::now()
@@ -57,6 +64,39 @@ unsafe extern "system" fn low_level_keyboard_proc(
                     return 1;
                 }
                 LAST_DIAL_CLICK_TIME.store(now, Ordering::SeqCst);
+
+                if is_scroll_mode {
+                    println!("[Windows Dial] Intercepted Dial Click -> Exiting Scroll Mode");
+                    if let Ok(guard) = IS_SCROLL_MODE_REF.read() {
+                        if let Some(ref arc) = *guard {
+                            arc.store(false, Ordering::SeqCst);
+                        }
+                    }
+                    if let Ok(guard) = LOCKED_VOL_REF.read() {
+                        if let Some(ref arc) = *guard {
+                            arc.store(0, Ordering::SeqCst);
+                        }
+                    }
+                    if let Ok(guard) = IS_HUD_OPEN_REF.read() {
+                        if let Some(ref arc) = *guard {
+                            arc.store(false, Ordering::SeqCst);
+                        }
+                    }
+                    if let Ok(guard) = APP_HANDLE_REF.read() {
+                        if let Some(ref app) = *guard {
+                            let app = app.clone();
+                            thread::spawn(move || {
+                                let state: tauri::State<AppState> = app.state();
+                                state.is_scroll_mode.store(false, Ordering::SeqCst);
+                                state.locked_vol.store(0, Ordering::SeqCst);
+                                state.is_hud_open.store(false, Ordering::SeqCst);
+                                let _ = app.emit("scroll_mode:exit", ());
+                                let _ = app.emit("hud:visibility", false);
+                            });
+                        }
+                    }
+                    return 1;
+                }
 
                 if !is_hud_open {
                     // 1. Immediately flip atomic flag so consecutive inputs know HUD is active
@@ -118,7 +158,25 @@ unsafe extern "system" fn low_level_keyboard_proc(
                     return 1;
                 }
             }
-            VK_VOLUME_UP | VK_VOLUME_DOWN if is_hud_open => {
+            VK_VOLUME_UP | VK_VOLUME_DOWN if (is_hud_open || is_scroll_mode) => {
+                let dir = if vk == VK_VOLUME_UP { 1 } else { -1 };
+
+                if is_scroll_mode {
+                    // Clockwise rotation (dir = 1) -> Scroll DOWN (-1)
+                    // Counterclockwise rotation (dir = -1) -> Scroll UP (1)
+                    let scroll_delta = if dir > 0 { -1 } else { 1 };
+                    println!("[Windows Dial] Scroll Mode Emulation -> dir: {}, delta: {}", dir, scroll_delta);
+                    if let Ok(guard) = APP_HANDLE_REF.read() {
+                        if let Some(ref app) = *guard {
+                            let app = app.clone();
+                            thread::spawn(move || {
+                                let state: tauri::State<AppState> = app.state();
+                                state.platform.input().emit_scroll(scroll_delta);
+                            });
+                        }
+                    }
+                    return 1;
+                }
                 let dir = if vk == VK_VOLUME_UP { 1 } else { -1 };
                 println!("[Windows Dial] Intercepted Dial Rotate -> ({})", dir);
 
@@ -177,12 +235,16 @@ impl DialBackend for WindowsDial {
         app: AppHandle,
         is_hud_open: Arc<AtomicBool>,
         locked_vol: Arc<AtomicI32>,
+        is_scroll_mode: Arc<AtomicBool>,
     ) {
         if let Ok(mut guard) = IS_HUD_OPEN_REF.write() {
             *guard = Some(is_hud_open);
         }
         if let Ok(mut guard) = LOCKED_VOL_REF.write() {
             *guard = Some(locked_vol);
+        }
+        if let Ok(mut guard) = IS_SCROLL_MODE_REF.write() {
+            *guard = Some(is_scroll_mode);
         }
         if let Ok(mut guard) = APP_HANDLE_REF.write() {
             *guard = Some(app);

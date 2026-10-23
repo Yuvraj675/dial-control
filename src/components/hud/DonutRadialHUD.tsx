@@ -8,7 +8,7 @@ interface DonutRadialHUDProps {
   profile: DialProfile;
   selectedIndex: number;
   isOpen: boolean;
-  currentMode: "menu" | "volume" | "brightness";
+  currentMode: "menu" | "volume" | "brightness" | "scroll";
   gaugeValue?: number; // 0-100
   theme?: "nothing_red" | "stealth" | "cmf_orange";
   dialRadius?: number;
@@ -186,6 +186,29 @@ export const DonutRadialHUD: React.FC<DonutRadialHUDProps> = ({
                     );
                   })}
                 </g>
+              ) : currentMode === "scroll" ? (
+                // ── Scroll Wheel Mode Ring ─────────────────────────────────
+                <g>
+                  <circle
+                    cx={cx}
+                    cy={cy}
+                    r={(rInner + rOuter) / 2}
+                    fill="none"
+                    stroke="#16181F"
+                    strokeWidth={rOuter - rInner}
+                  />
+                  <circle
+                    cx={cx}
+                    cy={cy}
+                    r={(rInner + rOuter) / 2}
+                    fill="none"
+                    stroke={accentColor}
+                    strokeWidth={3}
+                    strokeDasharray="12 12"
+                    filter="url(#nothing-glow)"
+                    opacity={0.85}
+                  />
+                </g>
               ) : (
                 // ── Continuous Circular Gauge Mode (Volume / Brightness) ───
                 <g>
@@ -265,6 +288,33 @@ export const DonutRadialHUD: React.FC<DonutRadialHUDProps> = ({
                   <div className="font-ndot text-sm text-white tracking-widest uppercase mt-0.5">
                     {activeAction?.label}
                   </div>
+                </div>
+              ) : currentMode === "scroll" ? (
+                /* Scroll Mode Center */
+                <div className="flex flex-col items-center justify-center text-center px-4">
+                  <motion.div
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    className="p-3 rounded-full bg-white/[0.08] border border-white/10 text-white flex items-center justify-center mb-1.5"
+                    style={{
+                      boxShadow: `0 0 25px ${glowColor}`,
+                    }}
+                  >
+                    {getActionIcon("scroll", 26, "text-white", 2.0)}
+                  </motion.div>
+                  <motion.div
+                    initial={{ opacity: 0, y: 3 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="font-ndot text-sm text-white tracking-widest uppercase font-bold"
+                  >
+                    ROTATE TO SCROLL
+                  </motion.div>
+                  <span className="font-ndot text-[9px] uppercase text-neutral-400 tracking-widest mt-1">
+                    CW: DOWN • CCW: UP
+                  </span>
+                  <span className="font-ndot text-[8px] uppercase text-neutral-500 tracking-wider mt-0.5">
+                    CLICK DIAL TO STOP
+                  </span>
                 </div>
               ) : (
                 /* Gauge Center Mode */
