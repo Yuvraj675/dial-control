@@ -9,6 +9,11 @@ const DBUS_SCHEMA = `
         <method name="Get">
             <arg type="s" direction="out" name="window" />
         </method>
+        <method name="MoveWindow">
+            <arg type="s" direction="in" name="title" />
+            <arg type="i" direction="in" name="x" />
+            <arg type="i" direction="in" name="y" />
+        </method>
         <signal name="FocusChanged">
             <arg type="s" name="window" />
         </signal>
@@ -71,6 +76,17 @@ export default class FocusedWindowDbus extends Extension {
       });
     } else {
       return "{}";
+    }
+  }
+
+  MoveWindow(title, x, y) {
+    let window_list = global.get_window_actors();
+    let winActor = window_list.find((actor) => {
+      let t = actor.meta_window ? actor.meta_window.get_title() : '';
+      return t && t.includes(title);
+    });
+    if (winActor && winActor.meta_window) {
+      winActor.meta_window.move_frame(true, x, y);
     }
   }
 

@@ -14,6 +14,13 @@ pub type LRESULT = isize;
 pub const TRUE: BOOL = 1;
 pub const FALSE: BOOL = 0;
 
+pub const HWND_TOPMOST: HWND = (-1isize) as HWND;
+pub const SWP_NOSIZE: DWORD = 0x0001;
+pub const SWP_NOMOVE: DWORD = 0x0002;
+pub const SWP_NOZORDER: DWORD = 0x0004;
+pub const SWP_NOACTIVATE: DWORD = 0x0010;
+pub const SWP_SHOWWINDOW: DWORD = 0x0040;
+
 pub const WH_KEYBOARD_LL: i32 = 13;
 pub const WM_KEYDOWN: u32 = 0x0100;
 pub const WM_KEYUP: u32 = 0x0101;
@@ -177,6 +184,15 @@ pub type MONITORENUMPROC = Option<unsafe extern "system" fn(hMonitor: HMONITOR, 
 extern "system" {
     pub fn GetForegroundWindow() -> HWND;
     pub fn SetForegroundWindow(hWnd: HWND) -> BOOL;
+    pub fn SetWindowPos(
+        hWnd: HWND,
+        hWndInsertAfter: HWND,
+        X: i32,
+        Y: i32,
+        cx: i32,
+        cy: i32,
+        uFlags: DWORD,
+    ) -> BOOL;
     pub fn ShowWindow(hWnd: HWND, nCmdShow: i32) -> BOOL;
     pub fn GetWindowTextW(hWnd: HWND, lpString: *mut u16, nMaxCount: i32) -> i32;
     pub fn GetClassNameW(hWnd: HWND, lpClassName: *mut u16, nMaxCount: i32) -> i32;

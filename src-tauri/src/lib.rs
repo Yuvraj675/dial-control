@@ -87,20 +87,93 @@ fn close_hud_for_scroll(app: AppHandle) {
     let _ = app.emit("hud:visibility", false);
 
     if let Some(pill_window) = app.get_webview_window("scroll_pill") {
+        let mut target_x = 0;
+        let mut target_y = 0;
+        let mut _target_w = 240;
+        let mut _target_h = 48;
+
         if let Ok(Some(monitor)) = app.primary_monitor() {
             let m_size = monitor.size();
             let scale = monitor.scale_factor();
             let w = (240.0 * scale) as i32;
-            let x = (m_size.width as i32 - w) / 2;
-            let y = (24.0 * scale) as i32;
-            let _ = pill_window.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(x, y)));
+            let h = (48.0 * scale) as i32;
+            let margin_x = (24.0 * scale) as i32;
+            let margin_y = (48.0 * scale) as i32;
+            target_x = m_size.width as i32 - w - margin_x;
+            target_y = m_size.height as i32 - h - margin_y;
+            _target_w = w;
+            _target_h = h;
+            let _ = pill_window.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(target_x, target_y)));
         }
+
+        #[cfg(target_os = "windows")]
+        {
+            if let Ok(hwnd) = pill_window.hwnd() {
+                use crate::platform::windows::ffi::*;
+                unsafe {
+                    SetWindowPos(
+                        hwnd.0 as HWND,
+                        HWND_TOPMOST,
+                        target_x,
+                        target_y,
+                        _target_w,
+                        _target_h,
+                        SWP_NOACTIVATE | SWP_SHOWWINDOW,
+                    );
+                }
+            }
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            use gtk::prelude::GtkWindowExt;
+            if let Ok(gtk_w) = pill_window.gtk_window() {
+                gtk_w.set_gravity(gtk::gdk::Gravity::SouthEast);
+                gtk_w.set_type_hint(gtk::gdk::WindowTypeHint::Notification);
+                gtk_w.move_(target_x, target_y);
+            }
+
+            // Also call GNOME Shell extension DBus method if running under GNOME Wayland
+            std::thread::spawn(move || {
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build();
+                if let Ok(rt) = rt {
+                    rt.block_on(async move {
+                        if let Ok(connection) = zbus::Connection::session().await {
+                            let proxy = zbus::Proxy::new(
+                                &connection,
+                                "org.gnome.Shell",
+                                "/org/gnome/shell/extensions/FocusedWindow",
+                                "org.gnome.shell.extensions.FocusedWindow",
+                            )
+                            .await;
+                            if let Ok(proxy) = proxy {
+                                let _ = proxy
+                                    .call_method("MoveWindow", &("Scroll Indicator", target_x, target_y))
+                                    .await;
+                            }
+                        }
+                    });
+                }
+            });
+        }
+
         let _ = pill_window.unminimize();
         let _ = pill_window.show();
         let _ = pill_window.set_always_on_top(true);
+
+        #[cfg(target_os = "linux")]
+        {
+            use gtk::prelude::GtkWindowExt;
+            if let Ok(gtk_w) = pill_window.gtk_window() {
+                gtk_w.move_(target_x, target_y);
+            }
+        }
+
         let _ = pill_window.emit("scroll_pill:active", true);
     }
-    println!("[HUD] Closed HUD window for scroll mode, showing floating scroll pill");
+    println!("[HUD] Closed HUD window for scroll mode, showing floating scroll pill in bottom right");
 }
 
 #[tauri::command]
