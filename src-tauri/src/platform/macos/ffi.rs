@@ -180,10 +180,10 @@ extern "C" {
     ) -> Boolean;
 }
 
-#[link(name = "DisplayServices", kind = "framework")]
 extern "C" {
-    pub fn DisplayServicesGetBrightness(display_id: u32, brightness: *mut f32) -> i32;
-    pub fn DisplayServicesSetBrightness(display_id: u32, brightness: f32) -> i32;
+    pub fn dlopen(filename: *const std::ffi::c_char, flag: std::ffi::c_int) -> *mut c_void;
+    pub fn dlsym(handle: *mut c_void, symbol: *const std::ffi::c_char) -> *mut c_void;
+    pub fn dlclose(handle: *mut c_void) -> std::ffi::c_int;
 }
 
 #[repr(C)]

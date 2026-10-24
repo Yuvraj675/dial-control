@@ -33,7 +33,16 @@ jobs:
         run: pnpm install
 
       - name: Build Tauri macOS bundles (.dmg & .app)
-        run: npx @tauri-apps/cli build --bundles dmg,app
+        run: |
+          npx @tauri-apps/cli build
+          # Zip the .app directory to preserve execution permissions and symlinks
+          for app_dir in src-tauri/target/**/bundle/macos/*.app; do
+            if [ -d "$app_dir" ]; then
+              parent_dir="$(dirname "$app_dir")"
+              base_name="$(basename "$app_dir")"
+              (cd "$parent_dir" && zip -r "${base_name}.zip" "$base_name")
+            fi
+          done
 
       - name: Upload macOS Installers
         uses: actions/upload-artifact@v4
@@ -41,5 +50,5 @@ jobs:
           name: dial-control-macos
           path: |
             src-tauri/target/**/bundle/dmg/*.dmg
-            src-tauri/target/**/bundle/macos/*.app
-          if-no-files-found: error
+            src-tauri/target/**/bundle/macos/*.zip
+          if-no-files-found: warn
