@@ -219,6 +219,34 @@ pub fn brightness_cache_is_fresh(now_ms: u64, last_set_ms: u64) -> bool {
     last_set_ms != 0 && now_ms.saturating_sub(last_set_ms) < BRIGHTNESS_SETTLE_MS
 }
 
+/// Media remote command delivered to our own Now Playing session (macOS `MPRemoteCommandCenter`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteCommand {
+    Play,
+    Pause,
+    Toggle,
+    Next,
+    Previous,
+}
+
+/// Play / Pause / Toggle are the dial click; Next / Previous are the double / triple press
+/// gestures that dismiss the HUD.
+pub fn remote_command_is_click(cmd: RemoteCommand) -> bool {
+    matches!(cmd, RemoteCommand::Play | RemoteCommand::Pause | RemoteCommand::Toggle)
+}
+
+/// Playback state to report after `cmd`. AVRCP has no toggle: the earbuds alternate PLAY and
+/// PAUSE from their own idea of the state, and the system drops a PLAY while we already report
+/// playing, so each click must leave us reporting what the next (opposite) press expects.
+pub fn reported_playing_after(cmd: RemoteCommand, playing: bool) -> bool {
+    match cmd {
+        RemoteCommand::Play => true,
+        RemoteCommand::Pause => false,
+        RemoteCommand::Toggle => !playing,
+        RemoteCommand::Next | RemoteCommand::Previous => playing,
+    }
+}
+
 pub fn now_millis() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -546,5 +574,32 @@ mod tests {
         assert!(!brightness_cache_is_fresh(10_000, 0));
         assert!(brightness_cache_is_fresh(10_000, 9_000));
         assert!(!brightness_cache_is_fresh(12_500, 10_000));
+    }
+
+    #[test]
+    fn remote_commands_map_to_click_or_cancel() {
+        assert!(remote_command_is_click(RemoteCommand::Play));
+        assert!(remote_command_is_click(RemoteCommand::Pause));
+        assert!(remote_command_is_click(RemoteCommand::Toggle));
+        assert!(!remote_command_is_click(RemoteCommand::Next));
+        assert!(!remote_command_is_click(RemoteCommand::Previous));
+    }
+
+    #[test]
+    fn alternating_earbud_presses_are_each_delivered() {
+        // Earbuds send PAUSE, PLAY, PAUSE...; after each we must report the state that makes
+        // the next one a real change (never a no-op the system would drop).
+        let mut playing = true;
+        for cmd in [RemoteCommand::Pause, RemoteCommand::Play, RemoteCommand::Pause, RemoteCommand::Play] {
+            let expected_change = match cmd {
+                RemoteCommand::Pause => playing,
+                RemoteCommand::Play => !playing,
+                _ => unreachable!(),
+            };
+            assert!(expected_change, "{cmd:?} would be a no-op");
+            playing = reported_playing_after(cmd, playing);
+        }
+        assert!(!reported_playing_after(RemoteCommand::Toggle, true));
+        assert!(reported_playing_after(RemoteCommand::Next, true));
     }
 }

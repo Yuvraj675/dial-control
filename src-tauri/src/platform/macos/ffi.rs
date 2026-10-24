@@ -55,6 +55,9 @@ pub const kCGScrollEventUnitLine: u32 = 1;
 // System defined subtypes & auxiliary key definitions
 pub const NX_SUBTYPE_AUX_CONTROL_BUTTONS: i16 = 8;
 
+// CGEventField: pid of the process that posted the event
+pub const kCGEventSourceUnixProcessID: u32 = 41;
+
 pub const NX_KEYTYPE_SOUND_UP: u32 = 0;
 pub const NX_KEYTYPE_SOUND_DOWN: u32 = 1;
 pub const NX_KEYTYPE_BRIGHTNESS_UP: u32 = 2;
