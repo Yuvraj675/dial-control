@@ -614,30 +614,18 @@ pub fn run() {
         )
         .manage(app_state)
         .on_window_event(|window, event| {
-            match event {
-                tauri::WindowEvent::CloseRequested { api, .. } => {
-                    let state: tauri::State<AppState> = window.state();
-                    if state.is_recording_shortcut.load(Ordering::SeqCst) {
-                        println!("[Window] CloseRequested suppressed because shortcut recording is in progress");
-                        api.prevent_close();
-                        let _ = window.emit("recording:system_close_pressed", ());
-                        return;
-                    }
-                    if window.label() == "settings" || window.label() == "hud" {
-                        let _ = window.hide();
-                        api.prevent_close();
-                    }
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                let state: tauri::State<AppState> = window.state();
+                if state.is_recording_shortcut.load(Ordering::SeqCst) {
+                    println!("[Window] CloseRequested suppressed because shortcut recording is in progress");
+                    api.prevent_close();
+                    let _ = window.emit("recording:system_close_pressed", ());
+                    return;
                 }
-                tauri::WindowEvent::Focused(false) => {
-                    if window.label() == "hud" {
-                        let app = window.app_handle().clone();
-                        let state: tauri::State<AppState> = app.state();
-                        if !state.is_scroll_mode.load(Ordering::SeqCst) {
-                            hide_hud(app.clone(), state);
-                        }
-                    }
+                if window.label() == "settings" || window.label() == "hud" {
+                    let _ = window.hide();
+                    api.prevent_close();
                 }
-                _ => {}
             }
         })
         .setup(move |app| {
