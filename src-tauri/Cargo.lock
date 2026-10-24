@@ -768,6 +768,7 @@ dependencies = [
  "tauri-plugin-global-shortcut",
  "tauri-plugin-shell",
  "tokio",
+ "windows",
  "zbus",
 ]
 

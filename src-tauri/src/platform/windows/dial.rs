@@ -224,7 +224,7 @@ unsafe extern "system" fn low_level_keyboard_proc(
                 return 1;
             }
             VK_MEDIA_NEXT_TRACK | VK_MEDIA_PREV_TRACK if is_hud_open || is_scroll_mode => {
-                // Orbit-style gesture enhancement:
+                // Gesture:
                 // Double-click (Next Track) or Triple-click (Prev Track) while HUD is open
                 // immediately cancels/dismisses HUD without executing any tool, and swallows
                 // the keys so background media players (Spotify) do NOT skip tracks!
@@ -849,6 +849,25 @@ impl DialBackend for WindowsDial {
 
         // 3. Observe HID Consumer Play/Pause clicks that never reach the keyboard hook
         run_raw_input_click_listener();
+
+        // 4. Become the current media session so earbud Play/Pause/Next/Previous are routed
+        // to us instead of to YouTube / the active player (which would pause itself).
+        crate::platform::windows::smtc::start(|button| match button {
+            crate::platform::windows::smtc::MediaButton::Click => handle_dial_click("smtc"),
+            crate::platform::windows::smtc::MediaButton::Cancel => {
+                if read_flag(&IS_HUD_OPEN_REF) || read_flag(&IS_SCROLL_MODE_REF) {
+                    with_app(|app| {
+                        let state: tauri::State<AppState> = app.state();
+                        if state.is_scroll_mode.load(Ordering::SeqCst) {
+                            crate::do_stop_scroll_mode(&app, &state);
+                        } else {
+                            crate::do_hide_hud(&app, &state);
+                        }
+                    });
+                }
+            }
+            crate::platform::windows::smtc::MediaButton::Ignore => {}
+        });
 
         // 3. Spawn a dedicated thread with a Win32 message pump for the low-level keyboard hook
         thread::spawn(move || unsafe {
