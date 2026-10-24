@@ -8,81 +8,7 @@ use std::sync::mpsc::{channel, Sender};
 use std::sync::Arc;
 use std::thread;
 
-#[repr(C)]
-struct IUnknownVtbl {
-    QueryInterface: *const c_void,
-    AddRef: unsafe extern "system" fn(this: *mut c_void) -> u32,
-    Release: unsafe extern "system" fn(this: *mut c_void) -> u32,
-}
-
-#[repr(C)]
-struct IMMDeviceEnumeratorVtbl {
-    base: IUnknownVtbl,
-    EnumAudioEndpoints: *const c_void,
-    GetDefaultAudioEndpoint: unsafe extern "system" fn(
-        this: *mut c_void,
-        dataFlow: i32,
-        role: i32,
-        ppEndpoint: *mut *mut c_void,
-    ) -> HRESULT,
-    GetDevice: *const c_void,
-    RegisterEndpointNotificationCallback: *const c_void,
-    UnregisterEndpointNotificationCallback: *const c_void,
-}
-
-#[repr(C)]
-struct IMMDeviceVtbl {
-    base: IUnknownVtbl,
-    Activate: unsafe extern "system" fn(
-        this: *mut c_void,
-        iid: *const GUID,
-        dwClsCtx: DWORD,
-        pActivationParams: *mut c_void,
-        ppInterface: *mut *mut c_void,
-    ) -> HRESULT,
-    OpenPropertyStore: *const c_void,
-    GetId: *const c_void,
-    GetState: *const c_void,
-}
-
-#[repr(C)]
-struct IAudioEndpointVolumeVtbl {
-    base: IUnknownVtbl,
-    RegisterControlChangeNotify: *const c_void,
-    UnregisterControlChangeNotify: *const c_void,
-    GetChannelCount: *const c_void,
-    SetMasterVolumeLevel: *const c_void,
-    SetMasterVolumeLevelScalar: unsafe extern "system" fn(
-        this: *mut c_void,
-        fLevel: f32,
-        pguidEventContext: *const GUID,
-    ) -> HRESULT,
-    GetMasterVolumeLevel: *const c_void,
-    GetMasterVolumeLevelScalar: unsafe extern "system" fn(
-        this: *mut c_void,
-        pfLevel: *mut f32,
-    ) -> HRESULT,
-    SetChannelVolumeLevel: *const c_void,
-    SetChannelVolumeLevelScalar: *const c_void,
-    GetChannelVolumeLevel: *const c_void,
-    GetChannelVolumeLevelScalar: *const c_void,
-    SetMute: unsafe extern "system" fn(
-        this: *mut c_void,
-        bMute: BOOL,
-        pguidEventContext: *const GUID,
-    ) -> HRESULT,
-    GetMute: unsafe extern "system" fn(
-        this: *mut c_void,
-        pbMute: *mut BOOL,
-    ) -> HRESULT,
-    GetVolumeStepInfo: *const c_void,
-    VolumeStepUp: *const c_void,
-    VolumeStepDown: *const c_void,
-    QueryHardwareSupport: *const c_void,
-    GetVolumeRange: *const c_void,
-}
-
-unsafe fn with_endpoint_volume<F, R>(f: F) -> Option<R>
+pub unsafe fn with_endpoint_volume<F, R>(f: F) -> Option<R>
 where
     F: FnOnce(*mut *const IAudioEndpointVolumeVtbl) -> Option<R>,
 {
@@ -93,7 +19,7 @@ where
     let hr = CoCreateInstance(
         &CLSID_MMDEVICE_ENUMERATOR,
         null_mut(),
-        23, // CLSCTX_ALL
+        CLSCTX_ALL,
         &IID_IMMDEVICE_ENUMERATOR,
         &mut enumerator as *mut _ as *mut *mut c_void,
     );
@@ -126,7 +52,7 @@ where
     let hr = ((**device).Activate)(
         device as *mut c_void,
         &IID_IAUDIO_ENDPOINT_VOLUME,
-        23,
+        CLSCTX_ALL,
         null_mut(),
         &mut volume as *mut _ as *mut *mut c_void,
     );
@@ -151,7 +77,7 @@ where
     result
 }
 
-fn query_hardware_volume() -> Option<i32> {
+pub fn query_hardware_volume() -> Option<i32> {
     unsafe {
         with_endpoint_volume(|vol| {
             let mut scalar: f32 = 0.0;
@@ -165,11 +91,15 @@ fn query_hardware_volume() -> Option<i32> {
     }
 }
 
-fn set_hardware_volume(pct: i32) -> bool {
+pub fn set_hardware_volume(pct: i32) -> bool {
+    set_hardware_volume_with_context(pct, &DIAL_CONTROL_EVENT_CONTEXT)
+}
+
+pub fn set_hardware_volume_with_context(pct: i32, pguid: *const GUID) -> bool {
     let scalar = (pct as f32 / 100.0).clamp(0.0, 1.0);
     unsafe {
         with_endpoint_volume(|vol| {
-            let hr = ((**vol).SetMasterVolumeLevelScalar)(vol as *mut c_void, scalar, null());
+            let hr = ((**vol).SetMasterVolumeLevelScalar)(vol as *mut c_void, scalar, pguid);
             Some(hr >= 0)
         })
         .unwrap_or(false)

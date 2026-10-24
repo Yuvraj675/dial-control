@@ -80,7 +80,7 @@ The dial automatically detects your active foreground application and adapts its
 
 The Windows port runs with native Win32 and COM integrations designed for maximum responsiveness, security, and hardware compatibility:
 
-- **Earbuds Dial Case Interception**: Uses a Win32 Low-Level Keyboard Hook (`WH_KEYBOARD_LL`). When the HUD is closed, clicking the dial case button (`VK_MEDIA_PLAY_PAUSE`) opens the radial HUD and blocks the default OS playback toggle. While open, rotating navigates slices and clicking confirms selection.
+- **Earbuds Dial Case Interception**: Uses dual-channel Windows Core Audio Endpoint Volume Notifications (`IAudioEndpointVolumeCallback`) for Bluetooth AVRCP rotary turns with zero-latency echo cancellation, plus a Win32 Low-Level Keyboard Hook (`WH_KEYBOARD_LL`) for center clicks and keyboard volume keys. When the HUD is closed, clicking the dial case button opens the radial HUD and swallows playback toggles on both keydown and keyup. While open, rotating navigates slices and clicking confirms selection.
 - **Hardware Master Volume (Zero Desynchronization)**: Directly interfaces with the Windows Core Audio COM API (`IAudioEndpointVolume` and `IMMDeviceEnumerator` via `ole32.dll`). It reads the exact system volume level on startup and sets the hardware master scalar directly without keypress simulation.
 - **Dual-Layer Display Brightness**:
   - **Internal Laptop Screens**: Dual-execution PowerShell script invoking both `(Get-WmiObject -Namespace root/wmi -ClassName WmiMonitorBrightnessMethods).WmiSetBrightness(...)` and `Invoke-CimMethod` with 150ms debouncing and `CREATE_NO_WINDOW`.

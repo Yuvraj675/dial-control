@@ -1,6 +1,7 @@
 use crate::platform::traits::{DialBackend, PlatformProvider};
 use crate::platform::windows::ffi::*;
 use crate::AppState;
+use std::ffi::c_void;
 use std::ptr::null_mut;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
@@ -13,6 +14,7 @@ static IS_SCROLL_MODE_REF: RwLock<Option<Arc<AtomicBool>>> = RwLock::new(None);
 static APP_HANDLE_REF: RwLock<Option<AppHandle>> = RwLock::new(None);
 static HOOK_HANDLE: AtomicUsize = AtomicUsize::new(0);
 static LAST_DIAL_CLICK_TIME: AtomicUsize = AtomicUsize::new(0);
+static LAST_AUDIO_NOTIFY_TIME: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Clone, serde::Serialize)]
 struct RotatePayload {
@@ -22,6 +24,8 @@ struct RotatePayload {
     volume_pct: i32,
 }
 
+// ── Low-Level Keyboard Hook (WH_KEYBOARD_LL) ─────────────────────────────────
+// Catches media play/pause keys from the dial case button and keyboard volume keys.
 unsafe extern "system" fn low_level_keyboard_proc(
     n_code: i32,
     w_param: WPARAM,
@@ -29,7 +33,10 @@ unsafe extern "system" fn low_level_keyboard_proc(
 ) -> LRESULT {
     let hhook = HOOK_HANDLE.load(Ordering::SeqCst) as HHOOK;
 
-    if n_code >= 0 && (w_param == WM_KEYDOWN as usize || w_param == WM_SYSKEYDOWN as usize) {
+    if n_code >= 0 {
+        let is_key_down = w_param == WM_KEYDOWN as usize || w_param == WM_SYSKEYDOWN as usize;
+        let is_key_up = w_param == WM_KEYUP as usize || w_param == WM_SYSKEYUP as usize;
+
         let kbd = *(l_param as *const KBDLLHOOKSTRUCT);
 
         // Passthrough if the input was synthesized by Dial Control itself
@@ -53,155 +60,386 @@ unsafe extern "system" fn low_level_keyboard_proc(
 
         match vk {
             VK_MEDIA_PLAY_PAUSE | VK_PAUSE | VK_MEDIA_STOP => {
-                let now = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_millis() as usize;
-
-                let last = LAST_DIAL_CLICK_TIME.load(Ordering::SeqCst);
-                if now.saturating_sub(last) < 250 {
-                    // Hardware contact debounce: block repeat event
+                // ALWAYS consume KeyUp so media players (Spotify, YouTube, Chrome)
+                // NEVER receive a play/pause toggle when clicking the dial!
+                if is_key_up {
                     return 1;
                 }
-                LAST_DIAL_CLICK_TIME.store(now, Ordering::SeqCst);
 
-                if is_scroll_mode {
-                    println!("[Windows Dial] Intercepted Dial Click -> Exiting Scroll Mode");
-                    if let Ok(guard) = IS_SCROLL_MODE_REF.read() {
-                        if let Some(ref arc) = *guard {
-                            arc.store(false, Ordering::SeqCst);
-                        }
+                if is_key_down {
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_millis() as usize;
+
+                    let last = LAST_DIAL_CLICK_TIME.load(Ordering::SeqCst);
+                    if now.saturating_sub(last) < 250 {
+                        // Hardware contact debounce: block repeat event
+                        return 1;
                     }
-                    if let Ok(guard) = LOCKED_VOL_REF.read() {
-                        if let Some(ref arc) = *guard {
-                            arc.store(-1, Ordering::SeqCst);
+                    LAST_DIAL_CLICK_TIME.store(now, Ordering::SeqCst);
+
+                    if is_scroll_mode {
+                        println!("[Windows Dial] Intercepted Dial Click -> Exiting Scroll Mode");
+                        if let Ok(guard) = IS_SCROLL_MODE_REF.read() {
+                            if let Some(ref arc) = *guard {
+                                arc.store(false, Ordering::SeqCst);
+                            }
                         }
-                    }
-                    if let Ok(guard) = IS_HUD_OPEN_REF.read() {
-                        if let Some(ref arc) = *guard {
-                            arc.store(false, Ordering::SeqCst);
+                        if let Ok(guard) = LOCKED_VOL_REF.read() {
+                            if let Some(ref arc) = *guard {
+                                arc.store(-1, Ordering::SeqCst);
+                            }
                         }
+                        if let Ok(guard) = IS_HUD_OPEN_REF.read() {
+                            if let Some(ref arc) = *guard {
+                                arc.store(false, Ordering::SeqCst);
+                            }
+                        }
+                        if let Ok(guard) = APP_HANDLE_REF.read() {
+                            if let Some(ref app) = *guard {
+                                let app = app.clone();
+                                thread::spawn(move || {
+                                    let state: tauri::State<AppState> = app.state();
+                                    crate::do_stop_scroll_mode(&app, &state);
+                                });
+                            }
+                        }
+                        return 1;
                     }
+
+                    if !is_hud_open {
+                        // 1. Immediately flip atomic flags so consecutive inputs know HUD is active and volume is locked
+                        if let Ok(is_open_guard) = IS_HUD_OPEN_REF.read() {
+                            if let Some(ref is_open) = *is_open_guard {
+                                is_open.store(true, Ordering::SeqCst);
+                            }
+                        }
+                        if let Ok(locked_guard) = LOCKED_VOL_REF.read() {
+                            if let Some(ref locked) = *locked_guard {
+                                locked.store(50, Ordering::SeqCst);
+                            }
+                        }
+
+                        // 2. Grant foreground activation permission to our process
+                        AllowSetForegroundWindow(GetCurrentProcessId());
+
+                        // 3. Offload GUI display to worker thread so the low-level hook returns in <0.01ms
+                        if let Ok(guard) = APP_HANDLE_REF.read() {
+                            if let Some(ref app) = *guard {
+                                let app = app.clone();
+                                thread::spawn(move || {
+                                    println!("[Windows Dial] Intercepted Earbuds Dial Click -> Opening HUD");
+                                    let state: tauri::State<AppState> = app.state();
+                                    crate::do_show_hud(&app, &state);
+                                });
+                            }
+                        }
+                        // Block OS from toggling audio playback
+                        return 1;
+                    } else {
+                        println!("[Windows Dial] Intercepted Earbuds Dial Click -> Confirm selection");
+                        if let Ok(guard) = APP_HANDLE_REF.read() {
+                            if let Some(ref app) = *guard {
+                                let app = app.clone();
+                                thread::spawn(move || {
+                                    let _ = app.emit("dial:click", ());
+                                    if let Some(window) = app.get_webview_window("hud") {
+                                        let _ = window.emit("dial:click", ());
+                                    }
+                                });
+                            }
+                        }
+                        // Block OS from toggling audio playback
+                        return 1;
+                    }
+                }
+            }
+            VK_VOLUME_UP | VK_VOLUME_DOWN if (is_hud_open || is_scroll_mode) => {
+                if is_key_up {
+                    return 1;
+                }
+                if is_key_down {
+                    let dir = if vk == VK_VOLUME_UP { 1 } else { -1 };
+
+                    if is_scroll_mode {
+                        let scroll_delta = if dir > 0 { -1 } else { 1 };
+                        println!("[Windows Dial] Keyboard Scroll Mode -> dir: {}, delta: {}", dir, scroll_delta);
+                        if let Ok(guard) = APP_HANDLE_REF.read() {
+                            if let Some(ref app) = *guard {
+                                let app = app.clone();
+                                thread::spawn(move || {
+                                    let state: tauri::State<AppState> = app.state();
+                                    state.platform.input().emit_scroll(scroll_delta);
+                                    let _ = app.emit("scroll:tick", serde_json::json!({ "direction": dir }));
+                                });
+                            }
+                        }
+                        return 1;
+                    }
+
+                    println!("[Windows Dial] Intercepted Keyboard Volume -> ({})", dir);
+
+                    let locked_val = if let Ok(guard) = LOCKED_VOL_REF.read() {
+                        guard.as_ref().map(|arc| arc.load(Ordering::SeqCst)).unwrap_or(-1)
+                    } else {
+                        -1
+                    };
+
                     if let Ok(guard) = APP_HANDLE_REF.read() {
                         if let Some(ref app) = *guard {
                             let app = app.clone();
                             thread::spawn(move || {
                                 let state: tauri::State<AppState> = app.state();
-                                crate::do_stop_scroll_mode(&app, &state);
-                            });
-                        }
-                    }
-                    return 1;
-                }
 
-                if !is_hud_open {
-                    // 1. Immediately flip atomic flags so consecutive inputs know HUD is active and volume is locked
-                    if let Ok(is_open_guard) = IS_HUD_OPEN_REF.read() {
-                        if let Some(ref is_open) = *is_open_guard {
-                            is_open.store(true, Ordering::SeqCst);
-                        }
-                    }
-                    if let Ok(locked_guard) = LOCKED_VOL_REF.read() {
-                        if let Some(ref locked) = *locked_guard {
-                            // Immediately set to 0 (non-negative) so any instant rotation is locked while do_show_hud starts
-                            locked.store(0, Ordering::SeqCst);
-                        }
-                    }
+                                let target_vol = if locked_val < 0 {
+                                    let current_vol = state.platform.audio().get_volume();
+                                    state.platform.audio().set_volume((current_vol + dir * 2).clamp(0, 100))
+                                } else {
+                                    locked_val
+                                };
 
-                    // 2. Offload GUI display to worker thread so the low-level hook returns in <0.01ms,
-                    // preventing Windows from timing out and silently removing the hook!
-                    if let Ok(guard) = APP_HANDLE_REF.read() {
-                        if let Some(ref app) = *guard {
-                            let app = app.clone();
-                            thread::spawn(move || {
-                                println!("[Windows Dial] Intercepted Earbuds Dial Click -> Opening HUD");
-                                let state: tauri::State<AppState> = app.state();
-                                crate::do_show_hud(&app, &state);
-                            });
-                        }
-                    }
-                    // Block OS from toggling audio playback
-                    return 1;
-                } else {
-                    println!("[Windows Dial] Intercepted Earbuds Dial Click -> Confirm selection");
-                    if let Ok(guard) = APP_HANDLE_REF.read() {
-                        if let Some(ref app) = *guard {
-                            let app = app.clone();
-                            thread::spawn(move || {
-                                let _ = app.emit("dial:click", ());
+                                let payload = RotatePayload {
+                                    direction: dir,
+                                    delta: dir,
+                                    volume: target_vol,
+                                    volume_pct: target_vol,
+                                };
+                                let _ = app.emit("dial:rotate", payload.clone());
                                 if let Some(window) = app.get_webview_window("hud") {
-                                    let _ = window.emit("dial:click", ());
+                                    let _ = window.emit("dial:rotate", payload);
                                 }
                             });
                         }
                     }
-                    // Block OS from toggling audio playback
                     return 1;
                 }
-            }
-            VK_VOLUME_UP | VK_VOLUME_DOWN if (is_hud_open || is_scroll_mode) => {
-                let dir = if vk == VK_VOLUME_UP { 1 } else { -1 };
-
-                if is_scroll_mode {
-                    // Clockwise rotation (dir = 1) -> Scroll DOWN (-1)
-                    // Counterclockwise rotation (dir = -1) -> Scroll UP (1)
-                    let scroll_delta = if dir > 0 { -1 } else { 1 };
-                    println!("[Windows Dial] Scroll Mode Emulation -> dir: {}, delta: {}", dir, scroll_delta);
-                    if let Ok(guard) = APP_HANDLE_REF.read() {
-                        if let Some(ref app) = *guard {
-                            let app = app.clone();
-                            thread::spawn(move || {
-                                let state: tauri::State<AppState> = app.state();
-                                state.platform.input().emit_scroll(scroll_delta);
-                                let _ = app.emit("scroll:tick", serde_json::json!({ "direction": dir }));
-                            });
-                        }
-                    }
-                    return 1;
-                }
-
-                println!("[Windows Dial] Intercepted Dial Rotate -> ({})", dir);
-
-                let locked_val = if let Ok(guard) = LOCKED_VOL_REF.read() {
-                    guard.as_ref().map(|arc| arc.load(Ordering::SeqCst)).unwrap_or(-1)
-                } else {
-                    -1
-                };
-
-                if let Ok(guard) = APP_HANDLE_REF.read() {
-                    if let Some(ref app) = *guard {
-                        let app = app.clone();
-                        thread::spawn(move || {
-                            let state: tauri::State<AppState> = app.state();
-
-                            let target_vol = if locked_val < 0 {
-                                let current_vol = state.platform.audio().get_volume();
-                                state.platform.audio().set_volume((current_vol + dir * 2).clamp(0, 100))
-                            } else {
-                                locked_val
-                            };
-
-                            let payload = RotatePayload {
-                                direction: dir,
-                                delta: dir,
-                                volume: target_vol,
-                                volume_pct: target_vol,
-                            };
-                            let _ = app.emit("dial:rotate", payload.clone());
-                            if let Some(window) = app.get_webview_window("hud") {
-                                let _ = window.emit("dial:rotate", payload);
-                            }
-                        });
-                    }
-                }
-                // Block volume key from default OS beep/volume popup while navigating
-                return 1;
             }
             _ => {}
         }
     }
 
     CallNextHookEx(hhook, n_code, w_param, l_param)
+}
+
+// ── Core Audio Endpoint Volume Callback (IAudioEndpointVolumeCallback) ───────
+// Intercepts Bluetooth AVRCP Absolute Volume rotary turns from the CMF Buds Pro 2 dial.
+#[repr(C)]
+struct VolumeCallback {
+    lp_vtbl: *const IAudioEndpointVolumeCallbackVtbl,
+}
+
+unsafe impl Sync for VolumeCallback {}
+unsafe impl Send for VolumeCallback {}
+
+unsafe extern "system" fn callback_query_interface(
+    this: *mut c_void,
+    riid: *const GUID,
+    ppv: *mut *mut c_void,
+) -> HRESULT {
+    if ppv.is_null() {
+        return -2147467261; // E_POINTER
+    }
+    let guid = *riid;
+    // Match IUnknown (00000000-0000-0000-C000-000000000046) or IAudioEndpointVolumeCallback (657804FA-D6AD-4496-8A60-352752AF4F89)
+    if (guid.data1 == 0 && guid.data2 == 0 && guid.data3 == 0)
+        || (guid.data1 == 0x657804FA && guid.data2 == 0xD6AD && guid.data3 == 0x4496)
+    {
+        *ppv = this;
+        return 0; // S_OK
+    }
+    *ppv = null_mut();
+    -2147467262 // E_NOINTERFACE
+}
+
+unsafe extern "system" fn callback_add_ref(_this: *mut c_void) -> u32 {
+    1
+}
+
+unsafe extern "system" fn callback_release(_this: *mut c_void) -> u32 {
+    1
+}
+
+unsafe extern "system" fn callback_on_notify(
+    _this: *mut c_void,
+    p_notify: *mut AUDIO_VOLUME_NOTIFICATION_DATA,
+) -> HRESULT {
+    if p_notify.is_null() {
+        return 0;
+    }
+    let data = *p_notify;
+
+    // 1. Echo filter: If triggered by Dial Control's own restoration or set_volume, swallow it!
+    if is_same_guid(&data.guidEventContext, &DIAL_CONTROL_EVENT_CONTEXT) {
+        return 0;
+    }
+
+    let is_hud_open = if let Ok(guard) = IS_HUD_OPEN_REF.read() {
+        guard.as_ref().map(|arc| arc.load(Ordering::SeqCst)).unwrap_or(false)
+    } else {
+        false
+    };
+
+    let is_scroll_mode = if let Ok(guard) = IS_SCROLL_MODE_REF.read() {
+        guard.as_ref().map(|arc| arc.load(Ordering::SeqCst)).unwrap_or(false)
+    } else {
+        false
+    };
+
+    let locked_val = if let Ok(guard) = LOCKED_VOL_REF.read() {
+        guard.as_ref().map(|arc| arc.load(Ordering::SeqCst)).unwrap_or(-1)
+    } else {
+        -1
+    };
+
+    // If HUD is active or in scroll mode with locked volume:
+    if (is_hud_open || is_scroll_mode) && locked_val >= 0 {
+        let new_pct = (data.fMasterVolume * 100.0).round() as i32;
+
+        if new_pct != locked_val {
+            let dir = if new_pct > locked_val { 1 } else { -1 };
+
+            // Microsecond debounce to prevent multiple hardware AVRCP packet bursts
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as usize;
+            let last = LAST_AUDIO_NOTIFY_TIME.load(Ordering::SeqCst);
+            if now.saturating_sub(last) < 40 {
+                // Restore volume and return
+                crate::platform::windows::audio::set_hardware_volume_with_context(
+                    locked_val,
+                    &DIAL_CONTROL_EVENT_CONTEXT,
+                );
+                return 0;
+            }
+            LAST_AUDIO_NOTIFY_TIME.store(now, Ordering::SeqCst);
+
+            println!(
+                "[Windows Dial] Bluetooth AVRCP dial turn detected: {}% (locked: {}%) -> dir: {}",
+                new_pct, locked_val, dir
+            );
+
+            // Snap volume immediately back to locked_val with DIAL_CONTROL_EVENT_CONTEXT so echo is swallowed!
+            crate::platform::windows::audio::set_hardware_volume_with_context(
+                locked_val,
+                &DIAL_CONTROL_EVENT_CONTEXT,
+            );
+
+            if let Ok(guard) = APP_HANDLE_REF.read() {
+                if let Some(ref app) = *guard {
+                    let app = app.clone();
+                    thread::spawn(move || {
+                        let state: tauri::State<AppState> = app.state();
+
+                        if is_scroll_mode {
+                            let scroll_delta = if dir > 0 { -1 } else { 1 };
+                            state.platform.input().emit_scroll(scroll_delta);
+                            let _ = app.emit("scroll:tick", serde_json::json!({ "direction": dir }));
+                        } else if is_hud_open {
+                            let payload = RotatePayload {
+                                direction: dir,
+                                delta: dir,
+                                volume: locked_val,
+                                volume_pct: locked_val,
+                            };
+                            let _ = app.emit("dial:rotate", payload.clone());
+                            if let Some(window) = app.get_webview_window("hud") {
+                                let _ = window.emit("dial:rotate", payload);
+                            }
+                        }
+                    });
+                }
+            }
+        }
+    }
+
+    0
+}
+
+static VOLUME_CALLBACK_VTBL: IAudioEndpointVolumeCallbackVtbl = IAudioEndpointVolumeCallbackVtbl {
+    QueryInterface: callback_query_interface,
+    AddRef: callback_add_ref,
+    Release: callback_release,
+    OnNotify: callback_on_notify,
+};
+
+static VOLUME_CALLBACK_INSTANCE: VolumeCallback = VolumeCallback {
+    lp_vtbl: &VOLUME_CALLBACK_VTBL,
+};
+
+fn run_coreaudio_volume_listener() {
+    thread::spawn(move || unsafe {
+        let _ = CoInitializeEx(null_mut(), 0); // COINIT_APARTMENTTHREADED
+
+        loop {
+            let mut enumerator: *mut *const IMMDeviceEnumeratorVtbl = null_mut();
+            let hr = CoCreateInstance(
+                &CLSID_MMDEVICE_ENUMERATOR,
+                null_mut(),
+                CLSCTX_ALL,
+                &IID_IMMDEVICE_ENUMERATOR,
+                &mut enumerator as *mut _ as *mut *mut c_void,
+            );
+            if hr < 0 || enumerator.is_null() {
+                thread::sleep(std::time::Duration::from_millis(2000));
+                continue;
+            }
+
+            let mut device: *mut *const IMMDeviceVtbl = null_mut();
+            let hr = ((**enumerator).GetDefaultAudioEndpoint)(
+                enumerator as *mut c_void,
+                0, // eRender
+                1, // eMultimedia
+                &mut device as *mut _ as *mut *mut c_void,
+            );
+            if hr < 0 || device.is_null() {
+                ((**enumerator).base.Release)(enumerator as *mut c_void);
+                thread::sleep(std::time::Duration::from_millis(2000));
+                continue;
+            }
+
+            let mut volume: *mut *const IAudioEndpointVolumeVtbl = null_mut();
+            let hr = ((**device).Activate)(
+                device as *mut c_void,
+                &IID_IAUDIO_ENDPOINT_VOLUME,
+                CLSCTX_ALL,
+                null_mut(),
+                &mut volume as *mut _ as *mut *mut c_void,
+            );
+            ((**device).base.Release)(device as *mut c_void);
+
+            if hr < 0 || volume.is_null() {
+                ((**enumerator).base.Release)(enumerator as *mut c_void);
+                thread::sleep(std::time::Duration::from_millis(2000));
+                continue;
+            }
+
+            let reg_hr = ((**volume).RegisterControlChangeNotify)(
+                volume as *mut c_void,
+                &VOLUME_CALLBACK_INSTANCE as *const _ as *mut c_void,
+            );
+            if reg_hr >= 0 {
+                println!("[Windows Dial] Registered Core Audio endpoint volume callback for rotary dial.");
+            }
+
+            // Message pump for the STA thread to receive COM callbacks
+            let mut msg: MSG = std::mem::zeroed();
+            while GetMessageW(&mut msg, null_mut(), 0, 0) > 0 {
+                TranslateMessage(&msg);
+                DispatchMessageW(&msg);
+            }
+
+            let _ = ((**volume).UnregisterControlChangeNotify)(
+                volume as *mut c_void,
+                &VOLUME_CALLBACK_INSTANCE as *const _ as *mut c_void,
+            );
+            ((**volume).base.Release)(volume as *mut c_void);
+            ((**enumerator).base.Release)(enumerator as *mut c_void);
+
+            thread::sleep(std::time::Duration::from_millis(1000));
+        }
+    });
 }
 
 pub struct WindowsDial;
@@ -233,7 +471,10 @@ impl DialBackend for WindowsDial {
             *guard = Some(app);
         }
 
-        // Spawn a dedicated thread with a Win32 message pump for the low-level hook
+        // 1. Start CoreAudio endpoint volume callback listener for Bluetooth AVRCP dial rotation
+        run_coreaudio_volume_listener();
+
+        // 2. Spawn a dedicated thread with a Win32 message pump for the low-level keyboard hook
         thread::spawn(move || unsafe {
             let h_instance = GetModuleHandleW(null_mut());
             let hook = SetWindowsHookExW(
