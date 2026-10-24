@@ -1,19 +1,19 @@
 use crate::platform::traits::{DialBackend, PlatformProvider};
-use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
-use std::sync::{Arc, RwLock};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicUsize, Ordering};
+use std::sync::{Arc, OnceLock};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager};
 
 #[cfg(target_os = "macos")]
 use super::ffi::*;
 
-static IS_HUD_OPEN_REF: RwLock<Option<Arc<AtomicBool>>> = RwLock::new(None);
-static LOCKED_VOL_REF: RwLock<Option<Arc<AtomicI32>>> = RwLock::new(None);
-static IS_SCROLL_MODE_REF: RwLock<Option<Arc<AtomicBool>>> = RwLock::new(None);
-static APP_HANDLE_REF: RwLock<Option<AppHandle>> = RwLock::new(None);
-static LAST_CLICK_TIME: RwLock<Option<Instant>> = RwLock::new(None);
-static TAP_PORT_REF: RwLock<Option<usize>> = RwLock::new(None);
+static IS_HUD_OPEN_REF: OnceLock<Arc<AtomicBool>> = OnceLock::new();
+static LOCKED_VOL_REF: OnceLock<Arc<AtomicI32>> = OnceLock::new();
+static IS_SCROLL_MODE_REF: OnceLock<Arc<AtomicBool>> = OnceLock::new();
+static APP_HANDLE_REF: OnceLock<AppHandle> = OnceLock::new();
+static LAST_CLICK_TIME_MS: AtomicUsize = AtomicUsize::new(0);
+static TAP_PORT_REF: AtomicUsize = AtomicUsize::new(0);
 
 pub struct MacDial;
 
@@ -30,11 +30,10 @@ impl MacDial {
         _user_info: *mut std::ffi::c_void,
     ) -> CGEventRef {
         if event_type == kCGEventTapDisabledByTimeout {
-            if let Ok(guard) = TAP_PORT_REF.read() {
-                if let Some(port_addr) = *guard {
-                    CGEventTapEnable(port_addr as CFMachPortRef, true);
-                    println!("[macOS Dial] Auto re-enabled CGEventTap after timeout.");
-                }
+            let port_addr = TAP_PORT_REF.load(Ordering::SeqCst);
+            if port_addr != 0 {
+                CGEventTapEnable(port_addr as CFMachPortRef, true);
+                println!("[macOS Dial] Auto re-enabled CGEventTap after timeout.");
             }
             return event;
         }
@@ -88,59 +87,87 @@ impl MacDial {
                 let key_flags = (data1 & 0x0000FF00) >> 8;
                 let is_key_down = (key_flags & 0xFF) == 0x0A || (key_flags & 0x01) != 0;
 
-                let is_scroll = if let Ok(guard) = IS_SCROLL_MODE_REF.read() {
-                    guard.as_ref().map(|arc| arc.load(Ordering::SeqCst)).unwrap_or(false)
-                } else {
-                    false
-                };
+                let is_scroll = IS_SCROLL_MODE_REF
+                    .get()
+                    .map(|arc| arc.load(Ordering::SeqCst))
+                    .unwrap_or(false);
 
-                let is_hud_open = if let Ok(guard) = IS_HUD_OPEN_REF.read() {
-                    guard.as_ref().map(|arc| arc.load(Ordering::SeqCst)).unwrap_or(false)
-                } else {
-                    false
-                };
+                let is_hud_open = IS_HUD_OPEN_REF
+                    .get()
+                    .map(|arc| arc.load(Ordering::SeqCst))
+                    .unwrap_or(false);
 
-                let locked_val = if let Ok(guard) = LOCKED_VOL_REF.read() {
-                    guard.as_ref().map(|arc| arc.load(Ordering::SeqCst)).unwrap_or(-1)
-                } else {
-                    -1
-                };
+                let locked_val = LOCKED_VOL_REF
+                    .get()
+                    .map(|arc| arc.load(Ordering::SeqCst))
+                    .unwrap_or(-1);
 
                 // 1. Center Click / Media Play-Pause Key
                 if key_type == NX_KEYTYPE_PLAY {
                     if is_key_down {
-                        let now = Instant::now();
-                        let mut can_click = false;
-                        if let Ok(mut guard) = LAST_CLICK_TIME.write() {
-                            let last = guard.unwrap_or(now - Duration::from_secs(1));
-                            if now.duration_since(last) > Duration::from_millis(500) {
-                                *guard = Some(now);
-                                can_click = true;
+                        let now = SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_millis() as usize;
+
+                        let last = LAST_CLICK_TIME_MS.load(Ordering::SeqCst);
+                        if now.saturating_sub(last) < 250 {
+                            return std::ptr::null_mut();
+                        }
+                        LAST_CLICK_TIME_MS.store(now, Ordering::SeqCst);
+
+                        if is_scroll {
+                            println!(">> [macOS NATIVE DIAL CLICK] -> Exiting Scroll Mode");
+                            if let Some(arc) = IS_SCROLL_MODE_REF.get() {
+                                arc.store(false, Ordering::SeqCst);
                             }
+                            if let Some(arc) = LOCKED_VOL_REF.get() {
+                                arc.store(-1, Ordering::SeqCst);
+                            }
+                            if let Some(arc) = IS_HUD_OPEN_REF.get() {
+                                arc.store(false, Ordering::SeqCst);
+                            }
+                            if let Some(app) = APP_HANDLE_REF.get() {
+                                let app_clone = app.clone();
+                                thread::spawn(move || {
+                                    let state: tauri::State<crate::AppState> = app_clone.state();
+                                    crate::do_stop_scroll_mode(&app_clone, &state);
+                                });
+                            }
+                            return std::ptr::null_mut();
                         }
 
-                        if can_click {
-                            if let Ok(guard) = APP_HANDLE_REF.read() {
-                                if let Some(ref app) = *guard {
-                                    let app_clone = app.clone();
-                                    thread::spawn(move || {
-                                        let state: tauri::State<crate::AppState> = app_clone.state();
-                                        if is_scroll {
-                                            println!(">> [macOS NATIVE DIAL CLICK] -> Exiting Scroll Mode");
-                                            crate::do_stop_scroll_mode(&app_clone, &state);
-                                        } else if !is_hud_open {
-                                            println!(">> [macOS NATIVE DIAL CLICK] -> Opening HUD");
-                                            crate::do_show_hud(&app_clone, &state);
-                                        } else {
-                                            println!(">> [macOS NATIVE DIAL CLICK] -> Dispatched action select to HUD");
-                                            let _ = app_clone.emit("dial:click", ());
-                                            if let Some(window) = app_clone.get_webview_window("hud") {
-                                                let _ = window.emit("dial:click", ());
-                                            }
-                                        }
-                                    });
-                                }
+                        if !is_hud_open {
+                            println!(">> [macOS NATIVE DIAL CLICK] -> Opening HUD");
+                            // Synchronously lock volume and set open flag so incoming rotation ticks
+                            // are immediately intercepted while do_show_hud starts up!
+                            if let Some(arc) = IS_HUD_OPEN_REF.get() {
+                                arc.store(true, Ordering::SeqCst);
                             }
+                            if let Some(arc) = LOCKED_VOL_REF.get() {
+                                arc.store(50, Ordering::SeqCst);
+                            }
+
+                            if let Some(app) = APP_HANDLE_REF.get() {
+                                let app_clone = app.clone();
+                                thread::spawn(move || {
+                                    let state: tauri::State<crate::AppState> = app_clone.state();
+                                    crate::do_show_hud(&app_clone, &state);
+                                });
+                            }
+                            return std::ptr::null_mut();
+                        } else {
+                            println!(">> [macOS NATIVE DIAL CLICK] -> Dispatched action select to HUD");
+                            if let Some(app) = APP_HANDLE_REF.get() {
+                                let app_clone = app.clone();
+                                thread::spawn(move || {
+                                    let _ = app_clone.emit("dial:click", ());
+                                    if let Some(window) = app_clone.get_webview_window("hud") {
+                                        let _ = window.emit("dial:click", ());
+                                    }
+                                });
+                            }
+                            return std::ptr::null_mut();
                         }
                     }
 
@@ -155,15 +182,13 @@ impl MacDial {
                     if is_scroll {
                         if is_key_down {
                             let scroll_delta = if dir > 0 { -1 } else { 1 };
-                            if let Ok(guard) = APP_HANDLE_REF.read() {
-                                if let Some(ref app) = *guard {
-                                    let app_clone = app.clone();
-                                    thread::spawn(move || {
-                                        let state: tauri::State<crate::AppState> = app_clone.state();
-                                        state.platform.input().emit_scroll(scroll_delta);
-                                        let _ = app_clone.emit("scroll:tick", serde_json::json!({ "direction": dir }));
-                                    });
-                                }
+                            if let Some(app) = APP_HANDLE_REF.get() {
+                                let app_clone = app.clone();
+                                thread::spawn(move || {
+                                    let state: tauri::State<crate::AppState> = app_clone.state();
+                                    state.platform.input().emit_scroll(scroll_delta);
+                                    let _ = app_clone.emit("scroll:tick", serde_json::json!({ "direction": dir }));
+                                });
                             }
                         }
                         // Drop event (both down and up): prevent OS volume change
@@ -172,38 +197,34 @@ impl MacDial {
 
                     if is_hud_open {
                         if is_key_down {
-                            if let Ok(guard) = APP_HANDLE_REF.read() {
-                                if let Some(ref app) = *guard {
-                                    let app_clone = app.clone();
-                                    thread::spawn(move || {
-                                        let state: tauri::State<crate::AppState> = app_clone.state();
+                            if let Some(app) = APP_HANDLE_REF.get() {
+                                let app_clone = app.clone();
+                                thread::spawn(move || {
+                                    let state: tauri::State<crate::AppState> = app_clone.state();
+
+                                    let target_vol = if locked_val < 0 {
                                         let current_vol = state.platform.audio().get_volume();
+                                        state.platform.audio().set_volume((current_vol + dir * 2).clamp(0, 100))
+                                    } else {
+                                        locked_val
+                                    };
 
-                                        let target_vol = if locked_val < 0 {
-                                            state.platform.audio().set_volume((current_vol + dir * 2).clamp(0, 100))
-                                        } else {
-                                            current_vol
-                                        };
-
-                                        let payload = serde_json::json!({
-                                            "direction": dir,
-                                            "delta": dir,
-                                            "volume": target_vol,
-                                            "volume_pct": target_vol,
-                                        });
-                                        let _ = app_clone.emit("dial:rotate", payload.clone());
-                                        if let Some(window) = app_clone.get_webview_window("hud") {
-                                            let _ = window.emit("dial:rotate", payload);
-                                        }
+                                    let payload = serde_json::json!({
+                                        "direction": dir,
+                                        "delta": dir,
+                                        "volume": target_vol,
+                                        "volume_pct": target_vol,
                                     });
-                                }
+                                    let _ = app_clone.emit("dial:rotate", payload.clone());
+                                    if let Some(window) = app_clone.get_webview_window("hud") {
+                                        let _ = window.emit("dial:rotate", payload);
+                                    }
+                                });
                             }
                         }
 
-                        // If volume is locked, return null to consume key event completely!
-                        if locked_val >= 0 {
-                            return std::ptr::null_mut();
-                        }
+                        // Always drop volume event while HUD is open so macOS doesn't alter system volume or show volume HUD
+                        return std::ptr::null_mut();
                     }
                 }
             }
@@ -221,18 +242,10 @@ impl DialBackend for MacDial {
         locked_vol: Arc<AtomicI32>,
         is_scroll_mode: Arc<AtomicBool>,
     ) {
-        if let Ok(mut guard) = IS_HUD_OPEN_REF.write() {
-            *guard = Some(is_hud_open);
-        }
-        if let Ok(mut guard) = LOCKED_VOL_REF.write() {
-            *guard = Some(locked_vol);
-        }
-        if let Ok(mut guard) = IS_SCROLL_MODE_REF.write() {
-            *guard = Some(is_scroll_mode);
-        }
-        if let Ok(mut guard) = APP_HANDLE_REF.write() {
-            *guard = Some(app);
-        }
+        let _ = IS_HUD_OPEN_REF.set(is_hud_open);
+        let _ = LOCKED_VOL_REF.set(locked_vol);
+        let _ = IS_SCROLL_MODE_REF.set(is_scroll_mode);
+        let _ = APP_HANDLE_REF.set(app);
 
         #[cfg(target_os = "macos")]
         thread::spawn(move || unsafe {
@@ -263,9 +276,7 @@ impl DialBackend for MacDial {
                 return;
             }
 
-            if let Ok(mut guard) = TAP_PORT_REF.write() {
-                *guard = Some(port as usize);
-            }
+            TAP_PORT_REF.store(port as usize, Ordering::SeqCst);
 
             println!("[+] macOS CGEventTap for rotary dial & media keys initialized successfully.");
 
