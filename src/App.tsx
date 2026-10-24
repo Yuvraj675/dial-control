@@ -259,6 +259,7 @@ export function App() {
   };
 
   const lastDialClickRef = useRef<number>(0);
+  const hasRotatedRef = useRef<boolean>(false);
 
   // Tauri Event Listeners (Hardware Dial & Context Detection) - Strictly HUD window
   useEffect(() => {
@@ -271,6 +272,7 @@ export function App() {
       const unlistenRotate = await listen<{ direction: number; delta: number; volume?: number; volume_pct?: number }>("dial:rotate", (event) => {
         const { currentMode, actionsCount, isHudOpen } = stateRef.current;
         if (!isHudOpen) return;
+        hasRotatedRef.current = true;
         const dir = event.payload.direction ?? event.payload.delta ?? 1;
 
         if (currentMode === "menu") {
@@ -323,6 +325,17 @@ export function App() {
               invoke("set_mode", { mode: "menu" }).catch(console.error);
               invoke("hide_hud").catch(console.error);
             }
+          }
+          return;
+        }
+
+        // If the user clicked the dial without rotating, treat it as a toggle dismiss!
+        if (!hasRotatedRef.current) {
+          console.log("[Dial Click] Clicked without rotating -> Toggling HUD closed");
+          setCurrentMode("menu");
+          setIsHudOpen(false);
+          if (isTauri) {
+            invoke("hide_hud").catch(console.error);
           }
           return;
         }
@@ -381,6 +394,7 @@ export function App() {
         setIsHudOpen(event.payload);
         stateRef.current.isHudOpen = event.payload;
         if (event.payload) {
+          hasRotatedRef.current = false;
           setCurrentMode("menu");
           setSelectedIndex(0);
           stateRef.current.currentMode = "menu";
@@ -456,6 +470,7 @@ export function App() {
         stateRef.current.isHudOpen = false;
       } else if (e.key === "ArrowRight" || e.key === "ArrowDown") {
         e.preventDefault();
+        hasRotatedRef.current = true;
         if (currentMode === "menu") {
           setSelectedIndex((prev) => {
             const next = (prev + 1) % actionsCount;
@@ -487,6 +502,7 @@ export function App() {
         }
       } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
         e.preventDefault();
+        hasRotatedRef.current = true;
         if (currentMode === "menu") {
           setSelectedIndex((prev) => {
             const next = (prev - 1 + actionsCount) % actionsCount;
@@ -541,6 +557,7 @@ export function App() {
     };
 
     const handleWheel = (e: WheelEvent) => {
+      hasRotatedRef.current = true;
       const { currentMode, actionsCount } = stateRef.current;
       if (currentMode === "scroll") {
         if (isTauri) {
