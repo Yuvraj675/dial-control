@@ -1,13 +1,15 @@
 pub mod platform;
 
 use platform::{Platform, PlatformProvider};
-use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicUsize, Ordering};
 use std::sync::Arc;
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::TrayIconBuilder,
     AppHandle, Emitter, Manager,
 };
+
+static LAST_HUD_SHOWN_TIME: AtomicUsize = AtomicUsize::new(0);
 
 pub struct AppState {
     pub platform: Arc<Platform>,
@@ -147,8 +149,20 @@ fn close_hud_for_scroll(app: AppHandle, state: tauri::State<AppState>) {
 pub(crate) fn do_show_hud(app: &AppHandle, state: &AppState) {
     let curr_vol = state.platform.audio().get_volume();
 
+    // Guarantee headroom for rotary turns in both directions (CW & CCW)
+    let locked_vol = curr_vol.clamp(6, 94);
+    if locked_vol != curr_vol {
+        state.platform.audio().set_volume(locked_vol);
+    }
+
     state.is_hud_open.store(true, Ordering::SeqCst);
-    state.locked_vol.store(curr_vol, Ordering::SeqCst);
+    state.locked_vol.store(locked_vol, Ordering::SeqCst);
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as usize;
+    LAST_HUD_SHOWN_TIME.store(now, Ordering::SeqCst);
 
     if let Some(window) = app.get_webview_window("hud") {
         // Guarantee HUD window is centered on screen every time it is shown
@@ -183,6 +197,7 @@ pub(crate) fn do_show_hud(app: &AppHandle, state: &AppState) {
             if let Ok(hwnd) = window.hwnd() {
                 let hwnd = hwnd.0 as HWND;
                 unsafe {
+                    AllowSetForegroundWindow(GetCurrentProcessId());
                     ShowWindow(hwnd, SW_RESTORE);
                     SetForegroundWindow(hwnd);
                     SetWindowPos(
@@ -205,7 +220,7 @@ pub(crate) fn do_show_hud(app: &AppHandle, state: &AppState) {
     let _ = app.emit(
         "sync:state",
         serde_json::json!({
-            "volume": curr_vol,
+            "volume": locked_vol,
         }),
     );
 }
@@ -614,18 +629,39 @@ pub fn run() {
         )
         .manage(app_state)
         .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                let state: tauri::State<AppState> = window.state();
-                if state.is_recording_shortcut.load(Ordering::SeqCst) {
-                    println!("[Window] CloseRequested suppressed because shortcut recording is in progress");
-                    api.prevent_close();
-                    let _ = window.emit("recording:system_close_pressed", ());
-                    return;
+            match event {
+                tauri::WindowEvent::CloseRequested { api, .. } => {
+                    let state: tauri::State<AppState> = window.state();
+                    if state.is_recording_shortcut.load(Ordering::SeqCst) {
+                        println!("[Window] CloseRequested suppressed because shortcut recording is in progress");
+                        api.prevent_close();
+                        let _ = window.emit("recording:system_close_pressed", ());
+                        return;
+                    }
+                    if window.label() == "settings" || window.label() == "hud" {
+                        let _ = window.hide();
+                        api.prevent_close();
+                    }
                 }
-                if window.label() == "settings" || window.label() == "hud" {
-                    let _ = window.hide();
-                    api.prevent_close();
+                tauri::WindowEvent::Focused(false) => {
+                    if window.label() == "hud" {
+                        let now = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_millis() as usize;
+                        let shown_time = LAST_HUD_SHOWN_TIME.load(Ordering::SeqCst);
+                        // 400ms grace period so initial presentation focus transition does not auto-dismiss
+                        if now.saturating_sub(shown_time) > 400 {
+                            let app = window.app_handle().clone();
+                            let state: tauri::State<AppState> = app.state();
+                            if !state.is_scroll_mode.load(Ordering::SeqCst) && state.is_hud_open.load(Ordering::SeqCst) {
+                                println!("[Window] HUD lost focus -> auto-dismissing");
+                                hide_hud(app.clone(), state);
+                            }
+                        }
+                    }
                 }
+                _ => {}
             }
         })
         .setup(move |app| {

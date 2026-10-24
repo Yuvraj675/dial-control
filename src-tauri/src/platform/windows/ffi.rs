@@ -144,14 +144,23 @@ pub type HDC = *mut c_void;
 
 pub const SYNTHETIC_INPUT_TAG: usize = 0x4449414C; // "DIAL" in ASCII
 pub const SW_RESTORE: i32 = 9;
+pub const ASFW_ANY: DWORD = 0xFFFFFFFF;
+pub const CLSCTX_INPROC_SERVER: DWORD = 0x1;
+pub const CLSCTX_INPROC_HANDLER: DWORD = 0x2;
+pub const CLSCTX_LOCAL_SERVER: DWORD = 0x4;
+pub const CLSCTX_ALL: DWORD = CLSCTX_INPROC_SERVER | CLSCTX_INPROC_HANDLER | CLSCTX_LOCAL_SERVER; // 23
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct GUID {
     pub data1: u32,
     pub data2: u16,
     pub data3: u16,
     pub data4: [u8; 8],
+}
+
+pub fn is_same_guid(a: &GUID, b: &GUID) -> bool {
+    a.data1 == b.data1 && a.data2 == b.data2 && a.data3 == b.data3 && a.data4 == b.data4
 }
 
 pub const CLSID_MMDEVICE_ENUMERATOR: GUID = GUID {
@@ -175,6 +184,125 @@ pub const IID_IAUDIO_ENDPOINT_VOLUME: GUID = GUID {
     data4: [0x97, 0x22, 0x0C, 0xF7, 0x40, 0x78, 0x22, 0x9A],
 };
 
+pub const IID_IAUDIO_ENDPOINT_VOLUME_CALLBACK: GUID = GUID {
+    data1: 0x657804FA,
+    data2: 0xD6AD,
+    data3: 0x4496,
+    data4: [0x8A, 0x60, 0x35, 0x27, 0x52, 0xAF, 0x4F, 0x89],
+};
+
+pub const DIAL_CONTROL_EVENT_CONTEXT: GUID = GUID {
+    data1: 0x4449414C, // "DIAL"
+    data2: 0x4354,     // "CT"
+    data3: 0x524C,     // "RL"
+    data4: [0x45, 0x56, 0x45, 0x4E, 0x54, 0x43, 0x54, 0x58], // "EVENTCTX"
+};
+
+#[repr(C)]
+pub struct IUnknownVtbl {
+    pub QueryInterface: unsafe extern "system" fn(this: *mut c_void, riid: *const GUID, ppvObject: *mut *mut c_void) -> HRESULT,
+    pub AddRef: unsafe extern "system" fn(this: *mut c_void) -> u32,
+    pub Release: unsafe extern "system" fn(this: *mut c_void) -> u32,
+}
+
+#[repr(C)]
+pub struct IMMDeviceEnumeratorVtbl {
+    pub base: IUnknownVtbl,
+    pub EnumAudioEndpoints: *const c_void,
+    pub GetDefaultAudioEndpoint: unsafe extern "system" fn(
+        this: *mut c_void,
+        dataFlow: i32,
+        role: i32,
+        ppEndpoint: *mut *mut c_void,
+    ) -> HRESULT,
+    pub GetDevice: *const c_void,
+    pub RegisterEndpointNotificationCallback: *const c_void,
+    pub UnregisterEndpointNotificationCallback: *const c_void,
+}
+
+#[repr(C)]
+pub struct IMMDeviceVtbl {
+    pub base: IUnknownVtbl,
+    pub Activate: unsafe extern "system" fn(
+        this: *mut c_void,
+        iid: *const GUID,
+        dwClsCtx: DWORD,
+        pActivationParams: *mut c_void,
+        ppInterface: *mut *mut c_void,
+    ) -> HRESULT,
+    pub OpenPropertyStore: *const c_void,
+    pub GetId: *const c_void,
+    pub GetState: *const c_void,
+}
+
+#[repr(C)]
+pub struct IAudioEndpointVolumeVtbl {
+    pub base: IUnknownVtbl,
+    pub RegisterControlChangeNotify: unsafe extern "system" fn(
+        this: *mut c_void,
+        pNotify: *mut c_void,
+    ) -> HRESULT,
+    pub UnregisterControlChangeNotify: unsafe extern "system" fn(
+        this: *mut c_void,
+        pNotify: *mut c_void,
+    ) -> HRESULT,
+    pub GetChannelCount: *const c_void,
+    pub SetMasterVolumeLevel: *const c_void,
+    pub SetMasterVolumeLevelScalar: unsafe extern "system" fn(
+        this: *mut c_void,
+        fLevel: f32,
+        pguidEventContext: *const GUID,
+    ) -> HRESULT,
+    pub GetMasterVolumeLevel: *const c_void,
+    pub GetMasterVolumeLevelScalar: unsafe extern "system" fn(
+        this: *mut c_void,
+        pfLevel: *mut f32,
+    ) -> HRESULT,
+    pub SetChannelVolumeLevel: *const c_void,
+    pub SetChannelVolumeLevelScalar: *const c_void,
+    pub GetChannelVolumeLevel: *const c_void,
+    pub GetChannelVolumeLevelScalar: *const c_void,
+    pub SetMute: unsafe extern "system" fn(
+        this: *mut c_void,
+        bMute: BOOL,
+        pguidEventContext: *const GUID,
+    ) -> HRESULT,
+    pub GetMute: unsafe extern "system" fn(
+        this: *mut c_void,
+        pbMute: *mut BOOL,
+    ) -> HRESULT,
+    pub GetVolumeStepInfo: *const c_void,
+    pub VolumeStepUp: *const c_void,
+    pub VolumeStepDown: *const c_void,
+    pub QueryHardwareSupport: *const c_void,
+    pub GetVolumeRange: *const c_void,
+}
+
+#[repr(C)]
+pub struct IAudioEndpointVolumeCallbackVtbl {
+    pub QueryInterface: unsafe extern "system" fn(
+        this: *mut c_void,
+        riid: *const GUID,
+        ppvObject: *mut *mut c_void,
+    ) -> HRESULT,
+    pub AddRef: unsafe extern "system" fn(this: *mut c_void) -> u32,
+    pub Release: unsafe extern "system" fn(this: *mut c_void) -> u32,
+    pub OnNotify: unsafe extern "system" fn(
+        this: *mut c_void,
+        pNotify: *mut AUDIO_VOLUME_NOTIFICATION_DATA,
+    ) -> HRESULT,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct AUDIO_VOLUME_NOTIFICATION_DATA {
+    pub guidEventContext: GUID,
+    pub bMuted: BOOL,
+    pub fMasterVolume: f32,
+    pub nChannels: u32,
+    pub afChannelVolumes: [f32; 1],
+}
+
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct PHYSICAL_MONITOR {
@@ -188,6 +316,7 @@ pub type MONITORENUMPROC = Option<unsafe extern "system" fn(hMonitor: HMONITOR, 
 extern "system" {
     pub fn GetForegroundWindow() -> HWND;
     pub fn SetForegroundWindow(hWnd: HWND) -> BOOL;
+    pub fn AllowSetForegroundWindow(dwProcessId: DWORD) -> BOOL;
     pub fn GetWindowLongW(hWnd: HWND, nIndex: i32) -> i32;
     pub fn SetWindowLongW(hWnd: HWND, nIndex: i32, dwNewLong: i32) -> i32;
     pub fn SetWindowPos(

@@ -99,7 +99,7 @@ dial-control/
 | **System Brightness** | `SystemBrightness` | WMI (`WmiMonitorBrightness`) | Mutter D-Bus `GetResources` / `/sys/class/backlight` | DisplayServices (`DisplayServicesSetBrightness`) |
 | **Active Context** | `ContextDetector` | Win32 `GetForegroundWindow` | GNOME Shell D-Bus extension / `_NET_ACTIVE_WINDOW` | Cocoa `NSWorkspace` + AppleScript |
 | **Virtual Input** | `VirtualInput` | Win32 `SendInput` | Kernel `/dev/uinput` (`evdev`) | `CGEventPost` (`CGEventCreateScrollWheelEvent2`) |
-| **Dial Interception** | `DialBackend` | Low-level hook (`WH_KEYBOARD_LL`) | BlueZ `MediaTransport1` + `evdev` exclusive grab | CoreGraphics Event Tap (`kCGHIDEventTap` on `NX_SYSDEFINED`) |
+| **Dial Interception** | `DialBackend` | Core Audio `IAudioEndpointVolumeCallback` (AVRCP) + Low-level hook (`WH_KEYBOARD_LL`) | BlueZ `MediaTransport1` + `evdev` exclusive grab | CoreGraphics Event Tap (`kCGHIDEventTap` on `NX_SYSDEFINED`) |
 
 ---
 
@@ -139,30 +139,30 @@ The CMF Buds Pro 2 rotary dial and smart case have **no proprietary Bluetooth pr
      - Only movements *away* from baseline in the active direction generate user actions.
 
 #### Windows Backend (`src-tauri/src/platform/windows/dial.rs`)
-- Uses a low-level keyboard hook (`WH_KEYBOARD_LL`) in a dedicated message pump thread.
+- **Dual-Channel Interception Architecture**:
+  1. **Core Audio Endpoint Volume Callback (`IAudioEndpointVolumeCallback`)**:
+     - The CMF Buds Pro 2 rotary dial uses Bluetooth AVRCP Absolute Volume. Windows handles these at the audio driver level without posting `VK_VOLUME_UP`/`VK_VOLUME_DOWN` keyboard messages!
+     - Dial Control registers an `IAudioEndpointVolumeCallback` on the default audio endpoint (`IMMDeviceEnumerator` -> `GetDefaultAudioEndpoint` -> `RegisterControlChangeNotify`) in an STA message loop thread.
+     - When the dial is rotated, `OnNotify` detects the volume change, determines direction (CW vs CCW), snaps the volume immediately back to baseline using `SetMasterVolumeLevelScalar(..., baseline, &DIAL_CONTROL_EVENT_CONTEXT)`, and dispatches `dial:rotate` or `scroll:tick`.
+     - **Echo Filter**: When `OnNotify` receives an event with `guidEventContext == DIAL_CONTROL_EVENT_CONTEXT`, it is swallowed completely.
+  2. **Low-Level Keyboard Hook (`WH_KEYBOARD_LL`)**:
+     - Intercepts center clicks (`VK_MEDIA_PLAY_PAUSE`, `VK_PAUSE`, `VK_MEDIA_STOP`) and physical keyboard volume keys in a dedicated Win32 message pump thread.
+     - **Complete KeyDown and KeyUp Interception**: Both `WM_KEYDOWN` and `WM_KEYUP` for media keys are swallowed to prevent media players (Spotify, YouTube, Chrome) from receiving play/pause commands on button release!
+     - When `!is_hud_open`: grants foreground activation via `AllowSetForegroundWindow(GetCurrentProcessId())`, flips atomic state, and calls `do_show_hud`.
+     - When `is_hud_open`: emits `dial:click` to confirm the selected action.
 - **Microsecond Non-Blocking Execution**:
   - The thread runs standard Win32 `while GetMessageW(&mut msg, null_mut(), 0, 0) > 0 { TranslateMessage(&msg); DispatchMessageW(&msg); }`.
-  - Do NOT wrap in watchdog outer loops with `UnhookWindowsHookEx` and sleeps; that causes repeated unhooking and breaks event interception.
-  - Do NOT use windowless `SetTimer` on the hook thread.
   - All heavy work (GUI display, Tauri event emission, Win32 calls) is strictly dispatched to background worker threads (`thread::spawn`).
-- **Clean KeyDown Interception**:
-  - The hook filters `n_code >= 0 && (w_param == WM_KEYDOWN as usize || w_param == WM_SYSKEYDOWN as usize)`.
-  - For `VK_MEDIA_PLAY_PAUSE`, `VK_PAUSE`, and `VK_MEDIA_STOP`: blocks OS play/pause, debounces hardware click, and toggles HUD / executes slice action.
-  - For `VK_VOLUME_UP` and `VK_VOLUME_DOWN`: while HUD or scroll mode is active, returns `1` to consume the volume event completely, preventing Windows from changing system volume or showing the volume bezel.
-  - When HUD is closed and not in scroll mode, volume keys pass through to `CallNextHookEx` so system volume works normally.
-- **Immediate Volume Lock on Initial Click**:
-  - When `!is_hud_open` intercepts a dial click, it immediately sets `locked.store(0, Ordering::SeqCst)` alongside `is_open.store(true, Ordering::SeqCst)`.
-  - This eliminates the race condition while `do_show_hud` queries live volume, guaranteeing that any incoming rotation tick is swallowed and never mutates Windows system volume.
-- **NEVER use `tauri::WindowEvent::Focused(false)` to Auto-Hide HUD**:
-  - On Windows, transparent borderless topmost overlay windows displayed while another app (Chrome, game, Spotify) has foreground focus DO NOT receive OS keyboard focus due to Windows ASFW restrictions.
-  - Using `Focused(false)` causes Tauri to instantly fire `hide_hud`, resetting `is_hud_open = false` and `locked_vol = -1`. The HUD appears on screen but all subsequent rotations control system volume and clicks fail to close it.
-  - The HUD is dismissed strictly via: dial click confirmation, Escape key, mouse click on HUD backdrop, or global toggle shortcut.
+- **Focus Auto-Dismiss with 400ms Grace Period**:
+  - `tauri::WindowEvent::Focused(false)` auto-dismisses the HUD when the user clicks outside on another window/desktop.
+  - A 400ms grace period (`LAST_HUD_SHOWN_TIME`) protects the initial presentation and window animation focus transition from triggering false-positive dismissals.
+- **Headroom Clamping (`6..94`)**:
+  - In `do_show_hud`, master volume is clamped to the range `6..94` so rotating in either direction always has headroom to register on Windows Core Audio. Original volume is restored on HUD close.
 - **On-Demand Live Brightness Reading**:
   - `get_brightness()` queries `query_dxva2_brightness().or_else(query_wmi_brightness)` on demand when invoked (e.g. when entering Brightness mode).
   - Continuous 1.5s background polling via PowerShell is strictly avoided to prevent CPU spikes and input latency.
 - **Win32 Foreground Window Activation**:
-  - Background processes on Windows are restricted by `LockSetForegroundWindow`.
-  - In `do_show_hud` (`src-tauri/src/lib.rs`), Tauri's `window.set_focus()` is paired with native Win32 `ShowWindow(hwnd, SW_RESTORE)`, `SetForegroundWindow(hwnd)`, and `SetWindowPos(hwnd, HWND_TOPMOST, ...)` so the HUD reliably pops up over fullscreen windows.
+  - In `do_show_hud` (`src-tauri/src/lib.rs`), `AllowSetForegroundWindow(GetCurrentProcessId())` is paired with native Win32 `ShowWindow(hwnd, SW_RESTORE)`, `SetForegroundWindow(hwnd)`, and `SetWindowPos(hwnd, HWND_TOPMOST, ...)` so the HUD reliably pops up over fullscreen windows.
 
 #### macOS Backend (`src-tauri/src/platform/macos/dial.rs`)
 - Uses a global CoreGraphics Event Tap (`CGEventTapCreate`) listening to `NX_SYSDEFINED` events (subtype `NX_SUBTYPE_AUX_CONTROL_BUTTONS = 8`).
