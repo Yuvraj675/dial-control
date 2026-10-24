@@ -279,6 +279,9 @@ Turns the rotary dial into a continuous, physical mouse scroll wheel for long do
 - Dynamic loading eliminates fatal linker errors on modern macOS SDKs while giving 100% native backlight control on both Apple Silicon and Intel Macs.
 - Fallback to `brightness` CLI if DisplayServices symbols are unavailable.
 
+#### macOS Packaging
+- Bundles are ad-hoc signed (`bundle.macOS.signingIdentity: "-"` in `tauri.conf.json`). Unsigned arm64 apps with the download quarantine flag are reported by Gatekeeper as "damaged"; ad-hoc signing plus `xattr -dr com.apple.quarantine` (documented in README) makes them launchable without an Apple Developer ID.
+
 ---
 
 ### 5.4 Active Window Context Detection

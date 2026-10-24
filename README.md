@@ -168,9 +168,17 @@ Download the latest installer from the GitHub repository's **Actions** tab (unde
 
 macOS packages are compiled automatically via **GitHub Actions** (`.github/workflows/build-macos.yml`) on `macos-latest` runners:
 - **`Dial Control_1.0.0_aarch64.dmg`**: Native Apple Silicon installer (M1/M2/M3/M4) with drag-to-Applications bundle.
-- **`Dial Control.app`**: Standalone signed application bundle.
+- **`Dial Control.app`**: Standalone application bundle (zipped).
 
 Download the latest `.dmg` or `.app` from the GitHub repository's **Actions** tab or **Releases**.
+
+The app is ad-hoc signed (`bundle.macOS.signingIdentity: "-"`), not notarized with an Apple Developer ID, so Gatekeeper blocks it on first launch (an older unsigned build showed *"is damaged and can't be opened"*). Install it like this:
+1. Open the `.dmg` and drag **Dial Control** into **Applications**.
+2. Remove the download quarantine flag once:
+   ```bash
+   xattr -dr com.apple.quarantine "/Applications/Dial Control.app"
+   ```
+   (or right-click the app, choose **Open**, then confirm under *System Settings → Privacy & Security → Open Anyway*).
 
 ---
 
