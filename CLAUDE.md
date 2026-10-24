@@ -139,29 +139,27 @@ The CMF Buds Pro 2 rotary dial and smart case have **no proprietary Bluetooth pr
      - Only movements *away* from baseline in the active direction generate user actions.
 
 #### Windows Backend (`src-tauri/src/platform/windows/dial.rs`)
-- Uses a low-level keyboard hook (`WH_KEYBOARD_LL`) in a dedicated message pump thread with a watchdog timer (`SetTimer`) and re-registration recovery loop.
-- **Mandatory Message Queue Timer (`SetTimer`)**:
-  - In Win32, worker threads spawned via standard threading do NOT have an active message queue by default.
-  - Calling `SetTimer(null_mut(), 0, 1000, None)` forces User32 to immediately create and maintain a thread message queue, and generates `WM_TIMER` messages so `while GetMessageW(...) > 0` remains actively pumping.
-  - Windows monitors low-level hook threads: if a hook thread is idle without an active message pump, Windows silently drops the hook. The 1000ms timer guarantees the hook stays permanently registered. `KillTimer` cleans it up on loop exit.
+- Uses a low-level keyboard hook (`WH_KEYBOARD_LL`) in a dedicated message pump thread.
 - **Microsecond Non-Blocking Execution**:
-  - Windows `LowLevelHooksTimeout` (100–300ms) silently kills hooks if callbacks block or acquire contended locks.
-  - Global state is held in lock-free `std::sync::OnceLock<Arc<AtomicBool/I32>>` with zero mutexes or `RwLock`s.
-  - All heavy work (GUI display, Tauri event emission, D-Bus/Win32 calls) is strictly dispatched to background worker threads (`thread::spawn`).
-- **Complete KeyDown and KeyUp Interception**:
-  - The hook checks both `WM_KEYDOWN`/`WM_SYSKEYDOWN` and `WM_KEYUP`/`WM_SYSKEYUP`.
-  - For `VK_MEDIA_PLAY_PAUSE`, `VK_PAUSE`, and `VK_MEDIA_STOP`: both KeyDown and KeyUp return `1`. Consuming KeyUp is critical to prevent media players (Spotify, YouTube, Chrome) from receiving a play/pause toggle on key release!
-  - For `VK_VOLUME_UP` and `VK_VOLUME_DOWN`: while HUD or scroll mode is active, both KeyDown and KeyUp return `1` to prevent the OS volume slider or beep popup from triggering.
+  - The thread runs standard Win32 `while GetMessageW(&mut msg, null_mut(), 0, 0) > 0 { TranslateMessage(&msg); DispatchMessageW(&msg); }`.
+  - Do NOT wrap in watchdog outer loops with `UnhookWindowsHookEx` and sleeps; that causes repeated unhooking and breaks event interception.
+  - Do NOT use windowless `SetTimer` on the hook thread.
+  - All heavy work (GUI display, Tauri event emission, Win32 calls) is strictly dispatched to background worker threads (`thread::spawn`).
+- **Clean KeyDown Interception**:
+  - The hook filters `n_code >= 0 && (w_param == WM_KEYDOWN as usize || w_param == WM_SYSKEYDOWN as usize)`.
+  - For `VK_MEDIA_PLAY_PAUSE`, `VK_PAUSE`, and `VK_MEDIA_STOP`: blocks OS play/pause, debounces hardware click, and toggles HUD / executes slice action.
+  - For `VK_VOLUME_UP` and `VK_VOLUME_DOWN`: while HUD or scroll mode is active, returns `1` to consume the volume event completely, preventing Windows from changing system volume or showing the volume bezel.
   - When HUD is closed and not in scroll mode, volume keys pass through to `CallNextHookEx` so system volume works normally.
-- **Immediate Synchronous Volume Lock on Initial Click**:
-  - When `!is_hud_open` intercepts a dial click, it MUST immediately execute `LOCKED_VOL_REF.store(50, Ordering::SeqCst)` alongside `IS_HUD_OPEN_REF.store(true, Ordering::SeqCst)`.
-  - This eliminates the 10-30ms race condition while `do_show_hud` queries live volume, guaranteeing that any incoming rotation tick is swallowed and never mutates Windows system volume.
-- **Zero-COM Fast Path During Menu Rotation**:
-  - When `locked_val >= 0` (menu navigation mode), the dial rotation worker does NOT perform blocking Core Audio COM queries. It uses `locked_val` directly in `RotatePayload`, ensuring zero input lag and preventing thread queue buildup during rapid dial spinning.
+- **Immediate Volume Lock on Initial Click**:
+  - When `!is_hud_open` intercepts a dial click, it immediately sets `locked.store(0, Ordering::SeqCst)` alongside `is_open.store(true, Ordering::SeqCst)`.
+  - This eliminates the race condition while `do_show_hud` queries live volume, guaranteeing that any incoming rotation tick is swallowed and never mutates Windows system volume.
 - **NEVER use `tauri::WindowEvent::Focused(false)` to Auto-Hide HUD**:
   - On Windows, transparent borderless topmost overlay windows displayed while another app (Chrome, game, Spotify) has foreground focus DO NOT receive OS keyboard focus due to Windows ASFW restrictions.
   - Using `Focused(false)` causes Tauri to instantly fire `hide_hud`, resetting `is_hud_open = false` and `locked_vol = -1`. The HUD appears on screen but all subsequent rotations control system volume and clicks fail to close it.
   - The HUD is dismissed strictly via: dial click confirmation, Escape key, mouse click on HUD backdrop, or global toggle shortcut.
+- **On-Demand Live Brightness Reading**:
+  - `get_brightness()` queries `query_dxva2_brightness().or_else(query_wmi_brightness)` on demand when invoked (e.g. when entering Brightness mode).
+  - Continuous 1.5s background polling via PowerShell is strictly avoided to prevent CPU spikes and input latency.
 - **Win32 Foreground Window Activation**:
   - Background processes on Windows are restricted by `LockSetForegroundWindow`.
   - In `do_show_hud` (`src-tauri/src/lib.rs`), Tauri's `window.set_focus()` is paired with native Win32 `ShowWindow(hwnd, SW_RESTORE)`, `SetForegroundWindow(hwnd)`, and `SetWindowPos(hwnd, HWND_TOPMOST, ...)` so the HUD reliably pops up over fullscreen windows.
