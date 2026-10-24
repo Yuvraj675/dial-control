@@ -15,10 +15,15 @@ impl MacMedia {
     /// for the duration of the key press.
     #[cfg(target_os = "macos")]
     unsafe fn forward_key(key_type: u32) -> bool {
+        let verb = match key_type {
+            NX_KEYTYPE_NEXT => "next track",
+            NX_KEYTYPE_PREVIOUS => "previous track",
+            _ => "playpause",
+        };
         match super::dial::app_handle() {
             Some(app) => {
                 let mut sent = false;
-                super::now_playing::forward_to_player(app, || sent = Self::post_media_key(key_type));
+                super::now_playing::forward_to_player(app, verb, || sent = Self::post_media_key(key_type));
                 sent
             }
             None => Self::post_media_key(key_type),

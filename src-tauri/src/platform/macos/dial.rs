@@ -181,6 +181,8 @@ unsafe extern "C" fn volume_listener(
             );
             // Never set properties from inside a HAL listener; restore on a worker thread.
             with_app(move |app| {
+                // The click that ends this navigation must come to us, not to YouTube.
+                super::now_playing::reassert_throttled(&app);
                 let state: tauri::State<crate::AppState> = app.state();
                 state.platform.audio().set_volume(baseline);
                 if burst {
