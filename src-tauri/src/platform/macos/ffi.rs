@@ -185,3 +185,19 @@ extern "C" {
     pub fn DisplayServicesGetBrightness(display_id: u32, brightness: *mut f32) -> i32;
     pub fn DisplayServicesSetBrightness(display_id: u32, brightness: f32) -> i32;
 }
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct CGPoint {
+    pub x: f64,
+    pub y: f64,
+}
+pub type NSPoint = CGPoint;
+
+#[link(name = "AppKit", kind = "framework")]
+#[link(name = "objc", kind = "dylib")]
+extern "C" {
+    pub fn objc_getClass(name: *const std::ffi::c_char) -> *mut c_void;
+    pub fn sel_registerName(name: *const std::ffi::c_char) -> *mut c_void;
+    pub fn objc_msgSend();
+}

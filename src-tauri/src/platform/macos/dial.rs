@@ -1,4 +1,4 @@
-use crate::platform::traits::DialBackend;
+use crate::platform::traits::{DialBackend, PlatformProvider};
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread;
@@ -44,9 +44,44 @@ impl MacDial {
         }
 
         if event_type == NX_SYSDEFINED {
-            // Field 54 is kCGEventSysDefinedEventData1
-            let data1 = CGEventGetIntegerValueField(event, 54);
-            let subtype = (data1 & 0xFF) as i16;
+            let mut subtype: i16 = 0;
+            let mut data1: isize = 0;
+
+            // 1. Try public AppKit [NSEvent eventWithCGEvent:]
+            let cls_nsevent = objc_getClass(b"NSEvent\0".as_ptr() as *const _);
+            if !cls_nsevent.is_null() {
+                let sel_event_with_cg =
+                    sel_registerName(b"eventWithCGEvent:\0".as_ptr() as *const _);
+                let sel_subtype = sel_registerName(b"subtype\0".as_ptr() as *const _);
+                let sel_data1 = sel_registerName(b"data1\0".as_ptr() as *const _);
+
+                type MsgSendCG = unsafe extern "C" fn(
+                    *mut std::ffi::c_void,
+                    *mut std::ffi::c_void,
+                    CGEventRef,
+                ) -> *mut std::ffi::c_void;
+                type MsgSendSubtype =
+                    unsafe extern "C" fn(*mut std::ffi::c_void, *mut std::ffi::c_void) -> i16;
+                type MsgSendData1 =
+                    unsafe extern "C" fn(*mut std::ffi::c_void, *mut std::ffi::c_void) -> isize;
+
+                let msg_cg: MsgSendCG = std::mem::transmute(objc_msgSend as *const ());
+                let msg_sub: MsgSendSubtype = std::mem::transmute(objc_msgSend as *const ());
+                let msg_d1: MsgSendData1 = std::mem::transmute(objc_msgSend as *const ());
+
+                let ns_event = msg_cg(cls_nsevent, sel_event_with_cg, event);
+                if !ns_event.is_null() {
+                    subtype = msg_sub(ns_event, sel_subtype);
+                    data1 = msg_d1(ns_event, sel_data1);
+                }
+            }
+
+            // Fallback: raw CoreGraphics field 54 or 0x95
+            if subtype == 0 && data1 == 0 {
+                let raw_data1 = CGEventGetIntegerValueField(event, 54);
+                subtype = (raw_data1 & 0xFF) as i16;
+                data1 = raw_data1 as isize;
+            }
 
             if subtype == NX_SUBTYPE_AUX_CONTROL_BUTTONS {
                 let key_type = ((data1 >> 16) & 0xFFFF) as u32;
@@ -98,6 +133,7 @@ impl MacDial {
                                             crate::do_show_hud(&app_clone, &state);
                                         } else {
                                             println!(">> [macOS NATIVE DIAL CLICK] -> Dispatched action select to HUD");
+                                            let _ = app_clone.emit("dial:click", ());
                                             if let Some(window) = app_clone.get_webview_window("hud") {
                                                 let _ = window.emit("dial:click", ());
                                             }
@@ -149,16 +185,15 @@ impl MacDial {
                                             current_vol
                                         };
 
+                                        let payload = serde_json::json!({
+                                            "direction": dir,
+                                            "delta": dir,
+                                            "volume": target_vol,
+                                            "volume_pct": target_vol,
+                                        });
+                                        let _ = app_clone.emit("dial:rotate", payload.clone());
                                         if let Some(window) = app_clone.get_webview_window("hud") {
-                                            let _ = window.emit(
-                                                "dial:rotate",
-                                                serde_json::json!({
-                                                    "direction": dir,
-                                                    "delta": dir,
-                                                    "volume": target_vol,
-                                                    "volume_pct": target_vol,
-                                                }),
-                                            );
+                                            let _ = window.emit("dial:rotate", payload);
                                         }
                                     });
                                 }

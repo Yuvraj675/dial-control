@@ -46,7 +46,7 @@ dial-control/
 │           ├── common.rs   # Shared profile matcher & context event
 │           ├── linux/      # WirePlumber, Mutter, uinput, BlueZ, evdev & D-Bus Context
 │           ├── windows/    # Core Audio COM, dxva2 DDC/CI, WMI/CIM, Win32 hooks
-│           └── macos/      # CoreAudio, IOKit & Cocoa stubs
+│           └── macos/      # CoreAudio, DisplayServices, CoreGraphics Event Tap & Cocoa
 └── dist-packages/          # Pre-assembled Linux & Windows installation packages
 ```
 
@@ -58,7 +58,7 @@ dial-control/
 |---|---|---|---|---|---|
 | **Linux (X11 / Wayland)** | BlueZ D-Bus + `evdev` exclusive grab | WirePlumber (`wpctl`) / PulseAudio | `/sys/class/backlight` + GNOME Mutter D-Bus | GNOME FocusedWindow D-Bus + Hyprland/Sway/KDE/X11 | **Fully Functional** |
 | **Windows (10 / 11)** | Low-Level Hook (`WH_KEYBOARD_LL`) | Windows Core Audio COM (`IAudioEndpointVolume`) | Dual-layer: `dxva2.dll` (DDC/CI) + WMI/CIM | Win32 `GetForegroundWindow` + Process Image & Class Name | **Fully Functional** |
-| **macOS (Sonoma / Sequoia / Apple Silicon & Intel)** | CoreGraphics Event Tap (`kCGHIDEventTap`) | CoreAudio (`VirtualMasterVolume`) | DisplayServices + auxiliary brightness keys | Cocoa `NSWorkspace` + AppleScript title query | **Fully Implemented** |
+| **macOS (Sonoma / Sequoia / Apple Silicon & Intel)** | CoreGraphics Event Tap (`kCGHIDEventTap`) | CoreAudio (`VirtualMasterVolume`) | DisplayServices hardware backlight | Cocoa `NSWorkspace` + AppleScript title query | **Fully Functional** |
 
 ---
 
@@ -101,7 +101,8 @@ The macOS backend uses native Apple frameworks (`CoreGraphics`, `CoreAudio`, `Co
 - **Center-Click Interception**: Center clicks (`NX_KEYTYPE_PLAY`) are intercepted with a 500ms debounce. The event is dropped before reaching media players, so Apple Music and Spotify do not inadvertently toggle playback when opening or navigating the HUD.
 - **Scroll Mode (Mouse Wheel Emulation)**: Emulates native CoreGraphics scroll wheel events via `CGEventCreateScrollWheelEvent2` with `kCGScrollEventUnitLine`. The HUD window automatically hides after 850ms, returning focus cleanly to the target browser or editor.
 - **Native Master Volume**: Direct C-FFI queries and updates to CoreAudio's `VirtualMasterVolume` and scalar properties on `kAudioObjectSystemObject`, with an `osascript` fallback.
-- **Display Brightness & Stepping**: Interacts with built-in MacBook displays via `DisplayServicesGetBrightness` / `DisplayServicesSetBrightness`, and posts native auxiliary brightness key events (`NX_KEYTYPE_BRIGHTNESS_UP` / `DOWN`) for smooth stepping with native macOS OSD feedback.
+- **Display Brightness & Stepping**: Interacts with built-in MacBook displays directly via `DisplayServicesGetBrightness` and `DisplayServicesSetBrightness` for accurate live percentage readings and smooth 5% stepping, with a `brightness` CLI fallback.
+- **Native Auxiliary Media Keys**: Simulates system-defined multimedia keys (`NX_KEYTYPE_PLAY`, `NX_KEYTYPE_NEXT`, `NX_KEYTYPE_PREVIOUS`) via AppKit `[NSEvent otherEventWithType:14 ...]` bridged directly to `CGEventPost(kCGHIDEventTap)`, controlling any active media player system-wide (Apple Music, Spotify, YouTube in Safari/Chrome, VLC) with an AppleScript fallback.
 - **Active Application Context**: Monitors foreground applications in real time using `NSWorkspace` and AppleScript to extract active application bundle identifiers (e.g. `com.google.Chrome`, `com.microsoft.VSCode`, `com.spotify.client`) and window titles, matching them to custom dial profiles.
 - **Notification Center Integration**: Dispatches native macOS Notification Center alerts via `osascript` on scroll mode entry and exit.
 - **Permissions**: Requires a single user toggle under *System Settings $\to$ Privacy & Security $\to$ Accessibility* for global event interception and scroll emulation, matching standard macOS utilities like Alfred and Raycast.

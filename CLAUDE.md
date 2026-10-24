@@ -81,7 +81,7 @@ dial-control/
 │           ├── traits.rs   # Unified traits (Audio, Brightness, Input, Dial, Context)
 │           ├── linux/      # Linux backend (WirePlumber, Mutter, uinput, BlueZ, evdev)
 │           ├── windows/    # Windows backend (WASAPI, Win32, WH_KEYBOARD_LL)
-│           └── macos/      # macOS backend (CoreAudio, IOKit, Cocoa stubs)
+│           └── macos/      # macOS backend (CoreAudio, DisplayServices, CoreGraphics Event Tap & Cocoa)
 └── temp/                   # [GITIGNORED] Scratch scripts, packaging temps & prototypes
 ```
 
@@ -90,10 +90,10 @@ dial-control/
 | Subsystem | Trait | Windows Backend | Linux Backend | macOS Backend |
 |---|---|---|---|---|
 | **System Audio** | `SystemAudio` | WASAPI (`IAudioEndpointVolume`) | WirePlumber (`wpctl`) / PulseAudio (`pactl`) | CoreAudio (`VirtualMasterVolume`) |
-| **System Brightness** | `SystemBrightness` | WMI (`WmiMonitorBrightness`) | Mutter D-Bus `GetResources` / `/sys/class/backlight` | DisplayServices / IOKit |
-| **Active Context** | `ContextDetector` | Win32 `GetForegroundWindow` | GNOME Shell D-Bus extension / `_NET_ACTIVE_WINDOW` | Cocoa `NSWorkspace` |
-| **Virtual Input** | `VirtualInput` | Win32 `SendInput` | Kernel `/dev/uinput` (`evdev`) | `CGEventPost` |
-| **Dial Interception** | `DialBackend` | Low-level hook (`WH_KEYBOARD_LL`) | BlueZ `MediaTransport1` + `evdev` exclusive grab | IOHIDManager / CoreBluetooth |
+| **System Brightness** | `SystemBrightness` | WMI (`WmiMonitorBrightness`) | Mutter D-Bus `GetResources` / `/sys/class/backlight` | DisplayServices (`DisplayServicesSetBrightness`) |
+| **Active Context** | `ContextDetector` | Win32 `GetForegroundWindow` | GNOME Shell D-Bus extension / `_NET_ACTIVE_WINDOW` | Cocoa `NSWorkspace` + AppleScript |
+| **Virtual Input** | `VirtualInput` | Win32 `SendInput` | Kernel `/dev/uinput` (`evdev`) | `CGEventPost` (`CGEventCreateScrollWheelEvent2`) |
+| **Dial Interception** | `DialBackend` | Low-level hook (`WH_KEYBOARD_LL`) | BlueZ `MediaTransport1` + `evdev` exclusive grab | CoreGraphics Event Tap (`kCGHIDEventTap` on `NX_SYSDEFINED`) |
 
 ---
 
