@@ -268,6 +268,7 @@ pub(crate) fn do_show_hud(app: &AppHandle, state: &AppState) {
     // Emitter::emit broadcasts to every webview regardless of the emitter it is called on,
     // so a second `window.emit` would deliver this event twice.
     let _ = app.emit("hud:visibility", true);
+    crate::platform::diag::log("HUD shown");
     let _ = app.emit(
         "sync:state",
         serde_json::json!({
@@ -678,6 +679,7 @@ fn set_recording_shortcut(state: tauri::State<AppState>, recording: bool) {
 }
 
 pub fn run() {
+    platform::diag::init();
     let is_hud_open = Arc::new(AtomicBool::new(false));
     let locked_vol = Arc::new(AtomicI32::new(-1));
     let is_recording_shortcut = Arc::new(AtomicBool::new(false));

@@ -7,11 +7,12 @@
 //! the button presses. A guard re-asserts the session whenever another app takes over.
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{mpsc, Mutex};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use windows::core::HSTRING;
 use windows::Foundation::{TypedEventHandler, Uri};
+use windows::Media::Control::CurrentSessionChangedEventArgs;
 use windows::Media::Control::GlobalSystemMediaTransportControlsSessionManager as SessionManager;
 use windows::Media::Core::MediaSource;
 use windows::Media::Playback::MediaPlayer;
@@ -23,7 +24,7 @@ use windows::Media::{
 
 const SESSION_TITLE: &str = "Dial Control";
 
-static OWN_ID_KNOWN: AtomicBool = AtomicBool::new(false);
+static WAKE: Mutex<Option<mpsc::Sender<()>>> = Mutex::new(None);
 
 /// What a media-button press means for the dial.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -135,7 +136,7 @@ pub fn start(on_button: impl Fn(MediaButton) + Send + Sync + 'static) {
                     if let Some(args) = args.as_ref() {
                         if let Ok(button) = args.Button() {
                             let kind = classify_button(button.0);
-                            println!("[Windows Dial] SMTC button {:?} -> {:?}", button, kind);
+                            crate::platform::diag::log(&format!("SMTC button {:?} -> {:?}", button, kind));
                             on_button(kind);
                         }
                     }
@@ -165,35 +166,71 @@ pub fn start(on_button: impl Fn(MediaButton) + Send + Sync + 'static) {
         println!("[Windows Dial] SMTC media session active (dial clicks now routed to Dial Control).");
 
         // Guard: keep the session current when a browser/player grabs media focus.
+        // Event-driven (no polling): woken by CurrentSessionChanged and by dial activity.
         let Ok(mgr) = SessionManager::RequestAsync().and_then(|op| op.join()) else {
-            eprintln!("[Windows Dial] SMTC session manager unavailable; focus guard disabled.");
+            crate::platform::diag::log("SMTC session manager unavailable; focus guard disabled");
             loop {
                 thread::sleep(Duration::from_secs(3600));
             }
         };
+        let (tx, rx) = mpsc::channel::<()>();
+        if let Ok(mut slot) = WAKE.lock() {
+            *slot = Some(tx);
+        }
+        let _ = mgr.CurrentSessionChanged(&TypedEventHandler::new(
+            move |_: windows::core::Ref<SessionManager>,
+                  _: windows::core::Ref<CurrentSessionChangedEventArgs>| {
+                request_focus_check();
+                Ok(())
+            },
+        ));
+
         thread::sleep(Duration::from_millis(500));
         let mut own_id = own_session_id(&mgr);
-        OWN_ID_KNOWN.store(own_id.is_some(), Ordering::SeqCst);
+        crate::platform::diag::log(&format!("SMTC own session id: {:?}", own_id));
+        let mut last_failure: Option<Instant> = None;
 
-        loop {
+        // Slow safety net only; normal operation is purely event-driven.
+        while !matches!(rx.recv_timeout(Duration::from_secs(10)), Err(mpsc::RecvTimeoutError::Disconnected)) {
+            while rx.try_recv().is_ok() {}
             if own_id.is_none() {
                 own_id = own_session_id(&mgr);
             }
-            if let (Some(own), Some(cur)) = (own_id.as_ref(), current_id(&mgr)) {
-                if &cur != own {
-                    println!("[Windows Dial] Media focus taken by {cur} -> reasserting");
-                    for wait_ms in [150u64, 300, 600, 1200] {
-                        reassert(&player, &smtc);
-                        thread::sleep(Duration::from_millis(wait_ms));
-                        if current_id(&mgr).as_ref() == Some(own) {
-                            break;
-                        }
-                    }
+            let (Some(own), Some(cur)) = (own_id.as_ref(), current_id(&mgr)) else {
+                continue;
+            };
+            if &cur == own {
+                last_failure = None;
+                continue;
+            }
+            // After a failed attempt, don't churn our session again for a while.
+            if last_failure.map(|t| t.elapsed() < Duration::from_secs(5)).unwrap_or(false) {
+                continue;
+            }
+            crate::platform::diag::log(&format!("media focus held by {cur} -> reasserting"));
+            let mut regained = false;
+            for wait_ms in [150u64, 300, 600] {
+                reassert(&player, &smtc);
+                thread::sleep(Duration::from_millis(wait_ms));
+                if current_id(&mgr).as_ref() == Some(own) {
+                    regained = true;
+                    break;
                 }
             }
-            thread::sleep(Duration::from_millis(1000));
+            crate::platform::diag::log(if regained { "media focus regained" } else { "media focus NOT regained" });
+            last_failure = if regained { None } else { Some(Instant::now()) };
         }
     });
+}
+
+/// Asks the guard to verify (and if needed re-take) media focus. Cheap and non-blocking;
+/// call it when the dial is about to need clicks (HUD opening, rotation).
+pub fn request_focus_check() {
+    if let Ok(slot) = WAKE.lock() {
+        if let Some(tx) = slot.as_ref() {
+            let _ = tx.send(());
+        }
+    }
 }
 
 #[cfg(test)]
