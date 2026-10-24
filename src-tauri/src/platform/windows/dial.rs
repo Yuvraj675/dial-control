@@ -123,6 +123,9 @@ unsafe extern "system" fn low_level_keyboard_proc(
                             let app = app.clone();
                             thread::spawn(move || {
                                 let _ = app.emit("dial:click", ());
+                                if let Some(window) = app.get_webview_window("hud") {
+                                    let _ = window.emit("dial:click", ());
+                                }
                             });
                         }
                     }
@@ -172,15 +175,16 @@ unsafe extern "system" fn low_level_keyboard_proc(
                                 current_vol
                             };
 
-                            let _ = app.emit(
-                                "dial:rotate",
-                                RotatePayload {
-                                    direction: dir,
-                                    delta: dir,
-                                    volume: new_vol,
-                                    volume_pct: new_vol,
-                                },
-                            );
+                            let payload = RotatePayload {
+                                direction: dir,
+                                delta: dir,
+                                volume: new_vol,
+                                volume_pct: new_vol,
+                            };
+                            let _ = app.emit("dial:rotate", payload.clone());
+                            if let Some(window) = app.get_webview_window("hud") {
+                                let _ = window.emit("dial:rotate", payload);
+                            }
                         });
                     }
                 }

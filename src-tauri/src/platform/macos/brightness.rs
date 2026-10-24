@@ -10,37 +10,6 @@ impl MacBrightness {
     pub fn new() -> Self {
         Self
     }
-
-    #[cfg(target_os = "macos")]
-    unsafe fn post_aux_key(key_type: u32) {
-        // macOS system-defined auxiliary keys (brightness, volume, media)
-        // are posted as NX_SYSDEFINED events with subtype 8 (NX_SUBTYPE_AUX_CONTROL_BUTTONS)
-        let flags: u64 = if key_type == NX_KEYTYPE_BRIGHTNESS_UP || key_type == NX_KEYTYPE_BRIGHTNESS_DOWN {
-            0
-        } else {
-            0
-        };
-
-        // Key down (state = 0x0A)
-        let data1_down: i64 = ((key_type as i64) << 16) | (0x0A << 8);
-        let event_down = CGEventCreateKeyboardEvent(std::ptr::null_mut(), 0, true);
-        if !event_down.is_null() {
-            CGEventSetFlags(event_down, flags);
-            CGEventPost(kCGHIDEventTap, event_down);
-            CFRelease(event_down as CFTypeRef);
-        }
-
-        std::thread::sleep(std::time::Duration::from_millis(20));
-
-        // Key up (state = 0x0B)
-        let _data1_up: i64 = ((key_type as i64) << 16) | (0x0B << 8);
-        let event_up = CGEventCreateKeyboardEvent(std::ptr::null_mut(), 0, false);
-        if !event_up.is_null() {
-            CGEventSetFlags(event_up, flags);
-            CGEventPost(kCGHIDEventTap, event_up);
-            CFRelease(event_up as CFTypeRef);
-        }
-    }
 }
 
 impl SystemBrightness for MacBrightness {
@@ -92,24 +61,10 @@ impl SystemBrightness for MacBrightness {
     }
 
     fn step_brightness(&self, direction: i32) {
-        #[cfg(target_os = "macos")]
-        unsafe {
-            let key = if direction > 0 {
-                NX_KEYTYPE_BRIGHTNESS_UP
-            } else {
-                NX_KEYTYPE_BRIGHTNESS_DOWN
-            };
-            Self::post_aux_key(key);
-            println!("[macOS Brightness] Stepped brightness via native aux key event: direction {}", direction);
-            return;
-        }
-
-        #[cfg(not(target_os = "macos"))]
-        {
-            let current = self.get_brightness();
-            let step = direction * 5;
-            let next = (current + step).clamp(0, 100);
-            self.set_brightness(next);
-        }
+        let current = self.get_brightness();
+        let step = direction * 5;
+        let next = (current + step).clamp(0, 100);
+        self.set_brightness(next);
+        println!("[macOS Brightness] Stepped brightness: {}% -> {}%", current, next);
     }
 }
