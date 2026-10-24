@@ -4,11 +4,42 @@ use std::process::Command;
 #[cfg(target_os = "macos")]
 use super::ffi::*;
 
+type FnGetBrightness = unsafe extern "C" fn(u32, *mut f32) -> i32;
+type FnSetBrightness = unsafe extern "C" fn(u32, f32) -> i32;
+
 pub struct MacBrightness;
 
 impl MacBrightness {
     pub fn new() -> Self {
         Self
+    }
+
+    #[cfg(target_os = "macos")]
+    unsafe fn get_display_services() -> (Option<FnGetBrightness>, Option<FnSetBrightness>) {
+        // DisplayServices is a macOS private framework. Loading it dynamically via dlopen
+        // prevents linker errors while preserving full Apple Silicon & Intel hardware backlight control.
+        let path = b"/System/Library/PrivateFrameworks/DisplayServices.framework/DisplayServices\0";
+        let handle = dlopen(path.as_ptr() as *const _, 1); // 1 = RTLD_LAZY
+        if handle.is_null() {
+            return (None, None);
+        }
+
+        let p_get = dlsym(handle, b"DisplayServicesGetBrightness\0".as_ptr() as *const _);
+        let p_set = dlsym(handle, b"DisplayServicesSetBrightness\0".as_ptr() as *const _);
+
+        let get_fn: Option<FnGetBrightness> = if !p_get.is_null() {
+            Some(std::mem::transmute(p_get))
+        } else {
+            None
+        };
+
+        let set_fn: Option<FnSetBrightness> = if !p_set.is_null() {
+            Some(std::mem::transmute(p_set))
+        } else {
+            None
+        };
+
+        (get_fn, set_fn)
     }
 }
 
@@ -16,10 +47,13 @@ impl SystemBrightness for MacBrightness {
     fn get_brightness(&self) -> i32 {
         #[cfg(target_os = "macos")]
         unsafe {
-            let display = CGMainDisplayID();
-            let mut val: f32 = 0.0;
-            if DisplayServicesGetBrightness(display, &mut val) == 0 {
-                return ((val * 100.0).round() as i32).clamp(0, 100);
+            let (get_fn, _) = Self::get_display_services();
+            if let Some(get_brightness) = get_fn {
+                let display = CGMainDisplayID();
+                let mut val: f32 = 0.0;
+                if get_brightness(display, &mut val) == 0 {
+                    return ((val * 100.0).round() as i32).clamp(0, 100);
+                }
             }
         }
 
@@ -46,10 +80,13 @@ impl SystemBrightness for MacBrightness {
 
         #[cfg(target_os = "macos")]
         unsafe {
-            let display = CGMainDisplayID();
-            if DisplayServicesSetBrightness(display, val) == 0 {
-                println!("[macOS Brightness] Set to {}% via DisplayServices", pct);
-                return pct;
+            let (_, set_fn) = Self::get_display_services();
+            if let Some(set_brightness) = set_fn {
+                let display = CGMainDisplayID();
+                if set_brightness(display, val) == 0 {
+                    println!("[macOS Brightness] Set to {}% via DisplayServices (dynamic)", pct);
+                    return pct;
+                }
             }
         }
 
