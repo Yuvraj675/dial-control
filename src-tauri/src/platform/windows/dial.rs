@@ -14,6 +14,9 @@ use std::sync::{Arc, OnceLock, RwLock};
 use std::thread;
 use tauri::{AppHandle, Emitter, Manager};
 
+/// KBDLLHOOKSTRUCT.flags bit set for events injected by SendInput (not a physical keyboard).
+const LLKHF_INJECTED: u32 = 0x10;
+
 static IS_HUD_OPEN_REF: RwLock<Option<Arc<AtomicBool>>> = RwLock::new(None);
 static LOCKED_VOL_REF: RwLock<Option<Arc<AtomicI32>>> = RwLock::new(None);
 static IS_SCROLL_MODE_REF: RwLock<Option<Arc<AtomicBool>>> = RwLock::new(None);
@@ -219,8 +222,25 @@ unsafe extern "system" fn low_level_keyboard_proc(
 
         match vk {
             VK_MEDIA_PLAY_PAUSE | VK_PAUSE | VK_MEDIA_STOP => {
-                // Consume both KeyDown and KeyUp so media players (Spotify, YouTube, Chrome)
-                // never receive a play/pause toggle when clicking the physical dial.
+                let injected = kbd.flags & LLKHF_INJECTED != 0;
+                if !injected {
+                    // A physical keyboard key. Windows would route Play/Pause to the current
+                    // media session, which is Dial Control's own, and open the HUD; instead
+                    // control the real player. Pause/Break and Stop are not dial inputs at all.
+                    if vk != VK_MEDIA_PLAY_PAUSE {
+                        return CallNextHookEx(hhook, n_code, w_param, l_param);
+                    }
+                    if is_key_down {
+                        with_app(|_| {
+                            crate::platform::windows::smtc::forward_media(
+                                crate::platform::windows::smtc::MediaCommand::TogglePlayPause,
+                            );
+                        });
+                    }
+                    return 1;
+                }
+                // Injected (e.g. by a Bluetooth stack on behalf of the earbuds): a dial click.
+                // Consume both KeyDown and KeyUp so no player sees a play/pause toggle.
                 if is_key_down {
                     handle_dial_click("keyboard hook");
                 }

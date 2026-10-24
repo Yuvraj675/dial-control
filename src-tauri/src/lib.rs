@@ -678,6 +678,32 @@ fn set_recording_shortcut(state: tauri::State<AppState>, recording: bool) {
     println!("[Shortcut] Recording shortcut active state: {}", recording);
 }
 
+/// Handles one line-based IPC connection from a CLI invocation (`--toggle`) or a second launch.
+/// Replies "ok" for known commands so the caller can tell a real instance from a stranger.
+fn serve_ipc<S: std::io::Read + std::io::Write>(app: &AppHandle, mut stream: S) {
+    use std::io::BufRead;
+    let mut line = String::new();
+    if std::io::BufReader::new(&mut stream).read_line(&mut line).is_err() {
+        return;
+    }
+    let known = match line.trim() {
+        "toggle" => {
+            let state: tauri::State<AppState> = app.state();
+            toggle_hud(app.clone(), state);
+            true
+        }
+        "show" => {
+            show_settings(app.clone());
+            true
+        }
+        _ => false,
+    };
+    if known {
+        let _ = stream.write_all(b"ok\n");
+        let _ = stream.flush();
+    }
+}
+
 pub fn run() {
     platform::diag::init();
     let is_hud_open = Arc::new(AtomicBool::new(false));
@@ -765,52 +791,30 @@ pub fn run() {
                 crate::platform::linux::context::ensure_bundled_extension_installed();
             }
 
-            // UNIX socket listener for instantaneous CLI --toggle on Wayland
+            // IPC listener: instantaneous CLI --toggle on Wayland and single-instance "show"
             #[cfg(unix)]
             {
                 let app_handle = app.handle().clone();
                 let socket_path = "/tmp/dial-control.sock";
+                // A live instance would have answered in main(); anything left here is stale.
                 let _ = std::fs::remove_file(socket_path);
                 if let Ok(listener) = std::os::unix::net::UnixListener::bind(socket_path) {
-                    use std::io::{BufRead, BufReader};
                     std::thread::spawn(move || {
-                        for stream in listener.incoming() {
-                            if let Ok(stream) = stream {
-                                let mut reader = BufReader::new(stream);
-                                let mut line = String::new();
-                                if reader.read_line(&mut line).is_ok() {
-                                    let cmd = line.trim();
-                                    if cmd == "toggle" {
-                                        let state: tauri::State<AppState> = app_handle.state();
-                                        toggle_hud(app_handle.clone(), state);
-                                    }
-                                }
-                            }
+                        for stream in listener.incoming().flatten() {
+                            serve_ipc(&app_handle, stream);
                         }
                     });
                     println!("[IPC] UNIX socket listener active on {}", socket_path);
                 }
             }
 
-            // TCP loopback listener for instantaneous CLI --toggle on Windows
             #[cfg(windows)]
             {
                 let app_handle = app.handle().clone();
                 if let Ok(listener) = std::net::TcpListener::bind("127.0.0.1:41829") {
-                    use std::io::{BufRead, BufReader};
                     std::thread::spawn(move || {
-                        for stream in listener.incoming() {
-                            if let Ok(stream) = stream {
-                                let mut reader = BufReader::new(stream);
-                                let mut line = String::new();
-                                if reader.read_line(&mut line).is_ok() {
-                                    let cmd = line.trim();
-                                    if cmd == "toggle" {
-                                        let state: tauri::State<AppState> = app_handle.state();
-                                        toggle_hud(app_handle.clone(), state);
-                                    }
-                                }
-                            }
+                        for stream in listener.incoming().flatten() {
+                            serve_ipc(&app_handle, stream);
                         }
                     });
                     println!("[IPC] TCP loopback listener active on 127.0.0.1:41829");
