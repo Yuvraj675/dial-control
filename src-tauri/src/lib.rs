@@ -14,22 +14,58 @@ static LAST_HUD_SHOWN_TIME: AtomicUsize = AtomicUsize::new(0);
 pub struct AppState {
     pub platform: Arc<Platform>,
     pub is_hud_open: Arc<AtomicBool>,
+    /// The user's listening volume captured when the HUD opened; restored on close.
+    /// -1 = no lock (volume mode: changes are intentional and kept).
     pub locked_vol: Arc<AtomicI32>,
     pub is_recording_shortcut: Arc<AtomicBool>,
     pub is_scroll_mode: Arc<AtomicBool>,
 }
 
-#[tauri::command]
+/// Captures the user's volume as the restore point unless one is already held.
+/// Must never overwrite an existing lock: by the time the frontend calls
+/// `set_mode("menu")` the backend may already have re-centred the volume for headroom
+/// (Windows) or BlueZ may have clamped it (Linux), and re-reading would lose the
+/// user's real volume on close.
+pub(crate) fn capture_volume_lock(state: &AppState) -> i32 {
+    let locked = state.locked_vol.load(Ordering::SeqCst);
+    if locked >= 0 {
+        return locked;
+    }
+    let curr_vol = state.platform.audio().get_volume();
+    state.locked_vol.store(curr_vol, Ordering::SeqCst);
+    curr_vol
+}
+
+/// On macOS hiding a window does not hand focus back: our app stays active and
+/// synthesized hotkeys land in Dial Control itself. Reactivate the app the user was in.
+fn return_focus_to_previous_app(app: &AppHandle) {
+    #[cfg(target_os = "macos")]
+    {
+        let hud_focused = app
+            .get_webview_window("hud")
+            .and_then(|w| w.is_focused().ok())
+            .unwrap_or(false);
+        if hud_focused {
+            let _ = app.run_on_main_thread(crate::platform::macos::context::reactivate_previous_app);
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = app;
+}
+
+// Brightness commands are `async` so Tauri runs them off the main thread: on Windows a
+// WMI read spawns PowerShell (hundreds of ms) and would otherwise freeze the HUD.
+#[tauri::command(async)]
 fn get_system_brightness(state: tauri::State<AppState>) -> i32 {
     state.platform.brightness().get_brightness()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn set_system_brightness(state: tauri::State<AppState>, pct: i32) -> i32 {
     state.platform.brightness().set_brightness(pct)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn step_brightness(state: tauri::State<AppState>, direction: i32) {
     state.platform.brightness().step_brightness(direction);
 }
@@ -44,24 +80,32 @@ fn set_system_volume(state: tauri::State<AppState>, pct: i32) -> i32 {
     state.platform.audio().set_volume(pct)
 }
 
+/// Returns the volume the gauge should display (the user's real volume), or -1.
 #[tauri::command]
-fn set_mode(app: AppHandle, state: tauri::State<AppState>, mode: String) {
+fn set_mode(app: AppHandle, state: tauri::State<AppState>, mode: String) -> i32 {
     if mode == "volume" {
         state.is_scroll_mode.store(false, Ordering::SeqCst);
-        state.locked_vol.store(-1, Ordering::SeqCst);
+        // Release the lock first so dial listeners treat the restore below as a natural change.
+        let user_vol = state.locked_vol.swap(-1, Ordering::SeqCst);
+        if user_vol >= 0 && state.platform.audio().get_volume() != user_vol {
+            // The backend may have re-centred the volume for rotation headroom; volume
+            // mode must start from the user's real level, not the headroom position.
+            state.platform.audio().set_volume(user_vol);
+        }
         println!("[HUD] Switched to volume mode (lock released for natural hardware volume control)");
+        user_vol
     } else if mode == "scroll" {
-        let curr_vol = state.platform.audio().get_volume();
-        state.locked_vol.store(curr_vol, Ordering::SeqCst);
+        let user_vol = capture_volume_lock(&state);
         state.is_scroll_mode.store(true, Ordering::SeqCst);
         state.is_hud_open.store(true, Ordering::SeqCst);
-        println!("[HUD] Switched to SCROLL MODE (volume locked at {}%)", curr_vol);
+        println!("[HUD] Switched to SCROLL MODE (volume locked at {}%)", user_vol);
         let _ = app.emit("scroll_mode:active", true);
+        user_vol
     } else {
         state.is_scroll_mode.store(false, Ordering::SeqCst);
-        let curr_vol = state.platform.audio().get_volume();
-        state.locked_vol.store(curr_vol, Ordering::SeqCst);
-        println!("[HUD] Switched to mode: {} (volume locked at {}% for navigation)", mode, curr_vol);
+        let user_vol = capture_volume_lock(&state);
+        println!("[HUD] Switched to mode: {} (volume locked at {}% for navigation)", mode, user_vol);
+        user_vol
     }
 }
 
@@ -138,6 +182,7 @@ fn close_hud_for_scroll(app: AppHandle, state: tauri::State<AppState>) {
     state.is_hud_open.store(false, Ordering::SeqCst);
     state.is_scroll_mode.store(true, Ordering::SeqCst);
 
+    return_focus_to_previous_app(&app);
     if let Some(window) = app.get_webview_window("hud") {
         let _ = window.hide();
     }
@@ -152,14 +197,17 @@ fn close_hud_for_scroll(app: AppHandle, state: tauri::State<AppState>) {
 }
 
 pub(crate) fn do_show_hud(app: &AppHandle, state: &AppState) {
-    let curr_vol = state.platform.audio().get_volume();
+    // A second show (dial click racing the shortcut) must keep the original restore point.
+    let already_locked = state.locked_vol.load(Ordering::SeqCst) >= 0;
+    let curr_vol = capture_volume_lock(state);
 
     state.is_hud_open.store(true, Ordering::SeqCst);
-    state.locked_vol.store(curr_vol, Ordering::SeqCst);
 
-    #[cfg(target_os = "windows")]
-    {
+    if !already_locked {
+        #[cfg(target_os = "windows")]
         crate::platform::windows::dial::init_hud_rotation(curr_vol);
+        #[cfg(target_os = "macos")]
+        crate::platform::macos::dial::init_hud_rotation(curr_vol);
     }
 
     let now = std::time::SystemTime::now()
@@ -217,10 +265,9 @@ pub(crate) fn do_show_hud(app: &AppHandle, state: &AppState) {
             }
         }
     }
+    // Emitter::emit broadcasts to every webview regardless of the emitter it is called on,
+    // so a second `window.emit` would deliver this event twice.
     let _ = app.emit("hud:visibility", true);
-    if let Some(window) = app.get_webview_window("hud") {
-        let _ = window.emit("hud:visibility", true);
-    }
     let _ = app.emit(
         "sync:state",
         serde_json::json!({
@@ -239,6 +286,7 @@ pub(crate) fn do_hide_hud(app: &AppHandle, state: &AppState) {
     state.is_hud_open.store(false, Ordering::SeqCst);
     state.is_scroll_mode.store(false, Ordering::SeqCst);
     state.locked_vol.store(-1, Ordering::SeqCst);
+    return_focus_to_previous_app(app);
     if let Some(window) = app.get_webview_window("hud") {
         let _ = window.hide();
     }
@@ -424,7 +472,14 @@ fn execute_action(
                         .args(["/c", "where wt.exe >nul 2>&1 && start wt.exe || where powershell.exe >nul 2>&1 && start powershell.exe || start cmd.exe"])
                         .spawn();
                 }
-                #[cfg(not(target_os = "windows"))]
+                #[cfg(target_os = "macos")]
+                {
+                    let _ = std::process::Command::new("sh")
+                        .arg("-c")
+                        .arg("open -a iTerm 2>/dev/null || open -a Terminal")
+                        .spawn();
+                }
+                #[cfg(target_os = "linux")]
                 {
                     let _ = std::process::Command::new("sh")
                         .arg("-c")
@@ -455,7 +510,7 @@ fn execute_action(
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn adjust_gauge(
     app: AppHandle,
     state: tauri::State<AppState>,

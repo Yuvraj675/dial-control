@@ -85,6 +85,9 @@ dial-control/
 │       └── platform/       # Modular OS Abstractions
 │           ├── mod.rs      # OS platform switcher & factory
 │           ├── traits.rs   # Unified traits (Audio, Brightness, Input, Dial, Context)
+│           ├── dial_logic.rs # Pure, unit-tested dial decisions shared by every backend
+│           ├── keymap.rs   # Profile key names -> Windows VK / macOS keycodes (tested)
+│           ├── common.rs   # Shared profile matcher (match_profile) & ContextEvent
 │           ├── linux/      # Linux backend (WirePlumber, Mutter, uinput, BlueZ, evdev)
 │           ├── windows/    # Windows backend (WASAPI, Win32, WH_KEYBOARD_LL)
 │           └── macos/      # macOS backend (CoreAudio, DisplayServices, CoreGraphics Event Tap & Cocoa)
@@ -161,6 +164,13 @@ The CMF Buds Pro 2 rotary dial and smart case have **no proprietary Bluetooth pr
        - When `is_hud_open` and `has_rotated`: the user turned the dial to highlight a tool. Clicking confirms and executes the highlighted tool (`dial:click`).
      - **Double-Click / Triple-Click Dismiss (Orbit Parity)**:
        - Double-pressing (`VK_MEDIA_NEXT_TRACK`) or triple-pressing (`VK_MEDIA_PREV_TRACK`) while the HUD is open immediately cancels and closes the HUD without executing any tool, matching Orbit.
+     - In **volume mode** (HUD open, `locked_vol < 0`) keyboard volume keys pass through so Windows changes the volume natively and the endpoint callback mirrors it on the gauge.
+  4. **Raw Input Consumer-Control Click Listener (`run_raw_input_click_listener`)**:
+     - AVRCP has no play/pause toggle opcode: the dial click arrives as discrete PLAY / PAUSE (Linux sees `KEY_PLAYCD` / `KEY_PAUSECD`). Windows maps HID Consumer **Play (0xB0)** and **Pause (0xB1)** to `WM_APPCOMMAND` only, with **no virtual key**, so `WH_KEYBOARD_LL` never sees them.
+     - A message-only window registers Consumer Control (`0x0C/0x01`, a *shared* HID collection) with `RIDEV_INPUTSINK`, parses reports with `HidP_GetUsages` (hid.dll loaded dynamically) and edge-detects 0xB0 / 0xB1 / 0xCD presses.
+     - Hook and Raw Input both call `handle_dial_click()`; a compare-exchange on the 400ms debounce timestamp guarantees one physical press acts once.
+     - **Limitation**: Raw Input observes but cannot swallow, so a discrete Play/Pause may still reach the active media session. `VK_MEDIA_PLAY_PAUSE` clicks remain fully swallowed by the hook.
+- **Floating-Model Echo Window**: the GUID_NULL duplicate filter is *armed* by each of our own sets and *disarmed* by the next real turn (`ECHO_ARMED`), so turning straight back onto the level last set (overshoot correction) is a detent, not an echo. Decision logic lives in `dial_logic::classify_floating_change` and is covered by a simulation test.
 - **Microsecond Non-Blocking Execution**:
   - All heavy work (GUI display, Tauri event emission, Win32 calls) is strictly dispatched to background worker threads (`thread::spawn`).
 - **Focus Auto-Dismiss with 400ms Grace Period**:
@@ -175,13 +185,18 @@ The CMF Buds Pro 2 rotary dial and smart case have **no proprietary Bluetooth pr
 - Uses a global CoreGraphics Event Tap (`CGEventTapCreate`) listening to `NX_SYSDEFINED` events (subtype `NX_SUBTYPE_AUX_CONTROL_BUTTONS = 8`).
 - **Lock-Free Fast Path**:
   - Event tap callback operates under strict macOS timing limits. Contended locks result in `kCGEventTapDisabledByTimeout`.
-  - Global state uses `OnceLock<Arc<AtomicBool/I32>>` and `AtomicUsize` for debounce timestamps, avoiding all mutexes and `RwLock`s.
+  - Global state uses `OnceLock<Arc<AtomicBool/I32>>` and atomics for debounce timestamps, avoiding all mutexes and `RwLock`s.
+  - Each callback wraps its `NSEvent` work in `objc_autoreleasePoolPush/Pop` (the tap thread has no pool).
+- **Aux key decoding** (`dial_logic::decode_aux_key`): `data1 = [key_type:16][key_state:8][flags:8]`, key-down is `key_state == 0x0A` exactly (0x0B is key-up; testing bit 0 misread every key-up as a second detent).
+- **CoreAudio Volume Listener (AVRCP Absolute Volume)**: Bluetooth absolute volume updates the output device volume directly instead of posting a media key, so `AudioObjectAddPropertyListener` on the default output device's `VirtualMasterVolume` detects turns (re-bound on `kAudioHardwarePropertyDefaultOutputDevice` changes). `init_hud_rotation` moves the volume into `6..94` for headroom (`ROTATION_BASELINE`); turns snap back on a worker thread (never inside the HAL listener). Shares `classify_volume_change` with the tests.
+- **Focus hand-back**: hiding a window does not deactivate a macOS app, so `do_hide_hud` re-activates the last foreign app (`NSRunningApplication activateWithOptions:`, pid tracked by the context poller) before hotkeys are emitted.
+- **Hotkeys** go through `keymap::mac_hotkey`: profile `KEY_*` names are translated, and Ctrl maps to Command (except Ctrl+` and Ctrl+Tab, which are Control on a Mac too).
 - Intercepts system auxiliary keys:
   - `NX_KEYTYPE_SOUND_UP` (0) $\to$ CW dial rotation (`direction: 1`).
   - `NX_KEYTYPE_SOUND_DOWN` (1) $\to$ CCW dial rotation (`direction: -1`).
   - `NX_KEYTYPE_PLAY` (16) $\to$ Media center click.
 - **Hardware-Level Event Consumption & Immediate Volume Locking**:
-  - On initial center click when `!is_hud_open`, the callback synchronously sets `IS_HUD_OPEN_REF = true` and `LOCKED_VOL_REF = 50` before dispatching `do_show_hud`.
+  - On initial center click when `!is_hud_open`, the callback synchronously sets `IS_HUD_OPEN_REF = true` before dispatching `do_show_hud` (which captures the real volume; no placeholder lock).
   - While HUD is open (`is_hud_open == true`), rotary events are intercepted, `dial:rotate` is emitted, and `null_mut()` is returned unconditionally to consume the event completely so macOS neither adjusts system volume nor displays the native volume bezel.
   - When in scroll mode, rotary events emit `scroll:tick` and return `null_mut()`.
   - For center click: returns `null_mut()` so Apple Music or Spotify does not play/pause while opening, navigating, or confirming in the HUD.
@@ -245,9 +260,9 @@ Turns the rotary dial into a continuous, physical mouse scroll wheel for long do
    - Calls `GetMonitorBrightness` on physical monitors for instant (< 1ms), live hardware backlight queries with zero process spawning.
 2. **Internal Laptop Screens (WMI `WmiMonitorBrightness`)**:
    - Queries `root/wmi:WmiMonitorBrightness.CurrentBrightness` via non-interactive PowerShell with `CREATE_NO_WINDOW`.
-   - **Continuous Background Poller**: Runs a 1.5s background polling loop that continuously updates `cached_brightness`. This guarantees that brightness adjustments made outside the app (via laptop Fn keys, Windows Action Center slider, or Settings) immediately synchronize with Dial Control.
+   - **On-Demand Reads**: Brightness is read live only when needed (entering Brightness mode); there is no background poller.
    - **Hardware Transition Protection (`last_set_time`)**: When the user adjusts brightness through Dial Control, polling is suspended for 2.5s to prevent intermediate hardware sensor readings from overriding user intent.
-   - **Stepping Guarantee**: `step_brightness()` always steps relative to `get_brightness()`, ensuring the display never jumps or snaps back to stale values.
+   - **Stepping Guarantee**: WMI applies asynchronously, so within 2.5s of our own set `step_brightness()` steps from the pending target instead of re-reading stale hardware (`dial_logic::brightness_cache_is_fresh`). Brightness commands are `#[tauri::command(async)]` so PowerShell never blocks the main thread.
 
 #### macOS DisplayServices Dynamic Brightness (`src-tauri/src/platform/macos/brightness.rs`)
 - Dynamically loads `/System/Library/PrivateFrameworks/DisplayServices.framework/DisplayServices` via `dlopen`/`dlsym`.
@@ -275,8 +290,9 @@ Automatically switches the radial wheel's active profile based on the foreground
    - Hyprland: `hyprctl activewindow -j`
    - Sway: `swaymsg -t get_tree`
    - X11: `_NET_ACTIVE_WINDOW` root window atom via `x11-dl`.
-4. **Profile Matching (`App.tsx`)**:
-   - Checks `match_patterns` in `config/profiles.json` against `wm_class`, `app`, and window `title`.
+4. **Profile Matching**:
+   - Backend `common::match_profile` matches whole words / phrases (never substrings: `zed` must not hit "optimized"). App identity (WM_CLASS / exe / bundle id) beats the title, except streaming media (YouTube inside a browser). Electron's shared `Chrome_WidgetWin_*` class is ignored for matching on Windows.
+   - Frontend `utils/contextMatch.ts` applies only **user-added** patterns (identity substring, title whole-word) and otherwise trusts the backend id. Context changes arriving while the HUD is open are deferred until it closes/reopens.
 
 ---
 
@@ -366,8 +382,13 @@ install -m 755 src-tauri/target/release/dial-control bin/dial-control
 2. **Elevate Single Commands Only**: If a command legitimately requires host network, D-Bus system bus access, or git lockfiles (`.git/index.lock`), run only that specific command with `BypassSandbox: true`.
 3. **Keep Tool Summary Consistent**: When retrying commands with `BypassSandbox: true`, keep `toolSummary` identical.
 
+### 🧪 Tests
+- **Rust** (`cargo test --manifest-path src-tauri/Cargo.toml --lib`): every OS backend routes its decisions through pure functions in `platform/dial_logic.rs`, `platform/keymap.rs` and `platform/common.rs`, so Windows and macOS behaviour is unit-tested on any host. When fixing a backend bug, extract the decision into one of these modules and add a regression test.
+- **Frontend** (`npm test`): Node's built-in runner with `--experimental-strip-types` (no extra deps). Test files import with explicit `.ts` extensions and use `import type` for type-only imports.
+- **Emit each Tauri event exactly once**: `Emitter::emit` broadcasts to every webview no matter which handle it is called on, so `app.emit(...)` followed by `window.emit(...)` delivers twice (this double-stepped the wheel on Windows and macOS).
+
 ### 📝 Verification Checklist Before Finishing Any Task
-1. Run `npm run build` to verify TypeScript and frontend bundling.
+1. Run `npm run build` to verify TypeScript and frontend bundling, and `npm test` + `cargo test --manifest-path src-tauri/Cargo.toml --lib`.
 2. Run `cargo check --manifest-path src-tauri/Cargo.toml` to verify Linux backend.
 3. Run `cargo check --target x86_64-pc-windows-msvc --manifest-path src-tauri/Cargo.toml` to verify Windows backend.
 4. Run `CC_aarch64_apple_darwin=clang cargo check --target aarch64-apple-darwin --manifest-path src-tauri/Cargo.toml` to verify macOS backend.

@@ -1,5 +1,7 @@
 pub mod traits;
 pub mod common;
+pub mod dial_logic;
+pub mod keymap;
 
 #[cfg(target_os = "linux")]
 pub mod linux;

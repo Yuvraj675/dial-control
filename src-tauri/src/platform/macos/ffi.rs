@@ -178,7 +178,28 @@ extern "C" {
         inObjectID: AudioObjectID,
         inAddress: *const AudioObjectPropertyAddress,
     ) -> Boolean;
+
+    pub fn AudioObjectAddPropertyListener(
+        inObjectID: AudioObjectID,
+        inAddress: *const AudioObjectPropertyAddress,
+        inListener: AudioObjectPropertyListenerProc,
+        inClientData: *mut c_void,
+    ) -> OSStatus;
+
+    pub fn AudioObjectRemovePropertyListener(
+        inObjectID: AudioObjectID,
+        inAddress: *const AudioObjectPropertyAddress,
+        inListener: AudioObjectPropertyListenerProc,
+        inClientData: *mut c_void,
+    ) -> OSStatus;
 }
+
+pub type AudioObjectPropertyListenerProc = unsafe extern "C" fn(
+    inObjectID: AudioObjectID,
+    inNumberAddresses: u32,
+    inAddresses: *const AudioObjectPropertyAddress,
+    inClientData: *mut c_void,
+) -> OSStatus;
 
 extern "C" {
     pub fn dlopen(filename: *const std::ffi::c_char, flag: std::ffi::c_int) -> *mut c_void;
@@ -200,4 +221,6 @@ extern "C" {
     pub fn objc_getClass(name: *const std::ffi::c_char) -> *mut c_void;
     pub fn sel_registerName(name: *const std::ffi::c_char) -> *mut c_void;
     pub fn objc_msgSend();
+    pub fn objc_autoreleasePoolPush() -> *mut c_void;
+    pub fn objc_autoreleasePoolPop(pool: *mut c_void);
 }
