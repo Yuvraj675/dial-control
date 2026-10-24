@@ -1,5 +1,6 @@
 use crate::platform::traits::MediaControl;
 use crate::platform::windows::ffi::*;
+use crate::platform::windows::smtc;
 use std::mem::size_of;
 use std::thread;
 use std::time::Duration;
@@ -47,16 +48,22 @@ impl WindowsMedia {
 impl MediaControl for WindowsMedia {
     fn play_pause(&self) {
         println!("[Windows Media] Play/Pause toggled");
-        self.send_media_key(VK_MEDIA_PLAY_PAUSE);
+        if !smtc::forward_media(smtc::MediaCommand::TogglePlayPause) {
+            self.send_media_key(VK_MEDIA_PLAY_PAUSE);
+        }
     }
 
     fn next_track(&self) {
         println!("[Windows Media] Next track");
-        self.send_media_key(VK_MEDIA_NEXT_TRACK);
+        if !smtc::forward_media(smtc::MediaCommand::Next) {
+            self.send_media_key(VK_MEDIA_NEXT_TRACK);
+        }
     }
 
     fn prev_track(&self) {
         println!("[Windows Media] Prev track");
-        self.send_media_key(VK_MEDIA_PREV_TRACK);
+        if !smtc::forward_media(smtc::MediaCommand::Previous) {
+            self.send_media_key(VK_MEDIA_PREV_TRACK);
+        }
     }
 }
