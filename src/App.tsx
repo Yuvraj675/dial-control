@@ -169,6 +169,7 @@ export function App() {
 
   // Execute an action (either mode switch, profile switch, home dial, or native system command/hotkey)
   const handleExecuteAction = (action: WheelAction) => {
+    diag(`execute slice ${action.id} (type=${action.type})`);
     // 1. Home Dial Selector
     if (action.type === "home" || action.id === "home_dial") {
       setActiveProfileId("home");
@@ -265,6 +266,10 @@ export function App() {
   };
 
   const lastDialClickRef = useRef<number>(0);
+  // Field diagnostics: mirrors HUD decisions into the backend log file (see platform::diag).
+  const diag = (msg: string) => {
+    if (isTauri) invoke("diag_log", { msg }).catch(() => {});
+  };
   const pendingProfileRef = useRef<string | null>(null);
   const hasRotatedRef = useRef<boolean>(false);
 
@@ -310,12 +315,17 @@ export function App() {
       // 2. Dial Center Click (Triggered when HUD is already open)
       const unlistenClick = await listen("dial:click", () => {
         const now = Date.now();
-        if (now - lastDialClickRef.current < 500) {
+        const { currentMode, selectedIndex, activeProfile } = stateRef.current;
+        const sinceLast = now - lastDialClickRef.current;
+        diag(
+          `dial:click received (mode=${currentMode}, index=${selectedIndex}, ` +
+            `slice=${activeProfile.actions[selectedIndex]?.id}, rotated=${hasRotatedRef.current}, sinceLast=${sinceLast}ms)`
+        );
+        if (sinceLast < 500) {
+          diag("dial:click ignored by 500ms UI debounce");
           return; // Ignore hardware bounce / duplicate events
         }
         lastDialClickRef.current = now;
-
-        const { currentMode, selectedIndex, activeProfile } = stateRef.current;
 
         // When in active volume/brightness adjustment mode or scroll mode, click confirms and dismisses HUD / exits scroll
         if (currentMode !== "menu") {

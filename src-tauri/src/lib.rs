@@ -282,7 +282,14 @@ fn show_hud(app: AppHandle, state: tauri::State<AppState>) {
     do_show_hud(&app, &state);
 }
 
+/// Lets the HUD webview append to the field diagnostic log (it has no file access).
+#[tauri::command(async)]
+fn diag_log(msg: String) {
+    platform::diag::log(&format!("[ui] {msg}"));
+}
+
 pub(crate) fn do_hide_hud(app: &AppHandle, state: &AppState) {
+    platform::diag::log("HUD hidden");
     let orig_vol = state.locked_vol.load(Ordering::SeqCst);
     state.is_hud_open.store(false, Ordering::SeqCst);
     state.is_scroll_mode.store(false, Ordering::SeqCst);
@@ -397,6 +404,7 @@ fn execute_action(
     let action_key = action.get("action").and_then(|v| v.as_str()).unwrap_or("");
 
     println!("[Action] Executing action: {} (type: {}, action: {})", action_id, action_type, action_key);
+    platform::diag::log(&format!("execute_action {action_id} ({action_type})"));
 
     // Close / Dismiss HUD
     if action_id == "close_hud" || action_type == "close" {
@@ -883,7 +891,8 @@ pub fn run() {
             register_activation_shortcut,
             set_recording_shortcut,
             load_config,
-            save_config
+            save_config,
+            diag_log
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

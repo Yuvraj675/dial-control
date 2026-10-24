@@ -143,6 +143,7 @@ fn handle_dial_click(source: &str) {
 
     match action {
         ClickAction::ExitScroll => {
+            crate::platform::diag::log("click decision: exit scroll mode");
             println!("[Windows Dial] Dial click ({}) -> Exiting Scroll Mode", source);
             with_app(|app| {
                 let state: tauri::State<AppState> = app.state();
@@ -150,6 +151,7 @@ fn handle_dial_click(source: &str) {
             });
         }
         ClickAction::OpenHud => {
+            crate::platform::diag::log("click decision: open HUD");
             crate::platform::windows::smtc::request_focus_check();
             // Flip the flag immediately so rotation arriving before the window is up is intercepted.
             if let Ok(guard) = IS_HUD_OPEN_REF.read() {
@@ -168,6 +170,7 @@ fn handle_dial_click(source: &str) {
             });
         }
         ClickAction::Confirm if !HAS_ROTATED.load(Ordering::SeqCst) => {
+            crate::platform::diag::log("click decision: toggle close (no rotation since open)");
             // Clicked again without rotating -> toggle the HUD closed.
             println!("[Windows Dial] Dial click ({}) without rotation -> Toggling HUD closed", source);
             with_app(|app| {
@@ -176,6 +179,7 @@ fn handle_dial_click(source: &str) {
             });
         }
         ClickAction::Confirm => {
+            crate::platform::diag::log("click decision: confirm -> emit dial:click");
             println!("[Windows Dial] Dial click ({}) -> Confirm selection", source);
             with_app(|app| {
                 let _ = app.emit("dial:click", ());
