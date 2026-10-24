@@ -78,6 +78,39 @@ fn is_own_app(front: &FrontWindow) -> bool {
 
 /// Re-activates the app the user was in before the HUD took focus. Must run on the main
 /// thread (called via `run_on_main_thread`).
+/// Lets the HUD appear over full-screen apps: status window level, joins every Space
+/// (including full-screen ones) and never hides when the app deactivates. Main thread.
+#[cfg(target_os = "macos")]
+pub fn raise_over_fullscreen(ns_window: *mut std::ffi::c_void) {
+    const NS_STATUS_WINDOW_LEVEL: isize = 25;
+    const CAN_JOIN_ALL_SPACES: usize = 1 << 0;
+    const STATIONARY: usize = 1 << 4;
+    const IGNORES_CYCLE: usize = 1 << 6;
+    const FULL_SCREEN_AUXILIARY: usize = 1 << 8;
+    if ns_window.is_null() {
+        return;
+    }
+    unsafe {
+        type SendIsize = unsafe extern "C" fn(*mut std::ffi::c_void, *mut std::ffi::c_void, isize);
+        type SendUsize = unsafe extern "C" fn(*mut std::ffi::c_void, *mut std::ffi::c_void, usize);
+        type SendBool = unsafe extern "C" fn(*mut std::ffi::c_void, *mut std::ffi::c_void, i8);
+        type Send0 = unsafe extern "C" fn(*mut std::ffi::c_void, *mut std::ffi::c_void);
+        let s_isize: SendIsize = std::mem::transmute(objc_msgSend as *const ());
+        let s_usize: SendUsize = std::mem::transmute(objc_msgSend as *const ());
+        let s_bool: SendBool = std::mem::transmute(objc_msgSend as *const ());
+        let s0: Send0 = std::mem::transmute(objc_msgSend as *const ());
+        let sel = |n: &[u8]| sel_registerName(n.as_ptr() as *const _);
+        s_isize(ns_window, sel(b"setLevel:\0"), NS_STATUS_WINDOW_LEVEL);
+        s_usize(
+            ns_window,
+            sel(b"setCollectionBehavior:\0"),
+            CAN_JOIN_ALL_SPACES | STATIONARY | IGNORES_CYCLE | FULL_SCREEN_AUXILIARY,
+        );
+        s_bool(ns_window, sel(b"setHidesOnDeactivate:\0"), 0);
+        s0(ns_window, sel(b"orderFrontRegardless\0"));
+    }
+}
+
 pub fn reactivate_previous_app() {
     let pid = LAST_FOREIGN_PID.load(Ordering::SeqCst);
     if pid <= 0 {
@@ -128,6 +161,11 @@ impl ContextDetector for MacContext {
                 }
                 if front.pid > 0 {
                     LAST_FOREIGN_PID.store(front.pid, Ordering::SeqCst);
+                }
+
+                if front.app_name != last_app {
+                    // A newly focused app (a browser with YouTube) may have taken Now Playing.
+                    super::now_playing::reassert(&app);
                 }
 
                 if front.app_name != last_app || front.title != last_title {

@@ -179,6 +179,7 @@ fn stop_scroll_mode(app: AppHandle, state: tauri::State<AppState>) {
 
 #[tauri::command]
 fn close_hud_for_scroll(app: AppHandle, state: tauri::State<AppState>) {
+    platform::diag::log("scroll mode: HUD closed, scrolling active");
     state.is_hud_open.store(false, Ordering::SeqCst);
     state.is_scroll_mode.store(true, Ordering::SeqCst);
 
@@ -243,6 +244,14 @@ pub(crate) fn do_show_hud(app: &AppHandle, state: &AppState) {
             }
         }
 
+        #[cfg(target_os = "macos")]
+        if let Ok(ns_window) = window.ns_window() {
+            let ns_window = ns_window as usize;
+            let _ = app.run_on_main_thread(move || {
+                crate::platform::macos::context::raise_over_fullscreen(ns_window as *mut std::ffi::c_void)
+            });
+        }
+
         #[cfg(target_os = "windows")]
         {
             use crate::platform::windows::ffi::*;
@@ -298,6 +307,9 @@ pub(crate) fn do_hide_hud(app: &AppHandle, state: &AppState) {
     if let Some(window) = app.get_webview_window("hud") {
         let _ = window.hide();
     }
+    // The next click (opening the HUD again) must come to us, not the app now in front.
+    #[cfg(target_os = "macos")]
+    crate::platform::macos::now_playing::reassert(app);
 
     if orig_vol >= 0 {
         state.platform.audio().set_volume(orig_vol);
@@ -777,6 +789,12 @@ pub fn run() {
             }
         })
         .setup(move |app| {
+            // Only accessory (menu-bar) apps can show windows over another app's full-screen
+            // Space; a regular app pulls the user back to the desktop. Settings stays reachable
+            // from the tray icon.
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
             // Build Tray Menu (Explicit MenuItems with proper labels and separator)
             let toggle_i = MenuItem::with_id(app, "toggle_hud", "Toggle Radial HUD", true, None::<&str>)?;
             let settings_i = MenuItem::with_id(app, "open_settings", "Settings and Preferences", true, None::<&str>)?;
