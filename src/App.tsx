@@ -399,6 +399,9 @@ export function App() {
               })
               .catch(console.error);
 
+            // Pre-fetch live system brightness so backend cache is primed
+            invoke<number>("get_system_brightness").catch(console.error);
+
           }
         }
       });
