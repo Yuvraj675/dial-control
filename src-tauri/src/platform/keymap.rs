@@ -159,6 +159,27 @@ pub fn mac_hotkey(keys: &[String]) -> Option<(u64, u16)> {
     keycode.map(|code| (flags, code))
 }
 
+/// Resolves an explicit macOS shortcut (`keys_mac`) exactly as written: Ctrl stays Control
+/// and Meta/Super is Command. No PC-to-Mac translation is applied.
+pub fn mac_hotkey_literal(keys: &[String]) -> Option<(u64, u16)> {
+    let mut flags: u64 = 0;
+    let mut keycode: Option<u16> = None;
+    for key in keys {
+        match normalize(key).as_str() {
+            "CTRL" | "CONTROL" | "LEFTCTRL" | "RIGHTCTRL" | "LCTRL" | "RCTRL" => flags |= MAC_FLAG_CONTROL,
+            "SHIFT" | "LEFTSHIFT" | "RIGHTSHIFT" | "LSHIFT" | "RSHIFT" => flags |= MAC_FLAG_SHIFT,
+            "ALT" | "OPTION" | "OPT" | "LEFTALT" | "RIGHTALT" | "LALT" | "RALT" => flags |= MAC_FLAG_OPTION,
+            "SUPER" | "META" | "WIN" | "CMD" | "COMMAND" | "LEFTMETA" | "RIGHTMETA" => flags |= MAC_FLAG_COMMAND,
+            other => {
+                if let Some(code) = mac_keycode(other) {
+                    keycode = Some(code);
+                }
+            }
+        }
+    }
+    keycode.map(|code| (flags, code))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -201,14 +222,35 @@ mod tests {
             "KEY_RIGHT", "KEY_LEFT", "KEY_F", "KEY_M", "KEY_LEFTCTRL", "KEY_S", "KEY_LEFTSHIFT",
             "KEY_LEFTALT", "KEY_SLASH", "KEY_GRAVE", "KEY_G", "KEY_C", "KEY_V", "KEY_DELETE",
             "KEY_N", "KEY_F2", "KEY_R", "KEY_T", "KEY_W", "KEY_Z", "KEY_Y", "KEY_EQUAL",
-            "KEY_MINUS", "KEY_H", "KEY_F4",
+            "KEY_MINUS", "KEY_H", "KEY_F4", "KEY_V", "KEY_LEFTMETA", "KEY_BACKSPACE", "KEY_ENTER",
+            "KEY_LEFTBRACE", "KEY_RIGHTBRACE",
         ];
         for k in used {
             assert!(windows_vk(k).is_some(), "Windows cannot map {k}");
-            let is_modifier = matches!(k, "KEY_LEFTCTRL" | "KEY_LEFTSHIFT" | "KEY_LEFTALT");
+            let is_modifier = matches!(k, "KEY_LEFTCTRL" | "KEY_LEFTSHIFT" | "KEY_LEFTALT" | "KEY_LEFTMETA");
             if !is_modifier {
                 assert!(mac_keycode(k).is_some(), "macOS cannot map {k}");
             }
+        }
+    }
+
+    #[test]
+    fn every_default_macos_shortcut_resolves() {
+        // keys_mac lists from src/data/defaultProfiles.ts; each must produce a real keycode.
+        let shortcuts: &[&[&str]] = &[
+            &["KEY_LEFTMETA", "KEY_S"], &["KEY_LEFTSHIFT", "KEY_LEFTALT", "KEY_F"],
+            &["KEY_LEFTMETA", "KEY_LEFTSHIFT", "KEY_F"], &["KEY_LEFTMETA", "KEY_SLASH"],
+            &["KEY_LEFTCTRL", "KEY_GRAVE"], &["KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_G"],
+            &["KEY_LEFTMETA", "KEY_C"], &["KEY_LEFTMETA", "KEY_V"], &["KEY_LEFTMETA", "KEY_BACKSPACE"],
+            &["KEY_LEFTMETA", "KEY_LEFTSHIFT", "KEY_N"], &["KEY_ENTER"],
+            &["KEY_LEFTMETA", "KEY_LEFTBRACE"], &["KEY_LEFTMETA", "KEY_RIGHTBRACE"],
+            &["KEY_LEFTMETA", "KEY_R"], &["KEY_LEFTMETA", "KEY_T"], &["KEY_LEFTMETA", "KEY_W"],
+            &["KEY_LEFTMETA", "KEY_LEFTSHIFT", "KEY_T"], &["KEY_LEFTMETA", "KEY_Z"],
+            &["KEY_LEFTMETA", "KEY_LEFTSHIFT", "KEY_Z"], &["KEY_LEFTMETA", "KEY_EQUAL"],
+            &["KEY_LEFTMETA", "KEY_MINUS"],
+        ];
+        for sc in shortcuts {
+            assert!(mac_hotkey_literal(&keys(sc)).is_some(), "unresolvable macOS shortcut {sc:?}");
         }
     }
 
@@ -235,6 +277,19 @@ mod tests {
     fn mac_keeps_control_where_macs_use_control() {
         assert_eq!(mac_hotkey(&keys(&["KEY_LEFTCTRL", "KEY_GRAVE"])), Some((MAC_FLAG_CONTROL, 0x32)));
         assert_eq!(mac_hotkey(&keys(&["Ctrl", "Tab"])), Some((MAC_FLAG_CONTROL, 0x30)));
+    }
+
+    #[test]
+    fn mac_literal_keeps_control_and_maps_meta_to_command() {
+        assert_eq!(
+            mac_hotkey_literal(&keys(&["KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_G"])),
+            Some((MAC_FLAG_CONTROL | MAC_FLAG_SHIFT, 0x05))
+        );
+        assert_eq!(mac_hotkey_literal(&keys(&["KEY_LEFTMETA", "KEY_C"])), Some((MAC_FLAG_COMMAND, 0x08)));
+        assert_eq!(mac_hotkey_literal(&keys(&["KEY_LEFTMETA", "KEY_LEFTBRACE"])), Some((MAC_FLAG_COMMAND, 0x21)));
+        assert_eq!(mac_hotkey_literal(&keys(&["KEY_LEFTMETA", "KEY_BACKSPACE"])), Some((MAC_FLAG_COMMAND, 0x33)));
+        assert_eq!(mac_hotkey_literal(&keys(&["KEY_ENTER"])), Some((0, 0x24)));
+        assert_eq!(mac_hotkey_literal(&keys(&["KEY_LEFTMETA"])), None);
     }
 
     #[test]

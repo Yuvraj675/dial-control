@@ -450,12 +450,24 @@ fn execute_action(
                 // 1. Hide HUD immediately so the compositor can return focus to the target window
                 hide_hud(app, state.clone());
 
+                // macOS has its own authored shortcut (keys_mac), used exactly as written.
+                let native_keys: Option<Vec<String>> = if cfg!(target_os = "macos") {
+                    action.get("keys_mac").and_then(|k| k.as_array()).map(|arr| {
+                        arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect()
+                    })
+                } else {
+                    None
+                };
+
                 // 2. Micro-sleep in background thread to guarantee target window focus settles before typing
                 let platform = state.platform.clone();
                 std::thread::spawn(move || {
                     std::thread::sleep(std::time::Duration::from_millis(120));
-                    println!("[Action] Emitting hotkeys to foreground window: {:?}", keys);
-                    platform.input().emit_hotkey(&keys);
+                    println!("[Action] Emitting hotkeys to foreground window: {:?}", native_keys.as_ref().unwrap_or(&keys));
+                    match native_keys {
+                        Some(native) if !native.is_empty() => platform.input().emit_native_hotkey(&native),
+                        _ => platform.input().emit_hotkey(&keys),
+                    }
                 });
             }
         }
