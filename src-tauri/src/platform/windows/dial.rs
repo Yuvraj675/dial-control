@@ -118,6 +118,7 @@ fn with_app<F: FnOnce(AppHandle) + Send + 'static>(f: F) {
 /// only the first observer acts.
 fn handle_dial_click(source: &str) {
     let now = now_millis();
+    crate::platform::diag::log(&format!("click from {source}"));
     let last = LAST_DIAL_CLICK_TIME.load(Ordering::SeqCst);
     let action = classify_click(
         now,
@@ -127,6 +128,7 @@ fn handle_dial_click(source: &str) {
         read_flag(&IS_SCROLL_MODE_REF),
     );
     if action == ClickAction::Debounced {
+        crate::platform::diag::log(&format!("click from {source} debounced"));
         return;
     }
     if LAST_DIAL_CLICK_TIME
@@ -145,6 +147,7 @@ fn handle_dial_click(source: &str) {
             });
         }
         ClickAction::OpenHud => {
+            crate::platform::windows::smtc::request_focus_check();
             // Flip the flag immediately so rotation arriving before the window is up is intercepted.
             if let Ok(guard) = IS_HUD_OPEN_REF.read() {
                 if let Some(ref is_open) = *guard {
@@ -634,6 +637,7 @@ unsafe extern "system" fn callback_on_notify(
         FloatingAction::Turn { direction, recenter } => (direction, recenter),
     };
 
+    crate::platform::windows::smtc::request_focus_check();
     set_last_audio_level(new_vol);
     // A real turn consumes the echo window: turning straight back onto the level we last
     // set must count as a detent, not as Windows' duplicate notification.
