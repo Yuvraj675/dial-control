@@ -212,6 +212,8 @@ extern "system" {
     pub fn PostQuitMessage(nExitCode: i32);
     pub fn SendInput(cInputs: u32, pInputs: *const INPUT, cbSize: i32) -> u32;
     pub fn EnumDisplayMonitors(hdc: HDC, lprcClip: *const c_void, lpfnEnum: MONITORENUMPROC, dwData: LPARAM) -> BOOL;
+    pub fn SetTimer(hWnd: HWND, nIDEvent: usize, uElapse: u32, lpTimerFunc: Option<unsafe extern "system" fn(HWND, u32, usize, DWORD)>) -> usize;
+    pub fn KillTimer(hWnd: HWND, uIDEvent: usize) -> BOOL;
 }
 
 #[link(name = "kernel32")]

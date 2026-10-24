@@ -1,10 +1,10 @@
 use crate::platform::traits::SystemBrightness;
 use crate::platform::windows::ffi::*;
 use std::process::Command;
-use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 unsafe extern "system" fn enum_mon_proc(
     hmon: HMONITOR,
@@ -15,6 +15,79 @@ unsafe extern "system" fn enum_mon_proc(
     let monitors = &mut *(lparam as *mut Vec<HMONITOR>);
     monitors.push(hmon);
     1
+}
+
+fn query_dxva2_brightness() -> Option<i32> {
+    unsafe {
+        let dxva2_name: Vec<u16> = "dxva2.dll\0".encode_utf16().collect();
+        let h_dxva2 = LoadLibraryW(dxva2_name.as_ptr());
+        if h_dxva2.is_null() {
+            return None;
+        }
+
+        let p_get_num = GetProcAddress(h_dxva2, b"GetNumberOfPhysicalMonitorsFromHMONITOR\0".as_ptr());
+        let p_get_phys = GetProcAddress(h_dxva2, b"GetPhysicalMonitorsFromHMONITOR\0".as_ptr());
+        let p_destroy = GetProcAddress(h_dxva2, b"DestroyPhysicalMonitors\0".as_ptr());
+        let p_get_bright = GetProcAddress(h_dxva2, b"GetMonitorBrightness\0".as_ptr());
+
+        if p_get_num.is_null()
+            || p_get_phys.is_null()
+            || p_destroy.is_null()
+            || p_get_bright.is_null()
+        {
+            FreeLibrary(h_dxva2);
+            return None;
+        }
+
+        let get_num: FnGetNumberOfPhysicalMonitorsFromHMONITOR = std::mem::transmute(p_get_num);
+        let get_phys: FnGetPhysicalMonitorsFromHMONITOR = std::mem::transmute(p_get_phys);
+        let destroy: FnDestroyPhysicalMonitors = std::mem::transmute(p_destroy);
+        let get_bright: FnGetMonitorBrightness = std::mem::transmute(p_get_bright);
+
+        let mut monitors: Vec<HMONITOR> = Vec::new();
+        let _ = EnumDisplayMonitors(
+            std::ptr::null_mut(),
+            std::ptr::null(),
+            Some(enum_mon_proc),
+            &mut monitors as *mut _ as LPARAM,
+        );
+
+        let mut found_brightness: Option<i32> = None;
+        for hmon in monitors {
+            let mut count: DWORD = 0;
+            if get_num(hmon, &mut count) != 0 && count > 0 {
+                let mut phys = vec![
+                    PHYSICAL_MONITOR {
+                        hPhysicalMonitor: std::ptr::null_mut(),
+                        szPhysicalMonitorDescription: [0; 128],
+                    };
+                    count as usize
+                ];
+                if get_phys(hmon, count, phys.as_mut_ptr()) != 0 {
+                    for p in &phys {
+                        let mut min: DWORD = 0;
+                        let mut cur: DWORD = 0;
+                        let mut max: DWORD = 100;
+                        if get_bright(p.hPhysicalMonitor, &mut min, &mut cur, &mut max) != 0 {
+                            if max > min {
+                                let span = max as i32 - min as i32;
+                                let pct = (((cur as i32 - min as i32) * 100) / span).clamp(0, 100);
+                                found_brightness = Some(pct);
+                                break;
+                            }
+                        }
+                    }
+                    let _ = destroy(count, phys.as_mut_ptr());
+                }
+            }
+            if found_brightness.is_some() {
+                break;
+            }
+        }
+
+        FreeLibrary(h_dxva2);
+        found_brightness
+    }
 }
 
 fn set_dxva2_brightness(pct: i32) {
@@ -85,10 +158,36 @@ fn set_dxva2_brightness(pct: i32) {
     }
 }
 
+fn query_wmi_brightness() -> Option<i32> {
+    let mut cmd = Command::new("powershell");
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    if let Ok(output) = cmd
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "$b = (Get-CimInstance -Namespace root/wmi -ClassName WmiMonitorBrightness -ErrorAction SilentlyContinue).CurrentBrightness; if ($null -eq $b) { $b = (Get-WmiObject -Namespace root/wmi -ClassName WmiMonitorBrightness -ErrorAction SilentlyContinue).CurrentBrightness }; if ($null -ne $b) { Write-Output $b }",
+        ])
+        .output()
+    {
+        if let Ok(s) = String::from_utf8(output.stdout) {
+            if let Ok(val) = s.trim().parse::<i32>() {
+                return Some(val.clamp(0, 100));
+            }
+        }
+    }
+    None
+}
+
 pub struct WindowsBrightness {
     cached_brightness: Arc<AtomicI32>,
     pending_target: Arc<AtomicI32>,
     is_updating: Arc<AtomicBool>,
+    last_set_time: Arc<AtomicUsize>,
 }
 
 impl WindowsBrightness {
@@ -96,30 +195,37 @@ impl WindowsBrightness {
         let cached = Arc::new(AtomicI32::new(70));
         let pending = Arc::new(AtomicI32::new(70));
         let updating = Arc::new(AtomicBool::new(false));
+        let last_set = Arc::new(AtomicUsize::new(0));
 
-        // Query initial hardware brightness asynchronously without visible console window
-        let cached_clone = cached.clone();
+        let cached_poll = cached.clone();
+        let last_set_poll = last_set.clone();
+
+        // Continuous background poller: polls every 1.5 seconds so changes made outside
+        // the app (via laptop Fn keys, Windows Action Center, or Settings) are immediately synchronized.
         thread::spawn(move || {
-            let mut cmd = Command::new("powershell");
-            #[cfg(target_os = "windows")]
-            {
-                use std::os::windows::process::CommandExt;
-                cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+            // Initial poll
+            if let Some(val) = query_dxva2_brightness().or_else(query_wmi_brightness) {
+                println!("[Windows Brightness] Initial hardware brightness detected: {}%", val);
+                cached_poll.store(val, Ordering::SeqCst);
             }
-            if let Ok(output) = cmd
-                .args([
-                    "-NoProfile",
-                    "-NonInteractive",
-                    "-Command",
-                    "$b = (Get-CimInstance -Namespace root/wmi -ClassName WmiMonitorBrightness -ErrorAction SilentlyContinue).CurrentBrightness; if ($null -eq $b) { $b = (Get-WmiObject -Namespace root/wmi -ClassName WmiMonitorBrightness -ErrorAction SilentlyContinue).CurrentBrightness }; if ($null -ne $b) { Write-Output $b }",
-                ])
-                .output()
-            {
-                if let Ok(s) = String::from_utf8(output.stdout) {
-                    if let Ok(val) = s.trim().parse::<i32>() {
-                        println!("[Windows Brightness] Initial hardware query: {}%", val);
-                        cached_clone.store(val, Ordering::SeqCst);
-                    }
+
+            loop {
+                thread::sleep(Duration::from_millis(1500));
+
+                let now = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as usize;
+
+                let last = last_set_poll.load(Ordering::SeqCst);
+                // If the user just stepped brightness through Dial Control within 2.5s, skip polling
+                // to avoid overwriting pending adjustments with transitional hardware sensor values.
+                if now.saturating_sub(last) < 2500 {
+                    continue;
+                }
+
+                if let Some(val) = query_dxva2_brightness().or_else(query_wmi_brightness) {
+                    cached_poll.store(val, Ordering::SeqCst);
                 }
             }
         });
@@ -128,13 +234,20 @@ impl WindowsBrightness {
             cached_brightness: cached,
             pending_target: pending,
             is_updating: updating,
+            last_set_time: last_set,
         }
     }
 
     fn apply_hardware_brightness(&self, target: i32) {
         self.pending_target.store(target, Ordering::SeqCst);
 
-        // Also adjust external desktop monitors (DDC/CI via dxva2) immediately
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as usize;
+        self.last_set_time.store(now, Ordering::SeqCst);
+
+        // Adjust external desktop monitors (DDC/CI via dxva2) immediately (< 1ms)
         set_dxva2_brightness(target);
 
         // Debounce: If already updating in background, the worker loop will pick up the latest pending target
@@ -146,7 +259,7 @@ impl WindowsBrightness {
         let pending_target = self.pending_target.clone();
 
         thread::spawn(move || {
-            // Debounce delay so fast scrolling doesn't spam PowerShell
+            // Debounce delay so fast rotary ticks don't spam PowerShell
             thread::sleep(Duration::from_millis(150));
 
             let final_target = pending_target.load(Ordering::SeqCst);
@@ -174,6 +287,11 @@ impl WindowsBrightness {
 
 impl SystemBrightness for WindowsBrightness {
     fn get_brightness(&self) -> i32 {
+        // External monitor live DDC/CI check (< 1ms)
+        if let Some(val) = query_dxva2_brightness() {
+            self.cached_brightness.store(val, Ordering::SeqCst);
+            return val;
+        }
         self.cached_brightness.load(Ordering::SeqCst)
     }
 

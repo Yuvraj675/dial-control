@@ -176,8 +176,32 @@ pub(crate) fn do_show_hud(app: &AppHandle, state: &AppState) {
                 gtk_w.present();
             }
         }
+
+        #[cfg(target_os = "windows")]
+        {
+            use crate::platform::windows::ffi::*;
+            if let Ok(hwnd) = window.hwnd() {
+                let hwnd = hwnd.0 as HWND;
+                unsafe {
+                    ShowWindow(hwnd, SW_RESTORE);
+                    SetForegroundWindow(hwnd);
+                    SetWindowPos(
+                        hwnd,
+                        HWND_TOPMOST,
+                        0,
+                        0,
+                        0,
+                        0,
+                        SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW,
+                    );
+                }
+            }
+        }
     }
     let _ = app.emit("hud:visibility", true);
+    if let Some(window) = app.get_webview_window("hud") {
+        let _ = window.emit("hud:visibility", true);
+    }
     let _ = app.emit(
         "sync:state",
         serde_json::json!({

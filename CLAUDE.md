@@ -16,6 +16,12 @@ The goal of this project is to build and ship a **standalone desktop application
   2. **Implement Platform Backends**: Build standard implementations for Windows (Win32/WASAPI), macOS (CoreAudio/IOKit/Cocoa), and Linux (WirePlumber/Pulse/sysfs).
   3. **Add Desktop Environment Edge-Case Fallbacks**: Only after the universal base is in place, layer in graceful workarounds for environment quirks (e.g. GNOME Wayland sandboxing, Mutter D-Bus, AT-SPI) without breaking or polluting other platforms.
 
+### 🛡️ Regression Prevention & Zero-Breakage Mandate
+- **NEVER BREAK PREVIOUSLY WORKING PLATFORMS OR FEATURES**:
+  - Whenever adding features, refactoring, or optimizing for one OS (e.g., implementing macOS support or tuning Linux), you **must ensure nothing previously built on Windows or Linux breaks**.
+  - New agent sessions must review the architecture and testing guidelines before making modifications.
+  - Before committing or concluding any turn, run local compilation checks for all supported targets: Linux (`cargo check`), Windows MSVC (`cargo check --target x86_64-pc-windows-msvc`), macOS (`CC_aarch64_apple_darwin=clang cargo check --target aarch64-apple-darwin`), and frontend (`npm run build`).
+
 ### 🔍 Research Before Probing (Internet First)
 - **Do not guess or run trial-and-error shell commands** on the host machine to figure out how OS-level features work.
 - **Use the internet**: Search the web, consult official OS APIs, and inspect how established cross-platform applications and Rust crates solve problems (e.g., `volumecontrol`, `brightness`, `x-win`, `active-win-pos-rs`, `enigo`, `winit`).
@@ -133,12 +139,19 @@ The CMF Buds Pro 2 rotary dial and smart case have **no proprietary Bluetooth pr
      - Only movements *away* from baseline in the active direction generate user actions.
 
 #### Windows Backend (`src-tauri/src/platform/windows/dial.rs`)
-- Uses a low-level keyboard hook (`WH_KEYBOARD_LL`) in a dedicated message pump thread.
-- Intercepts `VK_VOLUME_UP` and `VK_VOLUME_DOWN`.
-- When volume lock is active (`locked_vol >= 0`):
-  - Emits `dial:rotate` to the Tauri frontend.
-  - Returns `1` from the hook callback to **consume the key event**, completely blocking Windows from showing the volume slider or changing system volume.
-  - When in Volume mode (`locked_vol < 0`), lets the volume change naturally.
+- Uses a low-level keyboard hook (`WH_KEYBOARD_LL`) in a dedicated message pump thread with an automatic watchdog timer (`SetTimer`) and re-registration recovery loop.
+- **Microsecond Non-Blocking Execution**:
+  - Windows `LowLevelHooksTimeout` (100–300ms) silently kills hooks if callbacks block or acquire contended locks.
+  - Global state is held in lock-free `std::sync::OnceLock<Arc<AtomicBool/I32>>` with zero mutexes or `RwLock`s.
+  - All heavy work (GUI display, Tauri event emission, D-Bus/Win32 calls) is strictly dispatched to background worker threads (`thread::spawn`).
+- **Complete KeyDown and KeyUp Interception**:
+  - The hook checks both `WM_KEYDOWN`/`WM_SYSKEYDOWN` and `WM_KEYUP`/`WM_SYSKEYUP`.
+  - For `VK_MEDIA_PLAY_PAUSE`, `VK_PAUSE`, and `VK_MEDIA_STOP`: both KeyDown and KeyUp return `1`. Consuming KeyUp is critical to prevent media players (Spotify, YouTube, Chrome) from receiving a play/pause toggle on key release!
+  - For `VK_VOLUME_UP` and `VK_VOLUME_DOWN`: while HUD or scroll mode is active, both KeyDown and KeyUp return `1` to prevent the OS volume slider or beep popup from triggering.
+  - When HUD is closed and not in scroll mode, volume keys pass through to `CallNextHookEx` so system volume works normally.
+- **Win32 Foreground Window Activation**:
+  - Background processes on Windows are restricted by `LockSetForegroundWindow`.
+  - In `do_show_hud` (`src-tauri/src/lib.rs`), Tauri's `window.set_focus()` is paired with native Win32 `ShowWindow(hwnd, SW_RESTORE)`, `SetForegroundWindow(hwnd)`, and `SetWindowPos(hwnd, HWND_TOPMOST, ...)` so the HUD reliably pops up over fullscreen windows.
 
 #### macOS Backend (`src-tauri/src/platform/macos/dial.rs`)
 - Uses a global CoreGraphics Event Tap (`CGEventTapCreate`) listening to `NX_SYSDEFINED` events (subtype `NX_SUBTYPE_AUX_CONTROL_BUTTONS = 8`).
@@ -205,6 +218,22 @@ Turns the rotary dial into a continuous, physical mouse scroll wheel for long do
    - GNOME Shell catches the hardware key event, adjusts Mutter display brightness in native 5% steps, and displays the native GNOME OSD brightness slider.
 4. **UI Synchronization**:
    - The frontend queries `get_system_brightness` only when the user selects the Brightness mode on the dial. There is **zero background polling**.
+
+#### Windows Dual-Engine Brightness (`src-tauri/src/platform/windows/brightness.rs`)
+1. **External Monitors (DDC/CI via `dxva2.dll`)**:
+   - Dynamically loads `dxva2.dll` at runtime via `LoadLibraryW`.
+   - Calls `GetMonitorBrightness` on physical monitors for instant (< 1ms), live hardware backlight queries with zero process spawning.
+2. **Internal Laptop Screens (WMI `WmiMonitorBrightness`)**:
+   - Queries `root/wmi:WmiMonitorBrightness.CurrentBrightness` via non-interactive PowerShell with `CREATE_NO_WINDOW`.
+   - **Continuous Background Poller**: Runs a 1.5s background polling loop that continuously updates `cached_brightness`. This guarantees that brightness adjustments made outside the app (via laptop Fn keys, Windows Action Center slider, or Settings) immediately synchronize with Dial Control.
+   - **Hardware Transition Protection (`last_set_time`)**: When the user adjusts brightness through Dial Control, polling is suspended for 2.5s to prevent intermediate hardware sensor readings from overriding user intent.
+   - **Stepping Guarantee**: `step_brightness()` always steps relative to `get_brightness()`, ensuring the display never jumps or snaps back to stale values.
+
+#### macOS DisplayServices Dynamic Brightness (`src-tauri/src/platform/macos/brightness.rs`)
+- Dynamically loads `/System/Library/PrivateFrameworks/DisplayServices.framework/DisplayServices` via `dlopen`/`dlsym`.
+- Uses `DisplayServicesGetBrightness` and `DisplayServicesSetBrightness` on `CGMainDisplayID()`.
+- Dynamic loading eliminates fatal linker errors on modern macOS SDKs while giving 100% native backlight control on both Apple Silicon and Intel Macs.
+- Fallback to `brightness` CLI if DisplayServices symbols are unavailable.
 
 ---
 
@@ -319,8 +348,9 @@ install -m 755 src-tauri/target/release/dial-control bin/dial-control
 
 ### 📝 Verification Checklist Before Finishing Any Task
 1. Run `npm run build` to verify TypeScript and frontend bundling.
-2. Run `cargo check --manifest-path src-tauri/Cargo.toml` to verify Rust code.
-3. Build the release binary and verify checksums against `bin/dial-control`.
-4. Check `git status` to ensure no accidental build artifacts or backup files are staged.
-5. Commit using author `Yuvraj675 <yuviyg675@gmail.com>` with **strictly NO co-authors**.
-6. Never run `git push`.
+2. Run `cargo check --manifest-path src-tauri/Cargo.toml` to verify Linux backend.
+3. Run `cargo check --target x86_64-pc-windows-msvc --manifest-path src-tauri/Cargo.toml` to verify Windows backend.
+4. Run `CC_aarch64_apple_darwin=clang cargo check --target aarch64-apple-darwin --manifest-path src-tauri/Cargo.toml` to verify macOS backend.
+5. Check `git status` to ensure no accidental build artifacts or backup files are staged.
+6. Commit using author `Yuvraj675 <yuviyg675@gmail.com>` with **strictly NO co-authors**.
+7. Never run `git push`.
