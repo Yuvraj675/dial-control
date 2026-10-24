@@ -139,28 +139,35 @@ The CMF Buds Pro 2 rotary dial and smart case have **no proprietary Bluetooth pr
      - Only movements *away* from baseline in the active direction generate user actions.
 
 #### Windows Backend (`src-tauri/src/platform/windows/dial.rs`)
-- **Dual-Channel Interception Architecture**:
+- **Dual-Channel Interception Architecture (with Orbit Gesture & Event Parity)**:
   1. **Core Audio Endpoint Volume Callback (`IAudioEndpointVolumeCallback`)**:
-     - The CMF Buds Pro 2 rotary dial uses Bluetooth AVRCP Absolute Volume. Windows handles these at the audio driver level without posting `VK_VOLUME_UP`/`VK_VOLUME_DOWN` keyboard messages!
-     - Dial Control registers an `IAudioEndpointVolumeCallback` on the default audio endpoint (`IMMDeviceEnumerator` -> `GetDefaultAudioEndpoint` -> `RegisterControlChangeNotify`) in an STA message loop thread.
-     - When the dial is rotated, `OnNotify` detects the volume change, determines direction (CW vs CCW), snaps the volume immediately back to baseline using `SetMasterVolumeLevelScalar(..., baseline, &DIAL_CONTROL_EVENT_CONTEXT)`, and dispatches `dial:rotate` or `scroll:tick`.
-     - **Echo Filter**: When `OnNotify` receives an event with `guidEventContext == DIAL_CONTROL_EVENT_CONTEXT`, it is swallowed completely.
-  2. **Low-Level Keyboard Hook (`WH_KEYBOARD_LL`)**:
-     - Intercepts center clicks (`VK_MEDIA_PLAY_PAUSE`, `VK_PAUSE`, `VK_MEDIA_STOP`) and physical keyboard volume keys in a dedicated Win32 message pump thread.
-     - **Complete KeyDown and KeyUp Interception**: Both `WM_KEYDOWN` and `WM_KEYUP` for media keys are swallowed to prevent media players (Spotify, YouTube, Chrome) from receiving play/pause commands on button release!
-     - When `!is_hud_open`: grants foreground activation via `AllowSetForegroundWindow(GetCurrentProcessId())`, flips atomic state, and calls `do_show_hud`.
-     - When `is_hud_open`: emits `dial:click` to confirm the selected action.
+     - The CMF Buds Pro 2 rotary dial uses Bluetooth AVRCP Absolute Volume. Windows handles these at the audio driver level without posting `VK_VOLUME_UP`/`VK_VOLUME_DOWN` keyboard messages.
+     - Dial Control registers an `IAudioEndpointVolumeCallback` on the active render audio endpoint (`IMMDeviceEnumerator` -> `GetDefaultAudioEndpoint` -> `RegisterControlChangeNotify`).
+     - **Dynamic Device Rebinding**: Periodically checks the default audio endpoint ID (`GetId`); if the user connects or reconnects their CMF Buds Pro 2 after Dial Control started, the listener automatically unbinds and reattaches to the newly connected endpoint.
+     - **Floating Headroom Model & Echo Suppression**:
+       - Rather than fighting Windows CoreAudio on every single tick by immediately forcing volume resets, Dial Control allows the volume to float naturally within a safe headroom band (initialized to ~50% in `init_hud_rotation`), updating `last_audio_level`.
+       - If the volume reaches within 15% of boundaries ($\le 15\%$ or $\ge 85\%$), it recenters to 50% with `DIAL_CONTROL_EVENT_CONTEXT` to maintain infinite continuous rotary headroom.
+       - **Dual Echo Filtering**: Direct events carrying `DIAL_CONTROL_EVENT_CONTEXT` are swallowed immediately. Furthermore, Windows duplicate echo notifications (~1ms later without GUID) matching the target volume within 800ms are cleanly swallowed.
+       - When the HUD closes (`do_hide_hud`), the exact original user listening volume (`locked_vol`) is cleanly restored.
+  2. **Windows 11 Volume Flyout Pill Suppressor (`FlyoutSuppressor`)**:
+     - Windows 11 normally pops up its volume bar pill (`XamlExplorerHostIslandWindow`) on every endpoint volume change.
+     - Dial Control registers an out-of-context WinEvent hook (`SetWinEventHook` on `EVENT_OBJECT_SHOW`). When `XamlExplorerHostIslandWindow` appears while the HUD is open or within 800ms of dial activity, it is instantly hidden with `ShowWindow(hwnd, SW_HIDE)`.
+  3. **Low-Level Keyboard Hook (`WH_KEYBOARD_LL`) & Orbit Gesture Parity**:
+     - Intercepts center clicks (`VK_MEDIA_PLAY_PAUSE`, `VK_PAUSE`, `VK_MEDIA_STOP`), next/prev track gestures (`VK_MEDIA_NEXT_TRACK`, `VK_MEDIA_PREV_TRACK`), and physical keyboard volume keys in a dedicated Win32 message pump thread.
+     - **Complete KeyDown and KeyUp Interception**: Both `WM_KEYDOWN` and `WM_KEYUP` for media keys are swallowed so background players (Spotify, YouTube, Chrome) never receive accidental play/pause or song-skip commands.
+     - **Dial Click Toggle vs Confirm (`has_rotated`)**:
+       - When `!is_hud_open`: opens the HUD and resets `has_rotated` to false.
+       - When `is_hud_open` and `!has_rotated`: the user clicked the dial again without rotating. This acts as a clean **toggle/dismiss**, immediately closing the HUD without playing audio or executing any tool!
+       - When `is_hud_open` and `has_rotated`: the user turned the dial to highlight a tool. Clicking confirms and executes the highlighted tool (`dial:click`).
+     - **Double-Click / Triple-Click Dismiss (Orbit Parity)**:
+       - Double-pressing (`VK_MEDIA_NEXT_TRACK`) or triple-pressing (`VK_MEDIA_PREV_TRACK`) while the HUD is open immediately cancels and closes the HUD without executing any tool, matching Orbit.
 - **Microsecond Non-Blocking Execution**:
-  - The thread runs standard Win32 `while GetMessageW(&mut msg, null_mut(), 0, 0) > 0 { TranslateMessage(&msg); DispatchMessageW(&msg); }`.
   - All heavy work (GUI display, Tauri event emission, Win32 calls) is strictly dispatched to background worker threads (`thread::spawn`).
 - **Focus Auto-Dismiss with 400ms Grace Period**:
   - `tauri::WindowEvent::Focused(false)` auto-dismisses the HUD when the user clicks outside on another window/desktop.
   - A 400ms grace period (`LAST_HUD_SHOWN_TIME`) protects the initial presentation and window animation focus transition from triggering false-positive dismissals.
-- **Headroom Clamping (`6..94`)**:
-  - In `do_show_hud`, master volume is clamped to the range `6..94` so rotating in either direction always has headroom to register on Windows Core Audio. Original volume is restored on HUD close.
 - **On-Demand Live Brightness Reading**:
-  - `get_brightness()` queries `query_dxva2_brightness().or_else(query_wmi_brightness)` on demand when invoked (e.g. when entering Brightness mode).
-  - Continuous 1.5s background polling via PowerShell is strictly avoided to prevent CPU spikes and input latency.
+  - `get_brightness()` queries `query_dxva2_brightness().or_else(query_wmi_brightness)` on demand when invoked (e.g. when entering Brightness mode). Continuous background polling is strictly avoided.
 - **Win32 Foreground Window Activation**:
   - In `do_show_hud` (`src-tauri/src/lib.rs`), `AllowSetForegroundWindow(GetCurrentProcessId())` is paired with native Win32 `ShowWindow(hwnd, SW_RESTORE)`, `SetForegroundWindow(hwnd)`, and `SetWindowPos(hwnd, HWND_TOPMOST, ...)` so the HUD reliably pops up over fullscreen windows.
 

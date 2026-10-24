@@ -117,6 +117,11 @@ pub(crate) fn do_stop_scroll_mode(app: &AppHandle, state: &AppState) {
         state.platform.audio().set_volume(orig_vol);
     }
 
+    #[cfg(target_os = "windows")]
+    {
+        crate::platform::windows::dial::cleanup_hud_rotation();
+    }
+
     let _ = app.emit("hud:visibility", false);
     let _ = app.emit("scroll_mode:exit", ());
     send_os_notification("Scroll Mode Exited", "Dial returned to standard mode");
@@ -149,14 +154,13 @@ fn close_hud_for_scroll(app: AppHandle, state: tauri::State<AppState>) {
 pub(crate) fn do_show_hud(app: &AppHandle, state: &AppState) {
     let curr_vol = state.platform.audio().get_volume();
 
-    // Guarantee headroom for rotary turns in both directions (CW & CCW)
-    let locked_vol = curr_vol.clamp(6, 94);
-    if locked_vol != curr_vol {
-        state.platform.audio().set_volume(locked_vol);
-    }
-
     state.is_hud_open.store(true, Ordering::SeqCst);
-    state.locked_vol.store(locked_vol, Ordering::SeqCst);
+    state.locked_vol.store(curr_vol, Ordering::SeqCst);
+
+    #[cfg(target_os = "windows")]
+    {
+        crate::platform::windows::dial::init_hud_rotation(curr_vol);
+    }
 
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -220,7 +224,7 @@ pub(crate) fn do_show_hud(app: &AppHandle, state: &AppState) {
     let _ = app.emit(
         "sync:state",
         serde_json::json!({
-            "volume": locked_vol,
+            "volume": curr_vol,
         }),
     );
 }
@@ -241,6 +245,11 @@ pub(crate) fn do_hide_hud(app: &AppHandle, state: &AppState) {
 
     if orig_vol >= 0 {
         state.platform.audio().set_volume(orig_vol);
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        crate::platform::windows::dial::cleanup_hud_rotation();
     }
 
     let _ = app.emit("hud:visibility", false);

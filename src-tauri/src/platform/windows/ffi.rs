@@ -75,6 +75,15 @@ pub const VK_MEDIA_PLAY_PAUSE: u16 = 0xB3;
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
+pub struct RECT {
+    pub left: i32,
+    pub top: i32,
+    pub right: i32,
+    pub bottom: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
 pub struct POINT {
     pub x: i32,
     pub y: i32,
@@ -138,6 +147,20 @@ pub struct INPUT {
 }
 
 pub type HOOKPROC = Option<unsafe extern "system" fn(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT>;
+pub type HWINEVENTHOOK = *mut c_void;
+pub type WINEVENTPROC = Option<
+    unsafe extern "system" fn(
+        hWinEventHook: HWINEVENTHOOK,
+        event: DWORD,
+        hwnd: HWND,
+        idObject: i32,
+        idChild: i32,
+        idEventThread: DWORD,
+        dwmsEventTime: DWORD,
+    ),
+>;
+pub const EVENT_OBJECT_SHOW: DWORD = 0x8002;
+pub const WINEVENT_OUTOFCONTEXT: DWORD = 0;
 pub type HRESULT = i32;
 pub type HMONITOR = *mut c_void;
 pub type HDC = *mut c_void;
@@ -231,7 +254,10 @@ pub struct IMMDeviceVtbl {
         ppInterface: *mut *mut c_void,
     ) -> HRESULT,
     pub OpenPropertyStore: *const c_void,
-    pub GetId: *const c_void,
+    pub GetId: unsafe extern "system" fn(
+        this: *mut c_void,
+        ppstrId: *mut *mut u16,
+    ) -> HRESULT,
     pub GetState: *const c_void,
 }
 
@@ -343,6 +369,17 @@ extern "system" {
     pub fn EnumDisplayMonitors(hdc: HDC, lprcClip: *const c_void, lpfnEnum: MONITORENUMPROC, dwData: LPARAM) -> BOOL;
     pub fn SetTimer(hWnd: HWND, nIDEvent: usize, uElapse: u32, lpTimerFunc: Option<unsafe extern "system" fn(HWND, u32, usize, DWORD)>) -> usize;
     pub fn KillTimer(hWnd: HWND, uIDEvent: usize) -> BOOL;
+    pub fn GetWindowRect(hWnd: HWND, lpRect: *mut RECT) -> BOOL;
+    pub fn SetWinEventHook(
+        eventMin: DWORD,
+        eventMax: DWORD,
+        hmodWinEventProc: HINSTANCE,
+        pfnWinEventProc: WINEVENTPROC,
+        idProcess: DWORD,
+        idThread: DWORD,
+        dwFlags: DWORD,
+    ) -> HWINEVENTHOOK;
+    pub fn UnhookWinEvent(hWinEventHook: HWINEVENTHOOK) -> BOOL;
 }
 
 #[link(name = "kernel32")]
@@ -361,6 +398,7 @@ extern "system" {
 extern "system" {
     pub fn CoInitializeEx(pvReserved: *mut c_void, dwCoInit: DWORD) -> HRESULT;
     pub fn CoUninitialize();
+    pub fn CoTaskMemFree(pv: *mut c_void);
     pub fn CoCreateInstance(
         rclsid: *const GUID,
         pUnkOuter: *mut c_void,
