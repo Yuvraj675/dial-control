@@ -53,12 +53,12 @@ export const DEFAULT_CONFIG: ProfilesConfig = {
       match_patterns: ["*code*", "*cursor*", "*zed*", "*sublime*", "*nvim*"],
       actions: [
         { id: "scroll_mode", label: "SCROLL", icon: "scroll", type: "mode", action: "scroll", desc: "Rotate to scroll" },
-        { id: "code_save", label: "SAVE ALL", icon: "save", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_S"] },
-        { id: "code_format", label: "FORMAT", icon: "format", type: "hotkey", keys: ["KEY_LEFTSHIFT", "KEY_LEFTALT", "KEY_F"] },
-        { id: "code_find", label: "FIND IN FILES", icon: "find", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_F"] },
-        { id: "code_comment", label: "COMMENT", icon: "comment", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_SLASH"] },
-        { id: "code_terminal", label: "TERMINAL", icon: "terminal", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_GRAVE"] },
-        { id: "code_git", label: "GIT DIFF", icon: "git", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_G"] },
+        { id: "code_save", label: "SAVE ALL", icon: "save", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_S"], keys_mac: ["KEY_LEFTMETA", "KEY_S"] },
+        { id: "code_format", label: "FORMAT", icon: "format", type: "hotkey", keys: ["KEY_LEFTSHIFT", "KEY_LEFTALT", "KEY_F"], keys_mac: ["KEY_LEFTSHIFT", "KEY_LEFTALT", "KEY_F"] },
+        { id: "code_find", label: "FIND IN FILES", icon: "find", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_F"], keys_mac: ["KEY_LEFTMETA", "KEY_LEFTSHIFT", "KEY_F"] },
+        { id: "code_comment", label: "COMMENT", icon: "comment", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_SLASH"], keys_mac: ["KEY_LEFTMETA", "KEY_SLASH"] },
+        { id: "code_terminal", label: "TERMINAL", icon: "terminal", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_GRAVE"], keys_mac: ["KEY_LEFTCTRL", "KEY_GRAVE"] },
+        { id: "code_git", label: "GIT DIFF", icon: "git", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_G"], keys_mac: ["KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_G"] },
         { id: "home_dial", label: "HOME", icon: "home", type: "home", desc: "Choose Dial Menu" },
         { id: "close_hud", label: "CLOSE", icon: "close", type: "close", desc: "Dismiss HUD" },
       ],
@@ -70,11 +70,11 @@ export const DEFAULT_CONFIG: ProfilesConfig = {
       match_patterns: ["*nautilus*", "*dolphin*", "*thunar*", "*pcmanfm*", "*filee*", "*explorer*"],
       actions: [
         { id: "scroll_mode", label: "SCROLL", icon: "scroll", type: "mode", action: "scroll", desc: "Rotate to scroll" },
-        { id: "file_copy", label: "COPY", icon: "copy", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_C"] },
-        { id: "file_paste", label: "PASTE", icon: "paste", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_V"] },
-        { id: "file_trash", label: "DELETE", icon: "trash", type: "hotkey", keys: ["KEY_DELETE"] },
-        { id: "file_new_folder", label: "NEW FOLDER", icon: "new_folder", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_N"] },
-        { id: "file_rename", label: "RENAME", icon: "rename", type: "hotkey", keys: ["KEY_F2"] },
+        { id: "file_copy", label: "COPY", icon: "copy", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_C"], keys_mac: ["KEY_LEFTMETA", "KEY_C"] },
+        { id: "file_paste", label: "PASTE", icon: "paste", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_V"], keys_mac: ["KEY_LEFTMETA", "KEY_V"] },
+        { id: "file_trash", label: "DELETE", icon: "trash", type: "hotkey", keys: ["KEY_DELETE"], keys_mac: ["KEY_LEFTMETA", "KEY_BACKSPACE"] },
+        { id: "file_new_folder", label: "NEW FOLDER", icon: "new_folder", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_N"], keys_mac: ["KEY_LEFTMETA", "KEY_LEFTSHIFT", "KEY_N"] },
+        { id: "file_rename", label: "RENAME", icon: "rename", type: "hotkey", keys: ["KEY_F2"], keys_mac: ["KEY_ENTER"] },
         { id: "file_terminal", label: "TERMINAL", icon: "terminal", type: "command", cmd: "x-terminal-emulator || ptyxis || gnome-terminal || kgx || konsole || alacritty || kitty || xterm" },
         { id: "home_dial", label: "HOME", icon: "home", type: "home", desc: "Choose Dial Menu" },
         { id: "close_hud", label: "CLOSE", icon: "close", type: "close", desc: "Dismiss HUD" },
@@ -87,12 +87,12 @@ export const DEFAULT_CONFIG: ProfilesConfig = {
       match_patterns: ["*firefox*", "*chrome*", "*zen*", "*brave*", "*edge*"],
       actions: [
         { id: "scroll_mode", label: "SCROLL", icon: "scroll", type: "mode", action: "scroll", desc: "Rotate to scroll" },
-        { id: "nav_back", label: "BACK", icon: "back", type: "hotkey", keys: ["KEY_LEFTALT", "KEY_LEFT"] },
-        { id: "nav_fwd", label: "FORWARD", icon: "forward", type: "hotkey", keys: ["KEY_LEFTALT", "KEY_RIGHT"] },
-        { id: "nav_reload", label: "RELOAD", icon: "reload", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_R"] },
-        { id: "nav_new_tab", label: "NEW TAB", icon: "new_tab", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_T"] },
-        { id: "nav_close_tab", label: "CLOSE TAB", icon: "close_tab", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_W"] },
-        { id: "nav_reopen_tab", label: "RESTORE TAB", icon: "reopen_tab", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_T"] },
+        { id: "nav_back", label: "BACK", icon: "back", type: "hotkey", keys: ["KEY_LEFTALT", "KEY_LEFT"], keys_mac: ["KEY_LEFTMETA", "KEY_LEFTBRACE"] },
+        { id: "nav_fwd", label: "FORWARD", icon: "forward", type: "hotkey", keys: ["KEY_LEFTALT", "KEY_RIGHT"], keys_mac: ["KEY_LEFTMETA", "KEY_RIGHTBRACE"] },
+        { id: "nav_reload", label: "RELOAD", icon: "reload", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_R"], keys_mac: ["KEY_LEFTMETA", "KEY_R"] },
+        { id: "nav_new_tab", label: "NEW TAB", icon: "new_tab", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_T"], keys_mac: ["KEY_LEFTMETA", "KEY_T"] },
+        { id: "nav_close_tab", label: "CLOSE TAB", icon: "close_tab", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_W"], keys_mac: ["KEY_LEFTMETA", "KEY_W"] },
+        { id: "nav_reopen_tab", label: "RESTORE TAB", icon: "reopen_tab", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_T"], keys_mac: ["KEY_LEFTMETA", "KEY_LEFTSHIFT", "KEY_T"] },
         { id: "home_dial", label: "HOME", icon: "home", type: "home", desc: "Choose Dial Menu" },
         { id: "close_hud", label: "CLOSE", icon: "close", type: "close", desc: "Dismiss HUD" },
       ],
@@ -103,10 +103,10 @@ export const DEFAULT_CONFIG: ProfilesConfig = {
       icon: "palette",
       match_patterns: ["*figma*", "*blender*", "*resolve*", "*photoshop*", "*inkscape*"],
       actions: [
-        { id: "draw_undo", label: "UNDO", icon: "undo", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_Z"] },
-        { id: "draw_redo", label: "REDO", icon: "redo", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_Y"] },
-        { id: "draw_zoom_in", label: "ZOOM IN", icon: "zoom_in", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_EQUAL"] },
-        { id: "draw_zoom_out", label: "ZOOM OUT", icon: "zoom_out", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_MINUS"] },
+        { id: "draw_undo", label: "UNDO", icon: "undo", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_Z"], keys_mac: ["KEY_LEFTMETA", "KEY_Z"] },
+        { id: "draw_redo", label: "REDO", icon: "redo", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_Y"], keys_mac: ["KEY_LEFTMETA", "KEY_LEFTSHIFT", "KEY_Z"] },
+        { id: "draw_zoom_in", label: "ZOOM IN", icon: "zoom_in", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_EQUAL"], keys_mac: ["KEY_LEFTMETA", "KEY_EQUAL"] },
+        { id: "draw_zoom_out", label: "ZOOM OUT", icon: "zoom_out", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_MINUS"], keys_mac: ["KEY_LEFTMETA", "KEY_MINUS"] },
         { id: "draw_hand", label: "PAN", icon: "pan", type: "hotkey", keys: ["KEY_H"] },
         { id: "draw_select", label: "SELECT", icon: "select", type: "hotkey", keys: ["KEY_V"] },
         { id: "home_dial", label: "HOME", icon: "home", type: "home", desc: "Choose Dial Menu" },
@@ -300,6 +300,23 @@ export function sanitizeAndMigrateConfig(cfg: ProfilesConfig): ProfilesConfig {
       prof.actions = [scrollAction, ...prof.actions];
       updatedProfiles.file_manager = prof;
     }
+  }
+
+  // 4b. Give built-in shortcut slices their macOS form. Only when the user has not changed the
+  // PC shortcut: a customized slice has no known Mac equivalent (macOS falls back to Ctrl->Command).
+  for (const [profileId, prof] of Object.entries(updatedProfiles)) {
+    const defaults = DEFAULT_CONFIG.profiles[profileId];
+    if (!defaults) continue;
+    prof.actions = prof.actions.map((a) => {
+      const def = defaults.actions.find((d) => d.id === a.id);
+      const unchanged = def?.keys && a.keys && def.keys.join() === a.keys.join();
+      if (unchanged && def.keys_mac) return { ...a, keys_mac: def.keys_mac };
+      if (!unchanged && a.keys_mac) {
+        const { keys_mac: _drop, ...rest } = a;
+        return rest;
+      }
+      return a;
+    });
   }
 
   // 5. Ensure every profile has HOME and CLOSE dial slices

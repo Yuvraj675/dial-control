@@ -357,6 +357,11 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
         ...updatedActions[selectedActionIndex],
         ...updates,
       };
+      // A changed PC shortcut invalidates the built-in macOS form; macOS then derives it
+      // from the new shortcut (Ctrl -> Command).
+      if (updates.keys && !updates.keys_mac) {
+        delete updatedActions[selectedActionIndex].keys_mac;
+      }
       const updatedProfile = { ...activeProfile, actions: updatedActions };
       setCurrentConfig({
         ...currentConfig,

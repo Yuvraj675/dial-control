@@ -6,7 +6,8 @@ export interface WheelAction {
   icon: string;
   type: ActionType;
   action?: string;       // For media keys: playpause, next, prev
-  keys?: string[];       // For hotkeys: ["CTRL", "C"]
+  keys?: string[];       // For hotkeys: ["CTRL", "C"] (Windows & Linux)
+  keys_mac?: string[];   // Same shortcut authored for macOS (Meta = Command); used as written
   cmd?: string;          // For shell commands
   desc?: string;
 }

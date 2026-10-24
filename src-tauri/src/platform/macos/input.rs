@@ -39,11 +39,20 @@ impl VirtualInput for MacInput {
         }
     }
 
+    fn emit_native_hotkey(&self, keys: &[String]) {
+        self.post_hotkey(crate::platform::keymap::mac_hotkey_literal(keys), keys);
+    }
+
     fn emit_hotkey(&self, keys: &[String]) {
+        // Shared PC-style shortcut: translate Ctrl to Command; see keymap::mac_hotkey.
+        self.post_hotkey(crate::platform::keymap::mac_hotkey(keys), keys);
+    }
+}
+
+impl MacInput {
+    fn post_hotkey(&self, resolved: Option<(u64, u16)>, keys: &[String]) {
         #[cfg(target_os = "macos")]
         unsafe {
-            // Profiles use evdev names (KEY_LEFTCTRL, KEY_S); see keymap::mac_hotkey.
-            let resolved = crate::platform::keymap::mac_hotkey(keys);
             if resolved.is_none() {
                 eprintln!("[macOS Input] Could not resolve hotkey {:?}", keys);
             }

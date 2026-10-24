@@ -27,6 +27,11 @@ pub trait MediaControl: Send + Sync {
 pub trait VirtualInput: Send + Sync {
     fn emit_hotkey(&self, keys: &[String]);
     fn emit_scroll(&self, delta: i32);
+    /// Emits a shortcut authored specifically for this OS (`keys_mac`), exactly as written.
+    /// Backends without a distinct native form just emit it as a normal hotkey.
+    fn emit_native_hotkey(&self, keys: &[String]) {
+        self.emit_hotkey(keys);
+    }
 }
 
 /// Abstract interface for rotary dial hardware listeners and event interceptors.
