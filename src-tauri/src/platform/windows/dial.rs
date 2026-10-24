@@ -154,9 +154,9 @@ unsafe extern "system" fn low_level_keyboard_proc(
                 println!("[Windows Dial] Intercepted Dial Rotate -> ({})", dir);
 
                 let locked_val = if let Ok(guard) = LOCKED_VOL_REF.read() {
-                    guard.as_ref().map(|arc| arc.load(Ordering::SeqCst)).unwrap_or(0)
+                    guard.as_ref().map(|arc| arc.load(Ordering::SeqCst)).unwrap_or(-1)
                 } else {
-                    0
+                    -1
                 };
 
                 if let Ok(guard) = APP_HANDLE_REF.read() {
@@ -166,7 +166,7 @@ unsafe extern "system" fn low_level_keyboard_proc(
                             let state: tauri::State<AppState> = app.state();
                             let current_vol = state.platform.audio().get_volume();
 
-                            let new_vol = if locked_val == 0 {
+                            let new_vol = if locked_val < 0 {
                                 state.platform.audio().set_volume((current_vol + dir * 2).clamp(0, 100))
                             } else {
                                 current_vol

@@ -202,8 +202,11 @@ fn start_bluez_listener(
                 }
             };
 
-            let mut last_vol: Option<i32> = None;
-            let mut ignore_restore: Option<(i32, Instant)> = None;
+            let mut last_raw: Option<i32> = None;
+            let mut locked_raw_baseline: Option<i32> = None;
+            let mut restore_pending = false;
+            let mut last_restore_time = Instant::now() - Duration::from_secs(10);
+            let mut was_locked = false;
 
             while let Some(msg) = stream.next().await {
                 if let Ok(msg) = msg {
@@ -228,26 +231,142 @@ fn start_bluez_listener(
                                 Err(_) => continue,
                             };
 
-                            if let Some((target_raw, ts)) = ignore_restore {
-                                if ts.elapsed() < Duration::from_millis(600) {
-                                    if (new_vol - target_raw).abs() <= 3 {
-                                        ignore_restore = None;
-                                        last_vol = Some(new_vol);
-                                        continue;
+                            let is_hud = is_hud_open.load(Ordering::SeqCst);
+                            let is_scroll = is_scroll_mode.load(Ordering::SeqCst);
+                            let locked_pct = locked_vol.load(Ordering::SeqCst);
+
+                            // Locking is active when HUD is open or in scroll mode, EXCEPT when in volume mode (locked_pct < 0)
+                            let lock_active = (is_hud || is_scroll) && (locked_pct >= 0);
+
+                            // Detect entering or exiting locked mode
+                            if lock_active && !was_locked {
+                                was_locked = true;
+                                restore_pending = false;
+                                let raw = match last_raw {
+                                    Some(v) => v,
+                                    None => ((locked_pct as f64 * 127.0) / 100.0).round() as i32,
+                                };
+                                let clamped_baseline = raw.clamp(8, 119);
+                                locked_raw_baseline = Some(clamped_baseline);
+                                last_raw = Some(clamped_baseline);
+
+                                println!(
+                                    "[BlueZ Dial] Volume lock ACTIVATED at baseline raw: {} (mapped: {}%)",
+                                    clamped_baseline,
+                                    ((clamped_baseline as f64 / 127.0) * 100.0).round() as i32
+                                );
+
+                                if raw != clamped_baseline {
+                                    let proxy = zbus::Proxy::new(
+                                        &connection,
+                                        "org.bluez",
+                                        path.clone(),
+                                        "org.freedesktop.DBus.Properties",
+                                    )
+                                    .await;
+                                    if let Ok(proxy) = proxy {
+                                        let val = zvariant::Value::U16(clamped_baseline as u16);
+                                        let _ = proxy
+                                            .call_method("Set", &("org.bluez.MediaTransport1", "Volume", val))
+                                            .await;
                                     }
-                                } else {
-                                    ignore_restore = None;
                                 }
+                            } else if !lock_active && was_locked {
+                                was_locked = false;
+                                restore_pending = false;
+                                locked_raw_baseline = None;
+                                println!("[BlueZ Dial] Volume lock RELEASED (natural hardware volume control)");
                             }
 
-                            let delta = match last_vol {
+                            if lock_active {
+                                let baseline = locked_raw_baseline.unwrap_or(64);
+
+                                // Safety timeout for pending restore
+                                if restore_pending && last_restore_time.elapsed() > Duration::from_millis(400) {
+                                    restore_pending = false;
+                                }
+
+                                let prev = last_raw.unwrap_or(baseline);
+                                let dist_to_base = (new_vol - baseline).abs();
+                                let prev_dist_to_base = (prev - baseline).abs();
+
+                                // Echo suppression: If new_vol is returning towards or reached baseline, swallow it!
+                                if dist_to_base <= 3 || (restore_pending && dist_to_base < prev_dist_to_base) {
+                                    restore_pending = false;
+                                    last_raw = Some(baseline);
+                                    continue;
+                                }
+
+                                let delta = new_vol - prev;
+                                if delta == 0 {
+                                    continue;
+                                }
+
+                                let direction = if delta > 0 { 1 } else { -1 };
+                                let dir_name = if direction > 0 { "CW (+)" } else { "CCW (-)" };
+
+                                println!(
+                                    ">> [NATIVE DIAL TURN] {} (Raw: {}, Baseline: {}, Delta: {})",
+                                    dir_name, new_vol, baseline, delta
+                                );
+
+                                last_raw = Some(new_vol);
+                                restore_pending = true;
+                                last_restore_time = Instant::now();
+
+                                if is_scroll {
+                                    // direction > 0 is clockwise -> scroll down (-1)
+                                    // direction < 0 is counter-clockwise -> scroll up (1)
+                                    let scroll_delta = if direction > 0 { -1 } else { 1 };
+                                    let app_clone = app.clone();
+                                    thread::spawn(move || {
+                                        let state: tauri::State<crate::AppState> = app_clone.state();
+                                        state.platform.input().emit_scroll(scroll_delta);
+                                        let _ = app_clone.emit("scroll:tick", serde_json::json!({ "direction": direction }));
+                                    });
+                                } else {
+                                    if let Some(window) = app.get_webview_window("hud") {
+                                        let mapped_pct = ((baseline as f64 / 127.0) * 100.0).round().clamp(0.0, 100.0) as i32;
+                                        let _ = window.emit(
+                                            "dial:rotate",
+                                            serde_json::json!({
+                                                "direction": direction,
+                                                "delta": direction,
+                                                "volume": baseline,
+                                                "volume_pct": mapped_pct
+                                            }),
+                                        );
+                                    }
+                                }
+
+                                // Reset BlueZ volume back to baseline directly over D-Bus
+                                let proxy = zbus::Proxy::new(
+                                    &connection,
+                                    "org.bluez",
+                                    path.clone(),
+                                    "org.freedesktop.DBus.Properties",
+                                )
+                                .await;
+
+                                if let Ok(proxy) = proxy {
+                                    let val = zvariant::Value::U16(baseline as u16);
+                                    let _ = proxy
+                                        .call_method("Set", &("org.bluez.MediaTransport1", "Volume", val))
+                                        .await;
+                                }
+
+                                continue;
+                            }
+
+                            // Natural hardware volume control (Volume adjustment mode or HUD closed)
+                            let delta = match last_raw {
                                 Some(prev) => new_vol - prev,
                                 None => {
-                                    last_vol = Some(new_vol);
+                                    last_raw = Some(new_vol);
                                     continue;
                                 }
                             };
-                            last_vol = Some(new_vol);
+                            last_raw = Some(new_vol);
 
                             if delta == 0 {
                                 continue;
@@ -258,57 +377,11 @@ fn start_bluez_listener(
                             let mapped_pct = ((new_vol as f64 / 127.0) * 100.0)
                                 .round()
                                 .clamp(0.0, 100.0) as i32;
+
                             println!(
-                                ">> [NATIVE DIAL TURN] {} (Raw AVRCP: {}, Mapped: {}%)",
+                                ">> [NATIVE VOLUME CHANGE] {} (Raw AVRCP: {}, Mapped: {}%)",
                                 dir_name, new_vol, mapped_pct
                             );
-
-                            let is_scroll = is_scroll_mode.load(Ordering::SeqCst);
-                            if is_scroll {
-                                // direction > 0 is clockwise -> scroll down (-1)
-                                // direction < 0 is counter-clockwise -> scroll up (1)
-                                let scroll_delta = if direction > 0 { -1 } else { 1 };
-                                println!(">> [NATIVE SCROLL EMULATION] direction: {}, scroll_delta: {}", direction, scroll_delta);
-                                let app_clone = app.clone();
-                                thread::spawn(move || {
-                                    let state: tauri::State<crate::AppState> = app_clone.state();
-                                    state.platform.input().emit_scroll(scroll_delta);
-                                    let _ = app_clone.emit("scroll:tick", serde_json::json!({ "direction": direction }));
-                                });
-
-                                let locked_v = locked_vol.load(Ordering::SeqCst);
-                                if locked_v > 0 {
-                                    let expected_raw = ((locked_v as f64 * 127.0) / 100.0)
-                                        .round()
-                                        .clamp(0.0, 127.0) as i32;
-                                    ignore_restore = Some((expected_raw, Instant::now()));
-
-                                    let app_clone = app.clone();
-                                    thread::spawn(move || {
-                                        let state: tauri::State<crate::AppState> = app_clone.state();
-                                        state.platform.audio().set_volume(locked_v);
-                                    });
-
-                                    let proxy = zbus::Proxy::new(
-                                        &connection,
-                                        "org.bluez",
-                                        path.clone(),
-                                        "org.freedesktop.DBus.Properties",
-                                    )
-                                    .await;
-
-                                    if let Ok(proxy) = proxy {
-                                        let val: zvariant::Value = zvariant::Value::U16(expected_raw as u16);
-                                        let _ = proxy
-                                            .call_method(
-                                                "Set",
-                                                &("org.bluez.MediaTransport1", "Volume", val),
-                                            )
-                                            .await;
-                                    }
-                                }
-                                continue;
-                            }
 
                             if let Some(window) = app.get_webview_window("hud") {
                                 let _ = window.emit(
@@ -320,42 +393,6 @@ fn start_bluez_listener(
                                         "volume_pct": mapped_pct
                                     }),
                                 );
-                            }
-
-                            let hud_open = is_hud_open.load(Ordering::SeqCst);
-                            let locked_v = locked_vol.load(Ordering::SeqCst);
-
-                            if hud_open && locked_v > 0 {
-                                let expected_raw = ((locked_v as f64 * 127.0) / 100.0)
-                                        .round()
-                                        .clamp(0.0, 127.0) as i32;
-                                ignore_restore = Some((expected_raw, Instant::now()));
-
-                                // 1. Restore system audio sink volume via WirePlumber/PipeWire/PulseAudio
-                                let app_clone = app.clone();
-                                thread::spawn(move || {
-                                    let state: tauri::State<crate::AppState> = app_clone.state();
-                                    state.platform.audio().set_volume(locked_v);
-                                });
-
-                                // 2. Also try setting BlueZ MediaTransport1 Volume directly in 0..127 scale
-                                let proxy = zbus::Proxy::new(
-                                    &connection,
-                                    "org.bluez",
-                                    path.clone(),
-                                    "org.freedesktop.DBus.Properties",
-                                )
-                                .await;
-
-                                if let Ok(proxy) = proxy {
-                                    let val: zvariant::Value = zvariant::Value::U16(expected_raw as u16);
-                                    let _ = proxy
-                                        .call_method(
-                                            "Set",
-                                            &("org.bluez.MediaTransport1", "Volume", val),
-                                        )
-                                        .await;
-                                }
                             }
                         }
                     }
