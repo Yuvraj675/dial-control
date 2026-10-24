@@ -403,6 +403,12 @@ install -m 755 src-tauri/target/release/dial-control bin/dial-control
 2. Run `cargo check --manifest-path src-tauri/Cargo.toml` to verify Linux backend.
 3. Run `cargo check --target x86_64-pc-windows-msvc --manifest-path src-tauri/Cargo.toml` to verify Windows backend.
 4. Run `CC_aarch64_apple_darwin=clang cargo check --target aarch64-apple-darwin --manifest-path src-tauri/Cargo.toml` to verify macOS backend.
-5. Check `git status` to ensure no accidental build artifacts or backup files are staged.
-6. Commit using author `Yuvraj675 <yuviyg675@gmail.com>` with **strictly NO co-authors**.
-7. Never run `git push`.
+5. **Rebuild every artifact after each completed prompt** (any prompt that changed code, config, scripts or assets; skip only for pure questions or docs-only edits), following the Mandatory Production Build Procedure above, so the local launcher and every package are always current:
+   1. `npx @tauri-apps/cli build --no-bundle`
+   2. `install -m 755 src-tauri/target/release/dial-control bin/dial-control`
+   3. `./scripts/build-packages.sh` (regenerates the `.deb`, `.rpm`, `.pkg.tar.zst` and `.AppImage` in `dist-packages/`)
+   - Run them in that order, only after steps 1-4 pass. Never substitute a plain `cargo build` (debug or release) for a binary the user may launch: it has no embedded frontend and shows "localhost not found".
+   - If any build or packaging step fails, say which one and why in the final message; never report the packages as up to date when they are not. Windows and macOS installers come from the GitHub Actions workflows and cannot be built locally; state that they were not rebuilt.
+6. Check `git status` to ensure no accidental build artifacts or backup files are staged (`dist-packages/*.deb|rpm|AppImage|pkg.tar.zst`, `bin/` and `target/` are git-ignored and must stay untracked).
+7. Commit using author `Yuvraj675 <yuviyg675@gmail.com>` with **strictly NO co-authors**.
+8. Never run `git push`.
