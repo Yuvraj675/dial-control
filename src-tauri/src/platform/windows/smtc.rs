@@ -7,6 +7,7 @@
 //! the button presses. A guard re-asserts the session whenever another app takes over.
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -79,11 +80,40 @@ fn file_uri(path: &std::path::Path) -> String {
     format!("file:///{}", path.to_string_lossy().replace('\\', "/").replace(' ', "%20"))
 }
 
+/// The playback status we report, mirroring the earbuds' own play/pause state.
+///
+/// AVRCP has no toggle: the earbuds send PAUSE when they believe audio is playing and PLAY
+/// when they believe it is paused, flipping their state on every press. If we always reported
+/// "Playing", every second press (a PLAY) was a no-op for Windows and was never delivered, so
+/// each HUD selection took two physical clicks. After each press we report the state the
+/// earbuds now expect, so the next (opposite) command is delivered too.
+static REPORT_PLAYING: AtomicBool = AtomicBool::new(true);
+
+/// Status to report after a press of `button` (None for buttons that don't flip it).
+pub fn status_after_button(button: i32) -> Option<bool> {
+    if button == Button::Pause.0 {
+        Some(false)
+    } else if button == Button::Play.0 {
+        Some(true)
+    } else {
+        None
+    }
+}
+
+fn reported_status() -> MediaPlaybackStatus {
+    if REPORT_PLAYING.load(Ordering::SeqCst) {
+        MediaPlaybackStatus::Playing
+    } else {
+        MediaPlaybackStatus::Paused
+    }
+}
+
 fn reassert(player: &MediaPlayer, smtc: &SystemMediaTransportControls) {
     let _ = smtc.SetPlaybackStatus(MediaPlaybackStatus::Paused);
     let _ = player.Pause();
     let _ = player.Play();
-    let _ = smtc.SetPlaybackStatus(MediaPlaybackStatus::Playing);
+    // End on the state the earbuds expect, or the next press would be dropped again.
+    let _ = smtc.SetPlaybackStatus(reported_status());
 }
 
 fn own_session_id(mgr: &SessionManager) -> Option<String> {
@@ -133,12 +163,18 @@ pub fn start(on_button: impl Fn(MediaButton) + Send + Sync + 'static) {
             smtc.SetPlaybackStatus(MediaPlaybackStatus::Playing)?;
 
             smtc.ButtonPressed(&TypedEventHandler::new(
-                move |_: windows::core::Ref<SystemMediaTransportControls>,
+                move |sender: windows::core::Ref<SystemMediaTransportControls>,
                       args: windows::core::Ref<ButtonArgs>| {
                     if let Some(args) = args.as_ref() {
                         if let Ok(button) = args.Button() {
                             let kind = classify_button(button.0);
                             crate::platform::diag::log(&format!("SMTC button {:?} -> {:?}", button, kind));
+                            if let Some(playing) = status_after_button(button.0) {
+                                REPORT_PLAYING.store(playing, Ordering::SeqCst);
+                                if let Some(controls) = sender.as_ref() {
+                                    let _ = controls.SetPlaybackStatus(reported_status());
+                                }
+                            }
                             on_button(kind);
                         }
                     }
@@ -301,6 +337,14 @@ mod tests {
     fn next_and_previous_cancel() {
         assert_eq!(classify_button(Button::Next.0), MediaButton::Cancel);
         assert_eq!(classify_button(Button::Previous.0), MediaButton::Cancel);
+    }
+
+    #[test]
+    fn reported_status_mirrors_the_earbuds_alternation() {
+        // Pause -> report Paused so the next press (PLAY) is delivered, and vice versa.
+        assert_eq!(status_after_button(Button::Pause.0), Some(false));
+        assert_eq!(status_after_button(Button::Play.0), Some(true));
+        assert_eq!(status_after_button(Button::Next.0), None);
     }
 
     #[test]
