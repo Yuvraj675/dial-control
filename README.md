@@ -6,6 +6,7 @@ Turn your **CMF Buds Pro 2** smart dial case into a context-aware, beautifully a
 - **Scroll Mode (Mouse Wheel Emulation)**: Rotate the dial to scroll long web pages, documents, code, or video feeds with zero window focus loss and native OS notifications.
 - **Stateful Volume Locking**: Keeps your system audio playback volume locked at its baseline while browsing menus, scrolling, or adjusting brightness, with hardware-level echo suppression.
 - **Live Display Brightness**: Accurate live brightness reading and stepping across platforms (including Intel/Samsung OLED laptops via GNOME Mutter D-Bus, external monitors via DDC/CI on Windows, and DisplayServices on macOS).
+- **Single Instance**: Launching Dial Control again (application menu, autostart) brings the running instance's settings window forward instead of starting a second copy and tray icon.
 - **Direct Launch & System Tray Docking**: Launches directly into the Settings & Customizer window on startup. Closing the window minimizes seamlessly to the system tray background daemon.
 - **Nothing OS Typography**: Fully styled with authentic Nothing OS dot-matrix typography (`Ndot57`) across all HUD dials, settings panels, slice inspectors, and configuration cards.
 - **Custom Dials Creator**: Create custom dial profiles from scratch with custom shortcut triggers, import actions across any dial, and configure dynamic window title/class pattern matching.

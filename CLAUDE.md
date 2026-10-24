@@ -171,6 +171,7 @@ The CMF Buds Pro 2 rotary dial and smart case have **no proprietary Bluetooth pr
      - **Focus guard (event-driven, never polling)**: woken by `CurrentSessionChanged` and by dial activity (`smtc::request_focus_check()` on HUD open and rotation), it compares `GetCurrentSession()` with our own session id and re-asserts (pause/play cycle, 3 backoff attempts). After a failed attempt it backs off 5s so it never churns the session; a 10s timer is only a safety net. A continuous 1s poll was tried and caused click lag and dropped presses.
      - **Field diagnostics**: `platform::diag` writes timestamped lines (clicks, SMTC buttons, focus changes, HUD shown) to `%TEMP%\dial-control\dial-control.log`; release builds have no console, so ask users for this file.
      - **Controlling the real player**: the synthetic `VK_MEDIA_*` key is routed to the *current* session, which is ours, so it would be swallowed. `WindowsMedia` therefore calls `smtc::forward_media`, which sends `TryTogglePlayPauseAsync` / `TrySkipNext/PreviousAsync` to the last non-Dial-Control session that held focus (falling back to the key only when none exists).
+     - **Physical keyboard media keys**: the hook tells real keyboard keys (`LLKHF_INJECTED` clear) from injected ones. A real Play/Pause key is forwarded to the real player via `smtc::forward_media` and swallowed (otherwise it would reach our own session and open the HUD); injected ones are dial clicks; Pause/Break and Stop pass through untouched.
      - Known gap: a click arriving in the instant before the guard has taken focus back (e.g. a video just started) still reaches that player and pauses it. The `windows` crate is a Windows-only dependency (WinRT).
   5. **Raw Input Consumer-Control Click Listener (`run_raw_input_click_listener`)**:
      - AVRCP has no play/pause toggle opcode: the dial click arrives as discrete PLAY / PAUSE (Linux sees `KEY_PLAYCD` / `KEY_PAUSECD`). Windows maps HID Consumer **Play (0xB0)** and **Pause (0xB1)** to `WM_APPCOMMAND` only, with **no virtual key**, so `WH_KEYBOARD_LL` never sees them.
@@ -388,6 +389,9 @@ install -m 755 src-tauri/target/release/dial-control bin/dial-control
 1. **Try Sandboxed First**: Always attempt commands with `BypassSandbox: false`.
 2. **Elevate Single Commands Only**: If a command legitimately requires host network, D-Bus system bus access, or git lockfiles (`.git/index.lock`), run only that specific command with `BypassSandbox: true`.
 3. **Keep Tool Summary Consistent**: When retrying commands with `BypassSandbox: true`, keep `toolSummary` identical.
+
+### 🔒 Single Instance
+- `main.rs` first sends `show` (or `toggle` for `--toggle`) over the IPC socket (`/tmp/dial-control.sock` on Linux/macOS, `127.0.0.1:41829` on Windows). A running instance answers `ok` (`serve_ipc` in `lib.rs`), the new process prints a notice and exits, and the existing instance shows its settings window. Only an `ok` reply counts, so a stranger on the port never blocks startup, and a stale socket file is ignored and replaced by the new instance.
 
 ### 🧪 Tests
 - **Rust** (`cargo test --manifest-path src-tauri/Cargo.toml --lib`): every OS backend routes its decisions through pure functions in `platform/dial_logic.rs`, `platform/keymap.rs` and `platform/common.rs`, so Windows and macOS behaviour is unit-tested on any host. When fixing a backend bug, extract the decision into one of these modules and add a regression test.
