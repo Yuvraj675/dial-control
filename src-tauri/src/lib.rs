@@ -46,7 +46,7 @@ fn set_system_volume(state: tauri::State<AppState>, pct: i32) -> i32 {
 fn set_mode(app: AppHandle, state: tauri::State<AppState>, mode: String) {
     if mode == "volume" {
         state.is_scroll_mode.store(false, Ordering::SeqCst);
-        state.locked_vol.store(0, Ordering::SeqCst);
+        state.locked_vol.store(-1, Ordering::SeqCst);
         println!("[HUD] Switched to volume mode (lock released for natural hardware volume control)");
     } else if mode == "scroll" {
         let curr_vol = state.platform.audio().get_volume();
@@ -91,11 +91,16 @@ pub fn send_os_notification(title: &str, body: &str) {
 }
 
 pub(crate) fn do_stop_scroll_mode(app: &AppHandle, state: &AppState) {
+    let orig_vol = state.locked_vol.load(Ordering::SeqCst);
     state.is_scroll_mode.store(false, Ordering::SeqCst);
-    state.locked_vol.store(0, Ordering::SeqCst);
+    state.locked_vol.store(-1, Ordering::SeqCst);
     state.is_hud_open.store(false, Ordering::SeqCst);
     if let Some(window) = app.get_webview_window("hud") {
         let _ = window.hide();
+    }
+
+    if orig_vol >= 0 {
+        state.platform.audio().set_volume(orig_vol);
     }
 
     let _ = app.emit("hud:visibility", false);
@@ -175,12 +180,18 @@ fn show_hud(app: AppHandle, state: tauri::State<AppState>) {
 }
 
 pub(crate) fn do_hide_hud(app: &AppHandle, state: &AppState) {
+    let orig_vol = state.locked_vol.load(Ordering::SeqCst);
     state.is_hud_open.store(false, Ordering::SeqCst);
     state.is_scroll_mode.store(false, Ordering::SeqCst);
-    state.locked_vol.store(0, Ordering::SeqCst);
+    state.locked_vol.store(-1, Ordering::SeqCst);
     if let Some(window) = app.get_webview_window("hud") {
         let _ = window.hide();
     }
+
+    if orig_vol >= 0 {
+        state.platform.audio().set_volume(orig_vol);
+    }
+
     let _ = app.emit("hud:visibility", false);
     let _ = app.emit("scroll_mode:exit", ());
 }
@@ -541,7 +552,7 @@ fn set_recording_shortcut(state: tauri::State<AppState>, recording: bool) {
 
 pub fn run() {
     let is_hud_open = Arc::new(AtomicBool::new(false));
-    let locked_vol = Arc::new(AtomicI32::new(0));
+    let locked_vol = Arc::new(AtomicI32::new(-1));
     let is_recording_shortcut = Arc::new(AtomicBool::new(false));
     let is_scroll_mode = Arc::new(AtomicBool::new(false));
     let platform = Arc::new(Platform::new());
