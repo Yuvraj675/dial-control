@@ -74,7 +74,7 @@ unsafe extern "system" fn low_level_keyboard_proc(
                     }
                     if let Ok(guard) = LOCKED_VOL_REF.read() {
                         if let Some(ref arc) = *guard {
-                            arc.store(0, Ordering::SeqCst);
+                            arc.store(-1, Ordering::SeqCst);
                         }
                     }
                     if let Ok(guard) = IS_HUD_OPEN_REF.read() {

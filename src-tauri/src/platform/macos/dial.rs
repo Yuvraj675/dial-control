@@ -13,6 +13,7 @@ static LOCKED_VOL_REF: RwLock<Option<Arc<AtomicI32>>> = RwLock::new(None);
 static IS_SCROLL_MODE_REF: RwLock<Option<Arc<AtomicBool>>> = RwLock::new(None);
 static APP_HANDLE_REF: RwLock<Option<AppHandle>> = RwLock::new(None);
 static LAST_CLICK_TIME: RwLock<Option<Instant>> = RwLock::new(None);
+static TAP_PORT_REF: RwLock<Option<usize>> = RwLock::new(None);
 
 pub struct MacDial;
 
@@ -28,7 +29,17 @@ impl MacDial {
         event: CGEventRef,
         _user_info: *mut std::ffi::c_void,
     ) -> CGEventRef {
-        if event_type == kCGEventTapDisabledByTimeout || event_type == kCGEventTapDisabledByUserInput {
+        if event_type == kCGEventTapDisabledByTimeout {
+            if let Ok(guard) = TAP_PORT_REF.read() {
+                if let Some(port_addr) = *guard {
+                    CGEventTapEnable(port_addr as CFMachPortRef, true);
+                    println!("[macOS Dial] Auto re-enabled CGEventTap after timeout.");
+                }
+            }
+            return event;
+        }
+
+        if event_type == kCGEventTapDisabledByUserInput {
             return event;
         }
 
@@ -40,7 +51,7 @@ impl MacDial {
             if subtype == NX_SUBTYPE_AUX_CONTROL_BUTTONS {
                 let key_type = ((data1 >> 16) & 0xFFFF) as u32;
                 let key_flags = (data1 & 0x0000FF00) >> 8;
-                let is_key_down = (key_flags & 0x01) != 0 || (key_flags & 0xFF) == 0x0A;
+                let is_key_down = (key_flags & 0xFF) == 0x0A || (key_flags & 0x01) != 0;
 
                 let is_scroll = if let Ok(guard) = IS_SCROLL_MODE_REF.read() {
                     guard.as_ref().map(|arc| arc.load(Ordering::SeqCst)).unwrap_or(false)
@@ -106,47 +117,51 @@ impl MacDial {
                     let dir = if key_type == NX_KEYTYPE_SOUND_UP { 1 } else { -1 };
 
                     if is_scroll {
-                        let scroll_delta = if dir > 0 { -1 } else { 1 };
-                        if let Ok(guard) = APP_HANDLE_REF.read() {
-                            if let Some(ref app) = *guard {
-                                let app_clone = app.clone();
-                                thread::spawn(move || {
-                                    let state: tauri::State<crate::AppState> = app_clone.state();
-                                    state.platform.input().emit_scroll(scroll_delta);
-                                    let _ = app_clone.emit("scroll:tick", serde_json::json!({ "direction": dir }));
-                                });
+                        if is_key_down {
+                            let scroll_delta = if dir > 0 { -1 } else { 1 };
+                            if let Ok(guard) = APP_HANDLE_REF.read() {
+                                if let Some(ref app) = *guard {
+                                    let app_clone = app.clone();
+                                    thread::spawn(move || {
+                                        let state: tauri::State<crate::AppState> = app_clone.state();
+                                        state.platform.input().emit_scroll(scroll_delta);
+                                        let _ = app_clone.emit("scroll:tick", serde_json::json!({ "direction": dir }));
+                                    });
+                                }
                             }
                         }
-                        // Drop event: prevent OS volume change
+                        // Drop event (both down and up): prevent OS volume change
                         return std::ptr::null_mut();
                     }
 
                     if is_hud_open {
-                        if let Ok(guard) = APP_HANDLE_REF.read() {
-                            if let Some(ref app) = *guard {
-                                let app_clone = app.clone();
-                                thread::spawn(move || {
-                                    let state: tauri::State<crate::AppState> = app_clone.state();
-                                    let current_vol = state.platform.audio().get_volume();
+                        if is_key_down {
+                            if let Ok(guard) = APP_HANDLE_REF.read() {
+                                if let Some(ref app) = *guard {
+                                    let app_clone = app.clone();
+                                    thread::spawn(move || {
+                                        let state: tauri::State<crate::AppState> = app_clone.state();
+                                        let current_vol = state.platform.audio().get_volume();
 
-                                    let target_vol = if locked_val < 0 {
-                                        state.platform.audio().set_volume((current_vol + dir * 2).clamp(0, 100))
-                                    } else {
-                                        current_vol
-                                    };
+                                        let target_vol = if locked_val < 0 {
+                                            state.platform.audio().set_volume((current_vol + dir * 2).clamp(0, 100))
+                                        } else {
+                                            current_vol
+                                        };
 
-                                    if let Some(window) = app_clone.get_webview_window("hud") {
-                                        let _ = window.emit(
-                                            "dial:rotate",
-                                            serde_json::json!({
-                                                "direction": dir,
-                                                "delta": dir,
-                                                "volume": target_vol,
-                                                "volume_pct": target_vol,
-                                            }),
-                                        );
-                                    }
-                                });
+                                        if let Some(window) = app_clone.get_webview_window("hud") {
+                                            let _ = window.emit(
+                                                "dial:rotate",
+                                                serde_json::json!({
+                                                    "direction": dir,
+                                                    "delta": dir,
+                                                    "volume": target_vol,
+                                                    "volume_pct": target_vol,
+                                                }),
+                                            );
+                                        }
+                                    });
+                                }
                             }
                         }
 
@@ -186,21 +201,35 @@ impl DialBackend for MacDial {
 
         #[cfg(target_os = "macos")]
         thread::spawn(move || unsafe {
-            // Mask for NX_SYSDEFINED (14)
             let event_mask: CGEventMask = 1 << NX_SYSDEFINED;
+            let mut port: CFMachPortRef = std::ptr::null_mut();
 
-            let port = CGEventTapCreate(
-                kCGHIDEventTap,
-                kCGHeadInsertEventTap,
-                kCGEventTapOptionDefault,
-                event_mask,
-                Self::event_tap_callback,
-                std::ptr::null_mut(),
-            );
+            // Try creating the event tap, retrying every 2 seconds if accessibility permissions are pending
+            for _ in 0..60 {
+                port = CGEventTapCreate(
+                    kCGHIDEventTap,
+                    kCGHeadInsertEventTap,
+                    kCGEventTapOptionDefault,
+                    event_mask,
+                    Self::event_tap_callback,
+                    std::ptr::null_mut(),
+                );
+
+                if !port.is_null() {
+                    break;
+                }
+
+                eprintln!("[!] macOS CGEventTap requires Accessibility permission. Retrying in 2s...");
+                thread::sleep(Duration::from_secs(2));
+            }
 
             if port.is_null() {
-                eprintln!("[!] Warning: Could not create macOS CGEventTap. Please grant Accessibility permissions in System Settings.");
+                eprintln!("[!] Could not create macOS CGEventTap after retries. Please enable Accessibility in System Settings -> Privacy & Security.");
                 return;
+            }
+
+            if let Ok(mut guard) = TAP_PORT_REF.write() {
+                *guard = Some(port as usize);
             }
 
             println!("[+] macOS CGEventTap for rotary dial & media keys initialized successfully.");

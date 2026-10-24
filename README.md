@@ -1,8 +1,11 @@
 # CMF Buds Pro 2 - Smart Dial Control System
 
-Turn your **CMF Buds Pro 2** smart dial case into a context-aware, beautifully animated radial controller for **Linux and Windows** (with macOS in active development) - inspired by **[KnifeLemon/Filee](https://github.com/KnifeLemon/Filee)** and the Nothing OS aesthetic.
+Turn your **CMF Buds Pro 2** smart dial case into a context-aware, beautifully animated radial controller for **Linux, Windows, and macOS** - inspired by **[KnifeLemon/Filee](https://github.com/KnifeLemon/Filee)** and the Nothing OS aesthetic.
 
 - **100% Dual-Pairing Preserved**: Keeps your phone connection and the Nothing X mobile application active simultaneously.
+- **Scroll Mode (Mouse Wheel Emulation)**: Rotate the dial to scroll long web pages, documents, code, or video feeds with zero window focus loss and native OS notifications.
+- **Stateful Volume Locking**: Keeps your system audio playback volume locked at its baseline while browsing menus, scrolling, or adjusting brightness, with hardware-level echo suppression.
+- **Live Display Brightness**: Accurate live brightness reading and stepping across platforms (including Intel/Samsung OLED laptops via GNOME Mutter D-Bus, external monitors via DDC/CI on Windows, and DisplayServices on macOS).
 - **Direct Launch & System Tray Docking**: Launches directly into the Settings & Customizer window on startup. Closing the window minimizes seamlessly to the system tray background daemon.
 - **Nothing OS Typography**: Fully styled with authentic Nothing OS dot-matrix typography (`Ndot57`) across all HUD dials, settings panels, slice inspectors, and configuration cards.
 - **Custom Dials Creator**: Create custom dial profiles from scratch with custom shortcut triggers, import actions across any dial, and configure dynamic window title/class pattern matching.
@@ -53,9 +56,9 @@ dial-control/
 
 | Platform | Dial / AVRCP Interception | Volume Control | Brightness Control | Context Detection | Status |
 |---|---|---|---|---|---|
-| **Linux (X11 / Wayland)** | BlueZ D-Bus + `evdev` grabber | WirePlumber (`wpctl`) / PulseAudio | `/sys/class/backlight` + GNOME Mutter D-Bus | GNOME FocusedWindow D-Bus + Hyprland/Sway/KDE/X11 | **Fully Functional** |
+| **Linux (X11 / Wayland)** | BlueZ D-Bus + `evdev` exclusive grab | WirePlumber (`wpctl`) / PulseAudio | `/sys/class/backlight` + GNOME Mutter D-Bus | GNOME FocusedWindow D-Bus + Hyprland/Sway/KDE/X11 | **Fully Functional** |
 | **Windows (10 / 11)** | Low-Level Hook (`WH_KEYBOARD_LL`) | Windows Core Audio COM (`IAudioEndpointVolume`) | Dual-layer: `dxva2.dll` (DDC/CI) + WMI/CIM | Win32 `GetForegroundWindow` + Process Image & Class Name | **Fully Functional** |
-| **macOS** | CoreBluetooth / IOHIDManager | CoreAudio HAL | DisplayServices / IOKit | Cocoa `NSWorkspace` | **In Development** |
+| **macOS (Sonoma / Sequoia / Apple Silicon & Intel)** | CoreGraphics Event Tap (`kCGHIDEventTap`) | CoreAudio (`VirtualMasterVolume`) | DisplayServices + auxiliary brightness keys | Cocoa `NSWorkspace` + AppleScript title query | **Fully Implemented** |
 
 ---
 
@@ -87,6 +90,21 @@ The Windows port runs with native Win32 and COM integrations designed for maximu
 - **Overlay Window Presentation**: HUD window uses `"skipTaskbar": true` and `"shadow": false` to eliminate rectangular borders/shadows, and auto-dismisses smoothly when focus is lost (`Focused(false)` / clicking outside).
 - **Interactive Terminal Launcher**: Uses progressive PATH detection (`where wt.exe ... && start wt.exe || where powershell.exe ... || start cmd.exe`) to launch Windows Terminal, PowerShell, or Command Prompt without console suppression.
 - **Security & Least-Privilege**: Runs completely without Administrator privileges in user scope (`%LOCALAPPDATA%\Programs\dial-control`). Respects Windows UIPI (User Interface Privilege Isolation) so hotkeys can be delivered to user web browsers and applications.
+
+---
+
+## macOS Implementation Details
+
+The macOS backend uses native Apple frameworks (`CoreGraphics`, `CoreAudio`, `CoreFoundation`, and `DisplayServices`) for high performance and seamless integration with macOS Sonoma, Sequoia, and earlier releases:
+
+- **Hardware-Level Event Consumption (`CGEventTap`)**: Intercepts CMF Buds Pro 2 rotary events via an event tap at `kCGHIDEventTap` listening to `NX_SYSDEFINED` events (`NX_SUBTYPE_AUX_CONTROL_BUTTONS`). When volume locking or scroll mode is active, the callback returns `null_mut()`. This drops the event at the CoreGraphics driver layer, completely preventing macOS from changing system volume or showing the volume bezel overlay, eliminating feedback loops.
+- **Center-Click Interception**: Center clicks (`NX_KEYTYPE_PLAY`) are intercepted with a 500ms debounce. The event is dropped before reaching media players, so Apple Music and Spotify do not inadvertently toggle playback when opening or navigating the HUD.
+- **Scroll Mode (Mouse Wheel Emulation)**: Emulates native CoreGraphics scroll wheel events via `CGEventCreateScrollWheelEvent2` with `kCGScrollEventUnitLine`. The HUD window automatically hides after 850ms, returning focus cleanly to the target browser or editor.
+- **Native Master Volume**: Direct C-FFI queries and updates to CoreAudio's `VirtualMasterVolume` and scalar properties on `kAudioObjectSystemObject`, with an `osascript` fallback.
+- **Display Brightness & Stepping**: Interacts with built-in MacBook displays via `DisplayServicesGetBrightness` / `DisplayServicesSetBrightness`, and posts native auxiliary brightness key events (`NX_KEYTYPE_BRIGHTNESS_UP` / `DOWN`) for smooth stepping with native macOS OSD feedback.
+- **Active Application Context**: Monitors foreground applications in real time using `NSWorkspace` and AppleScript to extract active application bundle identifiers (e.g. `com.google.Chrome`, `com.microsoft.VSCode`, `com.spotify.client`) and window titles, matching them to custom dial profiles.
+- **Notification Center Integration**: Dispatches native macOS Notification Center alerts via `osascript` on scroll mode entry and exit.
+- **Permissions**: Requires a single user toggle under *System Settings $\to$ Privacy & Security $\to$ Accessibility* for global event interception and scroll emulation, matching standard macOS utilities like Alfred and Raycast.
 
 ---
 
@@ -138,6 +156,14 @@ Windows packages are compiled automatically via **GitHub Actions** (`.github/wor
 
 Download the latest installer from the GitHub repository's **Actions** tab (under workflow run artifacts) or **Releases**.
 
+### macOS Packages
+
+macOS packages are compiled automatically via **GitHub Actions** (`.github/workflows/build-macos.yml`) on `macos-latest` runners:
+- **`Dial Control_1.0.0_aarch64.dmg`**: Native Apple Silicon installer (M1/M2/M3/M4) with drag-to-Applications bundle.
+- **`Dial Control.app`**: Standalone signed application bundle.
+
+Download the latest `.dmg` or `.app` from the GitHub repository's **Actions** tab or **Releases**.
+
 ---
 
 ## Distribution Compatibility & System Requirements
@@ -146,6 +172,7 @@ Download the latest installer from the GitHub repository's **Actions** tab (unde
 
 | Distribution / Environment | Status | Details & Requirements |
 |---|---|---|
+| **macOS Sonoma (14) & Sequoia (15+)** | **Supported** | Native `.dmg` / `.app` (Apple Silicon & Intel). Requires Accessibility permission. |
 | **Windows 11 & Windows 10** | **Supported** | Native `.exe` / `.msi`. Pre-installed WebView2 runtime. |
 | **Ubuntu 24.04 LTS & 24.10+** | **Supported** | Native `.deb` works out of the box. GNOME Shell 46+. |
 | **Fedora 40, 41 & Nobara** | **Supported** | Native `.rpm` works out of the box. GNOME Shell 46/47+. |
@@ -232,6 +259,22 @@ This compiles:
 under `src-tauri/target/release/bundle/`.
 
 Alternatively, push to GitHub to let the automated **GitHub Actions** workflow (`build-windows.yml`) compile the `.exe` and `.msi` installers in the cloud with zero local setup needed.
+
+### Building on macOS (Local Machine or CI)
+
+On a macOS system with Node.js and Rust installed:
+
+```bash
+# 1. Install dependencies
+pnpm install
+
+# 2. Build native macOS packages (.dmg and .app bundle)
+npx @tauri-apps/cli build --bundles dmg,app
+```
+
+Bundles will be generated under `src-tauri/target/release/bundle/dmg/` and `src-tauri/target/release/bundle/macos/`.
+
+Alternatively, push to GitHub to let the automated **GitHub Actions** workflow (`build-macos.yml`) build the `.dmg` installer and `.app` bundle automatically on GitHub's Apple Silicon runners.
 
 ---
 
