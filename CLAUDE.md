@@ -142,7 +142,7 @@ The CMF Buds Pro 2 rotary dial and smart case have **no proprietary Bluetooth pr
      - Only movements *away* from baseline in the active direction generate user actions.
 
 #### Windows Backend (`src-tauri/src/platform/windows/dial.rs`)
-- **Dual-Channel Interception Architecture (with Orbit Gesture & Event Parity)**:
+- **Dual-Channel Interception Architecture**:
   1. **Core Audio Endpoint Volume Callback (`IAudioEndpointVolumeCallback`)**:
      - The CMF Buds Pro 2 rotary dial uses Bluetooth AVRCP Absolute Volume. Windows handles these at the audio driver level without posting `VK_VOLUME_UP`/`VK_VOLUME_DOWN` keyboard messages.
      - Dial Control registers an `IAudioEndpointVolumeCallback` on the active render audio endpoint (`IMMDeviceEnumerator` -> `GetDefaultAudioEndpoint` -> `RegisterControlChangeNotify`).
@@ -155,17 +155,22 @@ The CMF Buds Pro 2 rotary dial and smart case have **no proprietary Bluetooth pr
   2. **Windows 11 Volume Flyout Pill Suppressor (`FlyoutSuppressor`)**:
      - Windows 11 normally pops up its volume bar pill (`XamlExplorerHostIslandWindow`) on every endpoint volume change.
      - Dial Control registers an out-of-context WinEvent hook (`SetWinEventHook` on `EVENT_OBJECT_SHOW`). When `XamlExplorerHostIslandWindow` appears while the HUD is open or within 800ms of dial activity, it is instantly hidden with `ShowWindow(hwnd, SW_HIDE)`.
-  3. **Low-Level Keyboard Hook (`WH_KEYBOARD_LL`) & Orbit Gesture Parity**:
+  3. **Low-Level Keyboard Hook (`WH_KEYBOARD_LL`)**:
      - Intercepts center clicks (`VK_MEDIA_PLAY_PAUSE`, `VK_PAUSE`, `VK_MEDIA_STOP`), next/prev track gestures (`VK_MEDIA_NEXT_TRACK`, `VK_MEDIA_PREV_TRACK`), and physical keyboard volume keys in a dedicated Win32 message pump thread.
      - **Complete KeyDown and KeyUp Interception**: Both `WM_KEYDOWN` and `WM_KEYUP` for media keys are swallowed so background players (Spotify, YouTube, Chrome) never receive accidental play/pause or song-skip commands.
      - **Dial Click Toggle vs Confirm (`has_rotated`)**:
        - When `!is_hud_open`: opens the HUD and resets `has_rotated` to false.
        - When `is_hud_open` and `!has_rotated`: the user clicked the dial again without rotating. This acts as a clean **toggle/dismiss**, immediately closing the HUD without playing audio or executing any tool!
        - When `is_hud_open` and `has_rotated`: the user turned the dial to highlight a tool. Clicking confirms and executes the highlighted tool (`dial:click`).
-     - **Double-Click / Triple-Click Dismiss (Orbit Parity)**:
-       - Double-pressing (`VK_MEDIA_NEXT_TRACK`) or triple-pressing (`VK_MEDIA_PREV_TRACK`) while the HUD is open immediately cancels and closes the HUD without executing any tool, matching Orbit.
+     - **Double-Click / Triple-Click Dismiss**:
+       - Double-pressing (`VK_MEDIA_NEXT_TRACK`) or triple-pressing (`VK_MEDIA_PREV_TRACK`) while the HUD is open immediately cancels and closes the HUD without executing any tool.
      - In **volume mode** (HUD open, `locked_vol < 0`) keyboard volume keys pass through so Windows changes the volume natively and the endpoint callback mirrors it on the gauge.
-  4. **Raw Input Consumer-Control Click Listener (`run_raw_input_click_listener`)**:
+  4. **Own Media Session (`windows/smtc.rs`) — the click path that works while YouTube is playing**:
+     - Bluetooth AVRCP play/pause/next/previous never reach the keyboard path; Windows routes them to the *current media session* (SMTC). When a browser tab or player holds that role it pauses itself and Dial Control never sees the click.
+     - Dial Control therefore registers as a media session: a muted `MediaPlayer` looping generated silence (`%TEMP%\dial-control\silence.wav`) with its own `SystemMediaTransportControls` (`CommandManager` disabled). `ButtonPressed`: Play/Pause = dial click (`handle_dial_click("smtc")`), Next/Previous = cancel/dismiss gestures.
+     - **Focus guard**: a loop compares `GetCurrentSession()` with our own session id (found by its title) and re-asserts (pause/play cycle) with backoff whenever another app takes media focus.
+     - Side effect: while Dial Control runs, the dial no longer controls the real player directly (use the Play/Pause slice of the HUD). The `windows` crate is a Windows-only dependency (WinRT).
+  5. **Raw Input Consumer-Control Click Listener (`run_raw_input_click_listener`)**:
      - AVRCP has no play/pause toggle opcode: the dial click arrives as discrete PLAY / PAUSE (Linux sees `KEY_PLAYCD` / `KEY_PAUSECD`). Windows maps HID Consumer **Play (0xB0)** and **Pause (0xB1)** to `WM_APPCOMMAND` only, with **no virtual key**, so `WH_KEYBOARD_LL` never sees them.
      - A message-only window registers Consumer Control (`0x0C/0x01`, a *shared* HID collection) with `RIDEV_INPUTSINK`, parses reports with `HidP_GetUsages` (hid.dll loaded dynamically) and edge-detects 0xB0 / 0xB1 / 0xCD presses.
      - Hook and Raw Input both call `handle_dial_click()`; a compare-exchange on the 400ms debounce timestamp guarantees one physical press acts once.
