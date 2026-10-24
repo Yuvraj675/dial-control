@@ -3,6 +3,7 @@ import { DonutRadialHUD } from "./components/hud/DonutRadialHUD";
 import { SettingsWindow } from "./components/settings/SettingsWindow";
 import { DEFAULT_CONFIG, sanitizeAndMigrateConfig } from "./data/defaultProfiles";
 import { ProfilesConfig, WheelAction, DialProfile, getOrderedProfileIds } from "./types/profile";
+import { resolveContextProfile, wrapIndex } from "./utils/contextMatch";
 import { Disc, Layers, Sliders, Eye, EyeOff } from "lucide-react";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
@@ -178,7 +179,8 @@ export function App() {
 
     // 2. Switching to a chosen profile from the Home Dial
     if (action.type === "profile" && action.action) {
-      if (config.profiles[action.action]) {
+      // Read the live config: this handler is captured by listeners registered on first render.
+      if (stateRef.current.config.profiles[action.action]) {
         setActiveProfileId(action.action);
         setSelectedIndex(0);
         setCurrentMode("menu");
@@ -229,7 +231,8 @@ export function App() {
       const mode = isVolume ? "volume" : "brightness";
       setCurrentMode(mode);
       if (isTauri) {
-        invoke("set_mode", { mode }).catch(console.error);
+        const modeSwitch = invoke<number>("set_mode", { mode });
+        modeSwitch.catch(console.error);
         if (mode === "brightness") {
           invoke<number>("get_system_brightness")
             .then((b) => {
@@ -240,7 +243,10 @@ export function App() {
             })
             .catch(console.error);
         } else {
-          invoke<number>("get_system_volume")
+          // set_mode returns the user's real volume; get_system_volume could still read the
+          // transient headroom position while the backend restores it.
+          modeSwitch
+            .then((v) => (typeof v === "number" && v >= 0 ? v : invoke<number>("get_system_volume")))
             .then((v) => {
               if (typeof v === "number" && !isNaN(v)) {
                 setGaugeValue(v);
@@ -259,6 +265,7 @@ export function App() {
   };
 
   const lastDialClickRef = useRef<number>(0);
+  const pendingProfileRef = useRef<string | null>(null);
   const hasRotatedRef = useRef<boolean>(false);
 
   // Tauri Event Listeners (Hardware Dial & Context Detection) - Strictly HUD window
@@ -276,11 +283,7 @@ export function App() {
         const dir = event.payload.direction ?? event.payload.delta ?? 1;
 
         if (currentMode === "menu") {
-          setSelectedIndex((prev) => {
-            const next = prev + dir;
-            if (next < 0) return actionsCount - 1;
-            return next % actionsCount;
-          });
+          setSelectedIndex((prev) => wrapIndex(prev, dir, actionsCount));
         } else if (currentMode === "volume") {
           // In volume mode, PipeWire/BlueZ on Linux or Core Audio on Windows update hardware volume naturally.
           const vol = event.payload.volume_pct ?? event.payload.volume;
@@ -354,35 +357,20 @@ export function App() {
         title?: string;
         wm_class?: string;
       }>("context:change", (event) => {
-        const { profile_id, app, title, wm_class } = event.payload;
+        const { profile_id, app, title } = event.payload;
         console.log(`[Context] Foreground -> App: '${app}', Title: '${title}', Backend matched: '${profile_id}'`);
 
-        const profiles = stateRef.current.config.profiles;
-        const query = `${wm_class || ""} ${app || ""} ${title || ""}`.toLowerCase();
-        let targetId = profile_id;
+        const targetId = resolveContextProfile(stateRef.current.config, event.payload, DEFAULT_CONFIG);
 
-        // Check ordered profiles for custom trigger matches
-        const orderedProfileIds = getOrderedProfileIds(stateRef.current.config);
-        for (const id of orderedProfileIds) {
-          if (id === "default" || id === "home") continue;
-          const prof = profiles[id];
-          if (
-            prof?.match_patterns?.some((pat) => {
-              const clean = pat.replace(/\*/g, "").toLowerCase().trim();
-              return clean.length > 0 && query.includes(clean);
-            })
-          ) {
-            targetId = id;
-            break;
-          }
+        // The foreground title keeps changing while the HUD is open (song changes, tab titles);
+        // switching then would yank the wheel back to slice 0 mid-interaction. Defer instead.
+        if (stateRef.current.isHudOpen) {
+          pendingProfileRef.current = targetId;
+          return;
         }
-
-        if (targetId && profiles[targetId]) {
+        pendingProfileRef.current = null;
+        if (targetId !== stateRef.current.activeProfile.id) {
           setActiveProfileId(targetId);
-          setSelectedIndex(0);
-          setCurrentMode("menu");
-        } else if (profiles.default) {
-          setActiveProfileId("default");
           setSelectedIndex(0);
           setCurrentMode("menu");
         }
@@ -391,6 +379,10 @@ export function App() {
 
       // 4. HUD Visibility Sync
       const unlistenVis = await listen<boolean>("hud:visibility", (event) => {
+        if (pendingProfileRef.current) {
+          setActiveProfileId(pendingProfileRef.current);
+          pendingProfileRef.current = null;
+        }
         setIsHudOpen(event.payload);
         stateRef.current.isHudOpen = event.payload;
         if (event.payload) {

@@ -1,3 +1,4 @@
+use crate::platform::dial_logic::{brightness_cache_is_fresh, brightness_step_target, now_millis};
 use crate::platform::traits::SystemBrightness;
 use crate::platform::windows::ffi::*;
 use std::process::Command;
@@ -282,9 +283,15 @@ impl SystemBrightness for WindowsBrightness {
     }
 
     fn step_brightness(&self, direction: i32) {
-        let current = self.get_brightness();
-        let step = if direction > 0 { 5 } else { -5 };
-        let new_val = (current + step).clamp(0, 100);
-        self.set_brightness(new_val);
+        // WMI applies brightness asynchronously (150ms debounce + PowerShell), so right after
+        // our own set a hardware read still returns the old level and fast rotation would
+        // stall at +5%. Step from our own target until the hardware has settled.
+        let last_set = self.last_set_time.load(Ordering::SeqCst) as u64;
+        let current = if brightness_cache_is_fresh(now_millis(), last_set) {
+            self.pending_target.load(Ordering::SeqCst)
+        } else {
+            self.get_brightness()
+        };
+        self.set_brightness(brightness_step_target(current, direction));
     }
 }

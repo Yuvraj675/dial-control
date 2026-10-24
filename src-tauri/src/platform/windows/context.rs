@@ -1,4 +1,4 @@
-use crate::platform::common::{match_profile, ContextEvent};
+use crate::platform::common::{class_for_matching, match_profile, ContextEvent};
 use crate::platform::traits::ContextDetector;
 use crate::platform::windows::ffi::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -115,8 +115,10 @@ impl ContextDetector for WindowsContext {
                         continue;
                     }
 
-                    // 4. Match against profile rules
-                    let profile_id = match_profile(&app_name, &class_name, &title);
+                    // 4. Match against profile rules. Electron apps all share the
+                    // Chrome_WidgetWin class, which must not make Discord/Slack a "browser".
+                    let match_class = class_for_matching(&app_name, &class_name).to_string();
+                    let profile_id = match_profile(&app_name, &match_class, &title);
 
                     if profile_id != last_profile || title != last_title {
                         last_profile = profile_id.to_string();
@@ -131,7 +133,7 @@ impl ContextDetector for WindowsContext {
                             profile_id: profile_id.to_string(),
                             app: if !app_name.is_empty() { app_name } else { class_name.clone() },
                             title: title.clone(),
-                            wm_class: class_name,
+                            wm_class: match_class,
                         };
                         let _ = app.emit("context:change", event);
                     }

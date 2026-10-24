@@ -81,6 +81,7 @@ The dial automatically detects your active foreground application and adapts its
 The Windows port runs with native Win32 and COM integrations designed for maximum responsiveness, security, and hardware compatibility:
 
 - **Earbuds Dial Case Interception**: Uses dual-channel Windows Core Audio Endpoint Volume Notifications (`IAudioEndpointVolumeCallback`) for Bluetooth AVRCP rotary turns with a floating headroom model and dual-layer echo cancellation, plus a Win32 Low-Level Keyboard Hook (`WH_KEYBOARD_LL`) for center clicks and gestures. When the HUD is closed, clicking the dial case button opens the radial HUD and swallows playback toggles on both keydown and keyup. While open, rotating navigates slices and clicking confirms selection. Clicking again without rotating cleanly toggles/dismisses the HUD. Double-clicking or triple-clicking immediately cancels/dismisses the HUD (Orbit gesture parity) without skipping tracks in background players.
+- **Raw Input Click Detection**: Bluetooth AVRCP sends discrete Play / Pause for the dial click, which Windows delivers as `WM_APPCOMMAND` without any virtual key, so a keyboard hook alone never sees it. A Raw Input listener on the shared HID Consumer Control collection (`RIDEV_INPUTSINK`) detects those presses; it shares one debounced click handler with the hook. Note: Raw Input can observe but not swallow, so a discrete Play/Pause click may still toggle the active media player on Windows.
 - **Windows 11 Volume Flyout Suppression**: Features an out-of-context WinEvent hook (`SetWinEventHook`) that automatically suppresses the Windows 11 volume bar pill (`XamlExplorerHostIslandWindow`) during dial turns so the OS volume popup never obscures the HUD.
 - **Dynamic Audio Endpoint Rebinding**: Continuously tracks the active default render audio endpoint, automatically rebinding the Core Audio volume callback when CMF Buds Pro 2 are connected or reconnected.
 - **Hardware Master Volume (Zero Desynchronization)**: Directly interfaces with the Windows Core Audio COM API (`IAudioEndpointVolume` and `IMMDeviceEnumerator` via `ole32.dll`). It reads the exact system volume level on startup and sets the hardware master scalar directly without keypress simulation.
@@ -100,7 +101,9 @@ The Windows port runs with native Win32 and COM integrations designed for maximu
 The macOS backend uses native Apple frameworks (`CoreGraphics`, `CoreAudio`, `CoreFoundation`, and `DisplayServices`) for high performance and seamless integration with macOS Sonoma, Sequoia, and earlier releases:
 
 - **Hardware-Level Event Consumption (`CGEventTap`)**: Intercepts CMF Buds Pro 2 rotary events via an event tap at `kCGHIDEventTap` listening to `NX_SYSDEFINED` events (`NX_SUBTYPE_AUX_CONTROL_BUTTONS`). When volume locking or scroll mode is active, the callback returns `null_mut()`. This drops the event at the CoreGraphics driver layer, completely preventing macOS from changing system volume or showing the volume bezel overlay, eliminating feedback loops.
-- **Center-Click Interception**: Center clicks (`NX_KEYTYPE_PLAY`) are intercepted with a 500ms debounce. The event is dropped before reaching media players, so Apple Music and Spotify do not inadvertently toggle playback when opening or navigating the HUD.
+- **AVRCP Absolute Volume Rotation**: A CoreAudio property listener on the default output device (re-bound when the output changes) detects dial turns that macOS applies directly to the Bluetooth device volume, snapping back to a headroom baseline while the HUD is open.
+- **Focus Hand-Back & Hotkeys**: When the HUD hides, the previously active app is re-activated so hotkeys reach it; profile shortcuts are translated to Mac conventions (Ctrl -> Command, except Ctrl+` and Ctrl+Tab).
+- **Center-Click Interception**: Center clicks (`NX_KEYTYPE_PLAY`) are intercepted with a 250ms debounce. The event is dropped before reaching media players, so Apple Music and Spotify do not inadvertently toggle playback when opening or navigating the HUD.
 - **Scroll Mode (Mouse Wheel Emulation)**: Emulates native CoreGraphics scroll wheel events via `CGEventCreateScrollWheelEvent2` with `kCGScrollEventUnitLine`. The HUD window automatically hides after 850ms, returning focus cleanly to the target browser or editor.
 - **Native Master Volume**: Direct C-FFI queries and updates to CoreAudio's `VirtualMasterVolume` and scalar properties on `kAudioObjectSystemObject`, with an `osascript` fallback.
 - **Display Brightness & Stepping**: Interacts with built-in MacBook displays directly via `DisplayServicesGetBrightness` and `DisplayServicesSetBrightness` for accurate live percentage readings and smooth 5% stepping, with a `brightness` CLI fallback.
@@ -224,6 +227,15 @@ bash scripts/setup_udev.sh
 ```
 
 ---
+
+## Tests
+
+```bash
+cargo test --manifest-path src-tauri/Cargo.toml --lib   # dial logic, keymaps, profile matching (all OS paths)
+npm test                                                # frontend context matching & profile config
+```
+
+The Windows and macOS dial decision logic (click state machine, volume echo filtering, floating headroom, aux-key decoding, HID consumer edge detection, key translation) lives in platform-agnostic modules, so it is exercised on any host.
 
 ## Development & Building
 

@@ -214,8 +214,9 @@ fn parse_key_name(name: &str) -> Option<Key> {
         "KEY_RIGHT" | "RIGHT" => Some(Key::KEY_RIGHT),
         "KEY_UP" | "UP" => Some(Key::KEY_UP),
         "KEY_DOWN" | "DOWN" => Some(Key::KEY_DOWN),
-        "KEY_HOME" => Some(Key::KEY_HOME),
-        "KEY_END" => Some(Key::KEY_END),
+        "KEY_HOME" | "HOME" => Some(Key::KEY_HOME),
+        "KEY_INSERT" | "INSERT" => Some(Key::KEY_INSERT),
+        "KEY_END" | "END" => Some(Key::KEY_END),
         "KEY_PAGEUP" | "PAGE_UP" => Some(Key::KEY_PAGEUP),
         "KEY_PAGEDOWN" | "PAGE_DOWN" => Some(Key::KEY_PAGEDOWN),
 

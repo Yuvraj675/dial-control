@@ -1,8 +1,12 @@
+use crate::platform::dial_logic::{
+    classify_click, classify_volume_change, decode_aux_key, headroom_lock, is_rotation_burst,
+    now_millis, scroll_delta_for, ClickAction, VolumeAction,
+};
 use crate::platform::traits::{DialBackend, PlatformProvider};
-use std::sync::atomic::{AtomicBool, AtomicI32, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 
 #[cfg(target_os = "macos")]
@@ -12,8 +16,233 @@ static IS_HUD_OPEN_REF: OnceLock<Arc<AtomicBool>> = OnceLock::new();
 static LOCKED_VOL_REF: OnceLock<Arc<AtomicI32>> = OnceLock::new();
 static IS_SCROLL_MODE_REF: OnceLock<Arc<AtomicBool>> = OnceLock::new();
 static APP_HANDLE_REF: OnceLock<AppHandle> = OnceLock::new();
-static LAST_CLICK_TIME_MS: AtomicUsize = AtomicUsize::new(0);
-static TAP_PORT_REF: AtomicUsize = AtomicUsize::new(0);
+static LAST_CLICK_TIME_MS: AtomicU64 = AtomicU64::new(0);
+static TAP_PORT_REF: AtomicU64 = AtomicU64::new(0);
+
+/// Volume the dial snaps back to while the HUD is open. Separate from `locked_vol`
+/// (the user's volume, restored on close) because it is clamped for rotation headroom.
+static ROTATION_BASELINE: AtomicI32 = AtomicI32::new(-1);
+static LAST_ROTATION_MS: AtomicU64 = AtomicU64::new(0);
+static BOUND_OUTPUT_DEVICE: AtomicU32 = AtomicU32::new(0);
+
+/// Center-click debounce for hardware contact bounce.
+const CLICK_DEBOUNCE_MS: u64 = 250;
+
+fn flag(slot: &OnceLock<Arc<AtomicBool>>) -> bool {
+    slot.get().map(|a| a.load(Ordering::SeqCst)).unwrap_or(false)
+}
+
+fn locked_vol() -> i32 {
+    LOCKED_VOL_REF.get().map(|a| a.load(Ordering::SeqCst)).unwrap_or(-1)
+}
+
+fn with_app<F: FnOnce(AppHandle) + Send + 'static>(f: F) {
+    if let Some(app) = APP_HANDLE_REF.get() {
+        let app = app.clone();
+        thread::spawn(move || f(app));
+    }
+}
+
+/// Called from `do_show_hud`: moves the volume off 0%/100% so a CoreAudio-observed turn
+/// always has room to register in both directions.
+pub fn init_hud_rotation(curr_vol: i32) {
+    let baseline = headroom_lock(curr_vol);
+    ROTATION_BASELINE.store(baseline, Ordering::SeqCst);
+    if baseline != curr_vol {
+        with_app(move |app| {
+            let state: tauri::State<crate::AppState> = app.state();
+            state.platform.audio().set_volume(baseline);
+        });
+    }
+}
+
+fn emit_rotate(app: &AppHandle, direction: i32, volume_pct: i32) {
+    // Emitter::emit reaches every webview already; emitting again on the window doubles it.
+    let _ = app.emit(
+        "dial:rotate",
+        serde_json::json!({
+            "direction": direction,
+            "delta": direction,
+            "volume": volume_pct,
+            "volume_pct": volume_pct,
+        }),
+    );
+}
+
+fn handle_center_click() {
+    let now = now_millis();
+    let action = classify_click(
+        now,
+        LAST_CLICK_TIME_MS.load(Ordering::SeqCst),
+        CLICK_DEBOUNCE_MS,
+        flag(&IS_HUD_OPEN_REF),
+        flag(&IS_SCROLL_MODE_REF),
+    );
+    if action == ClickAction::Debounced {
+        return;
+    }
+    LAST_CLICK_TIME_MS.store(now, Ordering::SeqCst);
+
+    match action {
+        ClickAction::ExitScroll => {
+            println!(">> [macOS NATIVE DIAL CLICK] -> Exiting Scroll Mode");
+            with_app(|app| {
+                let state: tauri::State<crate::AppState> = app.state();
+                crate::do_stop_scroll_mode(&app, &state);
+            });
+        }
+        ClickAction::OpenHud => {
+            println!(">> [macOS NATIVE DIAL CLICK] -> Opening HUD");
+            // Flip the flag synchronously so rotation ticks arriving while the window
+            // animates in are already intercepted.
+            if let Some(arc) = IS_HUD_OPEN_REF.get() {
+                arc.store(true, Ordering::SeqCst);
+            }
+            with_app(|app| {
+                let state: tauri::State<crate::AppState> = app.state();
+                crate::do_show_hud(&app, &state);
+            });
+        }
+        ClickAction::Confirm => {
+            println!(">> [macOS NATIVE DIAL CLICK] -> Dispatched action select to HUD");
+            with_app(|app| {
+                let _ = app.emit("dial:click", ());
+            });
+        }
+        ClickAction::Debounced => {}
+    }
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn read_device_volume(device: AudioObjectID) -> Option<i32> {
+    let address = AudioObjectPropertyAddress {
+        mSelector: kAudioHardwareServiceDeviceProperty_VirtualMasterVolume,
+        mScope: kAudioObjectPropertyScopeOutput,
+        mElement: kAudioObjectPropertyElementMain,
+    };
+    let mut vol: f32 = 0.0;
+    let mut size = std::mem::size_of::<f32>() as u32;
+    let status = AudioObjectGetPropertyData(
+        device,
+        &address,
+        0,
+        std::ptr::null(),
+        &mut size,
+        &mut vol as *mut _ as *mut std::ffi::c_void,
+    );
+    (status == 0).then(|| ((vol * 100.0).round() as i32).clamp(0, 100))
+}
+
+/// CoreAudio listener for the default output device's volume. Bluetooth AVRCP Absolute
+/// Volume (the CMF dial) updates the device volume directly instead of posting a media key,
+/// so this is the macOS counterpart of the Windows endpoint-volume callback.
+#[cfg(target_os = "macos")]
+unsafe extern "C" fn volume_listener(
+    device: AudioObjectID,
+    _count: u32,
+    _addresses: *const AudioObjectPropertyAddress,
+    _client: *mut std::ffi::c_void,
+) -> OSStatus {
+    let Some(pct) = read_device_volume(device) else {
+        return 0;
+    };
+    let is_hud_open = flag(&IS_HUD_OPEN_REF);
+    let is_scroll = flag(&IS_SCROLL_MODE_REF);
+    let baseline = if locked_vol() < 0 { -1 } else { ROTATION_BASELINE.load(Ordering::SeqCst) };
+
+    match classify_volume_change(pct, baseline, is_hud_open, is_scroll) {
+        VolumeAction::Turn { direction } => {
+            let now = now_millis();
+            let burst = is_rotation_burst(now, LAST_ROTATION_MS.load(Ordering::SeqCst));
+            if !burst {
+                LAST_ROTATION_MS.store(now, Ordering::SeqCst);
+            }
+            println!(
+                ">> [macOS CoreAudio DIAL TURN] {}% (baseline {}%) -> dir {}{}",
+                pct,
+                baseline,
+                direction,
+                if burst { " (burst, restore only)" } else { "" }
+            );
+            // Never set properties from inside a HAL listener; restore on a worker thread.
+            with_app(move |app| {
+                let state: tauri::State<crate::AppState> = app.state();
+                state.platform.audio().set_volume(baseline);
+                if burst {
+                    return;
+                }
+                if is_scroll {
+                    state.platform.input().emit_scroll(scroll_delta_for(direction));
+                    let _ = app.emit("scroll:tick", serde_json::json!({ "direction": direction }));
+                } else {
+                    emit_rotate(&app, direction, locked_vol().max(0));
+                }
+            });
+        }
+        VolumeAction::NaturalChange { pct } => {
+            with_app(move |app| emit_rotate(&app, 0, pct));
+        }
+        VolumeAction::Ignore => {}
+    }
+    0
+}
+
+#[cfg(target_os = "macos")]
+const VOLUME_ADDRESS: AudioObjectPropertyAddress = AudioObjectPropertyAddress {
+    mSelector: kAudioHardwareServiceDeviceProperty_VirtualMasterVolume,
+    mScope: kAudioObjectPropertyScopeOutput,
+    mElement: kAudioObjectPropertyElementMain,
+};
+
+#[cfg(target_os = "macos")]
+const DEFAULT_OUTPUT_ADDRESS: AudioObjectPropertyAddress = AudioObjectPropertyAddress {
+    mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+    mScope: kAudioObjectPropertyScopeGlobal,
+    mElement: kAudioObjectPropertyElementMain,
+};
+
+/// Moves the volume listener to the current default output (buds connected after launch,
+/// switching between speakers and headphones).
+#[cfg(target_os = "macos")]
+unsafe fn bind_default_output_device() {
+    let mut device: AudioObjectID = 0;
+    let mut size = std::mem::size_of::<AudioObjectID>() as u32;
+    let status = AudioObjectGetPropertyData(
+        kAudioObjectSystemObject,
+        &DEFAULT_OUTPUT_ADDRESS,
+        0,
+        std::ptr::null(),
+        &mut size,
+        &mut device as *mut _ as *mut std::ffi::c_void,
+    );
+    if status != 0 || device == 0 {
+        return;
+    }
+    let previous = BOUND_OUTPUT_DEVICE.swap(device, Ordering::SeqCst);
+    if previous == device {
+        return;
+    }
+    if previous != 0 {
+        AudioObjectRemovePropertyListener(previous, &VOLUME_ADDRESS, volume_listener, std::ptr::null_mut());
+    }
+    let status = AudioObjectAddPropertyListener(device, &VOLUME_ADDRESS, volume_listener, std::ptr::null_mut());
+    if status == 0 {
+        println!("[+] macOS CoreAudio volume listener bound to output device {}", device);
+    } else {
+        eprintln!("[!] macOS: could not listen to volume of device {} (OSStatus {})", device, status);
+    }
+}
+
+#[cfg(target_os = "macos")]
+unsafe extern "C" fn default_output_listener(
+    _object: AudioObjectID,
+    _count: u32,
+    _addresses: *const AudioObjectPropertyAddress,
+    _client: *mut std::ffi::c_void,
+) -> OSStatus {
+    bind_default_output_device();
+    0
+}
 
 pub struct MacDial;
 
@@ -38,195 +267,93 @@ impl MacDial {
             return event;
         }
 
-        if event_type == kCGEventTapDisabledByUserInput {
+        if event_type == kCGEventTapDisabledByUserInput || event_type != NX_SYSDEFINED {
             return event;
         }
 
-        if event_type == NX_SYSDEFINED {
-            let mut subtype: i16 = 0;
-            let mut data1: isize = 0;
+        let mut subtype: i16 = 0;
+        let mut data1: isize = 0;
 
-            // 1. Try public AppKit [NSEvent eventWithCGEvent:]
-            let cls_nsevent = objc_getClass(b"NSEvent\0".as_ptr() as *const _);
-            if !cls_nsevent.is_null() {
-                let sel_event_with_cg =
-                    sel_registerName(b"eventWithCGEvent:\0".as_ptr() as *const _);
-                let sel_subtype = sel_registerName(b"subtype\0".as_ptr() as *const _);
-                let sel_data1 = sel_registerName(b"data1\0".as_ptr() as *const _);
+        // This callback runs on a plain thread with no autorelease pool; without one every
+        // NSEvent created below would leak.
+        let pool = objc_autoreleasePoolPush();
+        let cls_nsevent = objc_getClass(b"NSEvent\0".as_ptr() as *const _);
+        if !cls_nsevent.is_null() {
+            let sel_event_with_cg = sel_registerName(b"eventWithCGEvent:\0".as_ptr() as *const _);
+            let sel_subtype = sel_registerName(b"subtype\0".as_ptr() as *const _);
+            let sel_data1 = sel_registerName(b"data1\0".as_ptr() as *const _);
 
-                type MsgSendCG = unsafe extern "C" fn(
-                    *mut std::ffi::c_void,
-                    *mut std::ffi::c_void,
-                    CGEventRef,
-                ) -> *mut std::ffi::c_void;
-                type MsgSendSubtype =
-                    unsafe extern "C" fn(*mut std::ffi::c_void, *mut std::ffi::c_void) -> i16;
-                type MsgSendData1 =
-                    unsafe extern "C" fn(*mut std::ffi::c_void, *mut std::ffi::c_void) -> isize;
+            type MsgSendCG = unsafe extern "C" fn(
+                *mut std::ffi::c_void,
+                *mut std::ffi::c_void,
+                CGEventRef,
+            ) -> *mut std::ffi::c_void;
+            type MsgSendSubtype =
+                unsafe extern "C" fn(*mut std::ffi::c_void, *mut std::ffi::c_void) -> i16;
+            type MsgSendData1 =
+                unsafe extern "C" fn(*mut std::ffi::c_void, *mut std::ffi::c_void) -> isize;
 
-                let msg_cg: MsgSendCG = std::mem::transmute(objc_msgSend as *const ());
-                let msg_sub: MsgSendSubtype = std::mem::transmute(objc_msgSend as *const ());
-                let msg_d1: MsgSendData1 = std::mem::transmute(objc_msgSend as *const ());
+            let msg_cg: MsgSendCG = std::mem::transmute(objc_msgSend as *const ());
+            let msg_sub: MsgSendSubtype = std::mem::transmute(objc_msgSend as *const ());
+            let msg_d1: MsgSendData1 = std::mem::transmute(objc_msgSend as *const ());
 
-                let ns_event = msg_cg(cls_nsevent, sel_event_with_cg, event);
-                if !ns_event.is_null() {
-                    subtype = msg_sub(ns_event, sel_subtype);
-                    data1 = msg_d1(ns_event, sel_data1);
+            let ns_event = msg_cg(cls_nsevent, sel_event_with_cg, event);
+            if !ns_event.is_null() {
+                subtype = msg_sub(ns_event, sel_subtype);
+                data1 = msg_d1(ns_event, sel_data1);
+            }
+        }
+        objc_autoreleasePoolPop(pool);
+
+        if subtype != NX_SUBTYPE_AUX_CONTROL_BUTTONS {
+            return event;
+        }
+
+        let key = decode_aux_key(data1 as i64);
+
+        // 1. Center Click / Media Play-Pause Key: always dropped so Music/Spotify don't toggle.
+        if key.key_type == NX_KEYTYPE_PLAY {
+            if key.is_down && !key.is_repeat {
+                handle_center_click();
+            }
+            return std::ptr::null_mut();
+        }
+
+        // 2. Rotary Dial Rotation (Volume Up = CW, Volume Down = CCW)
+        if key.key_type == NX_KEYTYPE_SOUND_UP || key.key_type == NX_KEYTYPE_SOUND_DOWN {
+            let dir = if key.key_type == NX_KEYTYPE_SOUND_UP { 1 } else { -1 };
+            let is_scroll = flag(&IS_SCROLL_MODE_REF);
+            let is_hud_open = flag(&IS_HUD_OPEN_REF);
+
+            if is_scroll {
+                if key.is_down {
+                    with_app(move |app| {
+                        let state: tauri::State<crate::AppState> = app.state();
+                        state.platform.input().emit_scroll(scroll_delta_for(dir));
+                        let _ = app.emit("scroll:tick", serde_json::json!({ "direction": dir }));
+                    });
                 }
+                // Drop event (both down and up): prevent OS volume change
+                return std::ptr::null_mut();
             }
 
-            // Fallback: raw CoreGraphics field 54 or 0x95
-            if subtype == 0 && data1 == 0 {
-                let raw_data1 = CGEventGetIntegerValueField(event, 54);
-                subtype = (raw_data1 & 0xFF) as i16;
-                data1 = raw_data1 as isize;
-            }
-
-            if subtype == NX_SUBTYPE_AUX_CONTROL_BUTTONS {
-                let key_type = ((data1 >> 16) & 0xFFFF) as u32;
-                let key_flags = (data1 & 0x0000FF00) >> 8;
-                let is_key_down = (key_flags & 0xFF) == 0x0A || (key_flags & 0x01) != 0;
-
-                let is_scroll = IS_SCROLL_MODE_REF
-                    .get()
-                    .map(|arc| arc.load(Ordering::SeqCst))
-                    .unwrap_or(false);
-
-                let is_hud_open = IS_HUD_OPEN_REF
-                    .get()
-                    .map(|arc| arc.load(Ordering::SeqCst))
-                    .unwrap_or(false);
-
-                let locked_val = LOCKED_VOL_REF
-                    .get()
-                    .map(|arc| arc.load(Ordering::SeqCst))
-                    .unwrap_or(-1);
-
-                // 1. Center Click / Media Play-Pause Key
-                if key_type == NX_KEYTYPE_PLAY {
-                    if is_key_down {
-                        let now = SystemTime::now()
-                            .duration_since(UNIX_EPOCH)
-                            .unwrap_or_default()
-                            .as_millis() as usize;
-
-                        let last = LAST_CLICK_TIME_MS.load(Ordering::SeqCst);
-                        if now.saturating_sub(last) < 250 {
-                            return std::ptr::null_mut();
-                        }
-                        LAST_CLICK_TIME_MS.store(now, Ordering::SeqCst);
-
-                        if is_scroll {
-                            println!(">> [macOS NATIVE DIAL CLICK] -> Exiting Scroll Mode");
-                            if let Some(arc) = IS_SCROLL_MODE_REF.get() {
-                                arc.store(false, Ordering::SeqCst);
-                            }
-                            if let Some(arc) = LOCKED_VOL_REF.get() {
-                                arc.store(-1, Ordering::SeqCst);
-                            }
-                            if let Some(arc) = IS_HUD_OPEN_REF.get() {
-                                arc.store(false, Ordering::SeqCst);
-                            }
-                            if let Some(app) = APP_HANDLE_REF.get() {
-                                let app_clone = app.clone();
-                                thread::spawn(move || {
-                                    let state: tauri::State<crate::AppState> = app_clone.state();
-                                    crate::do_stop_scroll_mode(&app_clone, &state);
-                                });
-                            }
-                            return std::ptr::null_mut();
-                        }
-
-                        if !is_hud_open {
-                            println!(">> [macOS NATIVE DIAL CLICK] -> Opening HUD");
-                            // Synchronously lock volume and set open flag so incoming rotation ticks
-                            // are immediately intercepted while do_show_hud starts up!
-                            if let Some(arc) = IS_HUD_OPEN_REF.get() {
-                                arc.store(true, Ordering::SeqCst);
-                            }
-                            if let Some(arc) = LOCKED_VOL_REF.get() {
-                                arc.store(50, Ordering::SeqCst);
-                            }
-
-                            if let Some(app) = APP_HANDLE_REF.get() {
-                                let app_clone = app.clone();
-                                thread::spawn(move || {
-                                    let state: tauri::State<crate::AppState> = app_clone.state();
-                                    crate::do_show_hud(&app_clone, &state);
-                                });
-                            }
-                            return std::ptr::null_mut();
+            if is_hud_open {
+                if key.is_down {
+                    let locked_val = locked_vol();
+                    with_app(move |app| {
+                        let state: tauri::State<crate::AppState> = app.state();
+                        let shown = if locked_val < 0 {
+                            // Volume mode: apply the change ourselves since the key is dropped.
+                            let current = state.platform.audio().get_volume();
+                            state.platform.audio().set_volume((current + dir * 2).clamp(0, 100))
                         } else {
-                            println!(">> [macOS NATIVE DIAL CLICK] -> Dispatched action select to HUD");
-                            if let Some(app) = APP_HANDLE_REF.get() {
-                                let app_clone = app.clone();
-                                thread::spawn(move || {
-                                    let _ = app_clone.emit("dial:click", ());
-                                    if let Some(window) = app_clone.get_webview_window("hud") {
-                                        let _ = window.emit("dial:click", ());
-                                    }
-                                });
-                            }
-                            return std::ptr::null_mut();
-                        }
-                    }
-
-                    // Return null to drop the event so macOS Music/Spotify doesn't play/pause
-                    return std::ptr::null_mut();
+                            locked_val
+                        };
+                        emit_rotate(&app, dir, shown);
+                    });
                 }
-
-                // 2. Rotary Dial Rotation (Volume Up = CW, Volume Down = CCW)
-                if key_type == NX_KEYTYPE_SOUND_UP || key_type == NX_KEYTYPE_SOUND_DOWN {
-                    let dir = if key_type == NX_KEYTYPE_SOUND_UP { 1 } else { -1 };
-
-                    if is_scroll {
-                        if is_key_down {
-                            let scroll_delta = if dir > 0 { -1 } else { 1 };
-                            if let Some(app) = APP_HANDLE_REF.get() {
-                                let app_clone = app.clone();
-                                thread::spawn(move || {
-                                    let state: tauri::State<crate::AppState> = app_clone.state();
-                                    state.platform.input().emit_scroll(scroll_delta);
-                                    let _ = app_clone.emit("scroll:tick", serde_json::json!({ "direction": dir }));
-                                });
-                            }
-                        }
-                        // Drop event (both down and up): prevent OS volume change
-                        return std::ptr::null_mut();
-                    }
-
-                    if is_hud_open {
-                        if is_key_down {
-                            if let Some(app) = APP_HANDLE_REF.get() {
-                                let app_clone = app.clone();
-                                thread::spawn(move || {
-                                    let state: tauri::State<crate::AppState> = app_clone.state();
-
-                                    let target_vol = if locked_val < 0 {
-                                        let current_vol = state.platform.audio().get_volume();
-                                        state.platform.audio().set_volume((current_vol + dir * 2).clamp(0, 100))
-                                    } else {
-                                        locked_val
-                                    };
-
-                                    let payload = serde_json::json!({
-                                        "direction": dir,
-                                        "delta": dir,
-                                        "volume": target_vol,
-                                        "volume_pct": target_vol,
-                                    });
-                                    let _ = app_clone.emit("dial:rotate", payload.clone());
-                                    if let Some(window) = app_clone.get_webview_window("hud") {
-                                        let _ = window.emit("dial:rotate", payload);
-                                    }
-                                });
-                            }
-                        }
-
-                        // Always drop volume event while HUD is open so macOS doesn't alter system volume or show volume HUD
-                        return std::ptr::null_mut();
-                    }
-                }
+                // Always drop while the HUD is open so macOS doesn't change volume or show its HUD
+                return std::ptr::null_mut();
             }
         }
 
@@ -248,11 +375,23 @@ impl DialBackend for MacDial {
         let _ = APP_HANDLE_REF.set(app);
 
         #[cfg(target_os = "macos")]
+        unsafe {
+            // HAL delivers property notifications on its own thread; no run loop needed.
+            bind_default_output_device();
+            AudioObjectAddPropertyListener(
+                kAudioObjectSystemObject,
+                &DEFAULT_OUTPUT_ADDRESS,
+                default_output_listener,
+                std::ptr::null_mut(),
+            );
+        }
+
+        #[cfg(target_os = "macos")]
         thread::spawn(move || unsafe {
             let event_mask: CGEventMask = 1 << NX_SYSDEFINED;
             let mut port: CFMachPortRef = std::ptr::null_mut();
 
-            // Try creating the event tap, retrying every 2 seconds if accessibility permissions are pending
+            // Retry every 2 seconds while Accessibility permission is pending
             for _ in 0..60 {
                 port = CGEventTapCreate(
                     kCGHIDEventTap,
@@ -276,7 +415,7 @@ impl DialBackend for MacDial {
                 return;
             }
 
-            TAP_PORT_REF.store(port as usize, Ordering::SeqCst);
+            TAP_PORT_REF.store(port as u64, Ordering::SeqCst);
 
             println!("[+] macOS CGEventTap for rotary dial & media keys initialized successfully.");
 
@@ -291,6 +430,7 @@ impl DialBackend for MacDial {
 
         #[cfg(not(target_os = "macos"))]
         {
+            let _ = Duration::from_secs(0);
             println!("[macOS Mock Dial] Listeners registered");
         }
     }

@@ -1,4 +1,4 @@
-import { ProfilesConfig, WheelAction } from "../types/profile";
+import type { ProfilesConfig, WheelAction } from "../types/profile.ts";
 
 export const DEFAULT_CONFIG: ProfilesConfig = {
   settings: {

@@ -336,6 +336,72 @@ pub struct PHYSICAL_MONITOR {
     pub szPhysicalMonitorDescription: [u16; 128],
 }
 
+// ── Raw Input (HID Consumer Control) ─────────────────────────────────────────
+pub const WM_INPUT: u32 = 0x00FF;
+pub const RIDEV_INPUTSINK: DWORD = 0x0000_0100;
+pub const RID_INPUT: u32 = 0x1000_0003;
+pub const RIDI_PREPARSEDDATA: u32 = 0x2000_0005;
+pub const RIM_TYPEHID: DWORD = 2;
+pub const HWND_MESSAGE: HWND = (-3isize) as HWND;
+pub const HID_USAGE_PAGE_CONSUMER: u16 = 0x0C;
+pub const HID_USAGE_CONSUMER_CONTROL: u16 = 0x01;
+pub const HIDP_INPUT: i32 = 0;
+pub const HIDP_STATUS_SUCCESS: i32 = 0x0011_0000;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct RAWINPUTDEVICE {
+    pub usUsagePage: u16,
+    pub usUsage: u16,
+    pub dwFlags: DWORD,
+    pub hwndTarget: HWND,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct RAWINPUTHEADER {
+    pub dwType: DWORD,
+    pub dwSize: DWORD,
+    pub hDevice: HANDLE,
+    pub wParam: WPARAM,
+}
+
+/// Fixed prefix of RAWHID; `dwCount` reports of `dwSizeHid` bytes follow immediately.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct RAWHID_HEADER {
+    pub dwSizeHid: DWORD,
+    pub dwCount: DWORD,
+}
+
+pub type WNDPROC = Option<unsafe extern "system" fn(HWND, u32, WPARAM, LPARAM) -> LRESULT>;
+
+#[repr(C)]
+pub struct WNDCLASSW {
+    pub style: u32,
+    pub lpfnWndProc: WNDPROC,
+    pub cbClsExtra: i32,
+    pub cbWndExtra: i32,
+    pub hInstance: HINSTANCE,
+    pub hIcon: HANDLE,
+    pub hCursor: HANDLE,
+    pub hbrBackground: HANDLE,
+    pub lpszMenuName: *const u16,
+    pub lpszClassName: *const u16,
+}
+
+/// `HidP_GetUsages` from hid.dll (loaded dynamically like dxva2.dll).
+pub type FnHidPGetUsages = unsafe extern "system" fn(
+    ReportType: i32,
+    UsagePage: u16,
+    LinkCollection: u16,
+    UsageList: *mut u16,
+    UsageLength: *mut u32,
+    PreparsedData: *mut c_void,
+    Report: *mut u8,
+    ReportLength: u32,
+) -> i32;
+
 pub type MONITORENUMPROC = Option<unsafe extern "system" fn(hMonitor: HMONITOR, hdcMonitor: HDC, lprcMonitor: *mut c_void, dwData: LPARAM) -> BOOL>;
 
 #[link(name = "user32")]
@@ -380,6 +446,25 @@ extern "system" {
         dwFlags: DWORD,
     ) -> HWINEVENTHOOK;
     pub fn UnhookWinEvent(hWinEventHook: HWINEVENTHOOK) -> BOOL;
+    pub fn RegisterClassW(lpWndClass: *const WNDCLASSW) -> u16;
+    pub fn CreateWindowExW(
+        dwExStyle: DWORD,
+        lpClassName: *const u16,
+        lpWindowName: *const u16,
+        dwStyle: DWORD,
+        X: i32,
+        Y: i32,
+        nWidth: i32,
+        nHeight: i32,
+        hWndParent: HWND,
+        hMenu: HANDLE,
+        hInstance: HINSTANCE,
+        lpParam: *mut c_void,
+    ) -> HWND;
+    pub fn DefWindowProcW(hWnd: HWND, Msg: u32, wParam: WPARAM, lParam: LPARAM) -> LRESULT;
+    pub fn RegisterRawInputDevices(pRawInputDevices: *const RAWINPUTDEVICE, uiNumDevices: u32, cbSize: u32) -> BOOL;
+    pub fn GetRawInputData(hRawInput: HANDLE, uiCommand: u32, pData: *mut c_void, pcbSize: *mut u32, cbSizeHeader: u32) -> u32;
+    pub fn GetRawInputDeviceInfoW(hDevice: HANDLE, uiCommand: u32, pData: *mut c_void, pcbSize: *mut u32) -> u32;
 }
 
 #[link(name = "kernel32")]
