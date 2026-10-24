@@ -95,9 +95,12 @@ unsafe extern "system" fn low_level_keyboard_proc(
                     }
 
                     if !is_hud_open {
-                        // 1. Immediately flip atomic flag so consecutive inputs know HUD is active
+                        // 1. Immediately flip atomic flags so consecutive inputs know HUD is active
                         if let Some(arc) = IS_HUD_OPEN_REF.get() {
                             arc.store(true, Ordering::SeqCst);
+                        }
+                        if let Some(arc) = LOCKED_VOL_REF.get() {
+                            arc.store(50, Ordering::SeqCst);
                         }
 
                         // 2. Offload GUI display to worker thread so the low-level hook returns in <0.01ms,
@@ -164,19 +167,19 @@ unsafe extern "system" fn low_level_keyboard_proc(
                         let app = app.clone();
                         thread::spawn(move || {
                             let state: tauri::State<AppState> = app.state();
-                            let current_vol = state.platform.audio().get_volume();
 
-                            let new_vol = if locked_val < 0 {
+                            let target_vol = if locked_val < 0 {
+                                let current_vol = state.platform.audio().get_volume();
                                 state.platform.audio().set_volume((current_vol + dir * 2).clamp(0, 100))
                             } else {
-                                current_vol
+                                locked_val
                             };
 
                             let payload = RotatePayload {
                                 direction: dir,
                                 delta: dir,
-                                volume: new_vol,
-                                volume_pct: new_vol,
+                                volume: target_vol,
+                                volume_pct: target_vol,
                             };
                             let _ = app.emit("dial:rotate", payload.clone());
                             if let Some(window) = app.get_webview_window("hud") {
@@ -236,11 +239,12 @@ impl DialBackend for WindowsDial {
                 HOOK_HANDLE.store(hook as usize, Ordering::SeqCst);
                 println!("[Windows Dial] Low-level keyboard & AVRCP hook installed successfully.");
 
-                // Set a 2000ms timer so GetMessageW unblocks periodically to keep the thread responsive and healthy
-                SetTimer(null_mut(), 0, 2000, None);
-
                 let mut msg: MSG = std::mem::zeroed();
-                while GetMessageW(&mut msg, null_mut(), 0, 0) > 0 {
+                loop {
+                    let res = GetMessageW(&mut msg, null_mut(), 0, 0);
+                    if res <= 0 {
+                        break;
+                    }
                     TranslateMessage(&msg);
                     DispatchMessageW(&msg);
                 }
