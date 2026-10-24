@@ -239,16 +239,19 @@ impl DialBackend for WindowsDial {
                 HOOK_HANDLE.store(hook as usize, Ordering::SeqCst);
                 println!("[Windows Dial] Low-level keyboard & AVRCP hook installed successfully.");
 
+                // Set a 1000ms timer to guarantee the thread message queue is initialized and active,
+                // and to keep GetMessageW actively pumping so Windows never silently drops the hook.
+                let timer_id = SetTimer(null_mut(), 0, 1000, None);
+
                 let mut msg: MSG = std::mem::zeroed();
-                loop {
-                    let res = GetMessageW(&mut msg, null_mut(), 0, 0);
-                    if res <= 0 {
-                        break;
-                    }
+                while GetMessageW(&mut msg, null_mut(), 0, 0) > 0 {
                     TranslateMessage(&msg);
                     DispatchMessageW(&msg);
                 }
 
+                if timer_id != 0 {
+                    KillTimer(null_mut(), timer_id);
+                }
                 UnhookWindowsHookEx(hook);
                 HOOK_HANDLE.store(0, Ordering::SeqCst);
                 println!("[Windows Dial] Low-level keyboard hook uninstalled or message loop exited. Re-installing hook...");

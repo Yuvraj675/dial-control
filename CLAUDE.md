@@ -139,7 +139,11 @@ The CMF Buds Pro 2 rotary dial and smart case have **no proprietary Bluetooth pr
      - Only movements *away* from baseline in the active direction generate user actions.
 
 #### Windows Backend (`src-tauri/src/platform/windows/dial.rs`)
-- Uses a low-level keyboard hook (`WH_KEYBOARD_LL`) in a dedicated message pump thread with a re-registration recovery loop.
+- Uses a low-level keyboard hook (`WH_KEYBOARD_LL`) in a dedicated message pump thread with a watchdog timer (`SetTimer`) and re-registration recovery loop.
+- **Mandatory Message Queue Timer (`SetTimer`)**:
+  - In Win32, worker threads spawned via standard threading do NOT have an active message queue by default.
+  - Calling `SetTimer(null_mut(), 0, 1000, None)` forces User32 to immediately create and maintain a thread message queue, and generates `WM_TIMER` messages so `while GetMessageW(...) > 0` remains actively pumping.
+  - Windows monitors low-level hook threads: if a hook thread is idle without an active message pump, Windows silently drops the hook. The 1000ms timer guarantees the hook stays permanently registered. `KillTimer` cleans it up on loop exit.
 - **Microsecond Non-Blocking Execution**:
   - Windows `LowLevelHooksTimeout` (100–300ms) silently kills hooks if callbacks block or acquire contended locks.
   - Global state is held in lock-free `std::sync::OnceLock<Arc<AtomicBool/I32>>` with zero mutexes or `RwLock`s.
@@ -164,16 +168,18 @@ The CMF Buds Pro 2 rotary dial and smart case have **no proprietary Bluetooth pr
 
 #### macOS Backend (`src-tauri/src/platform/macos/dial.rs`)
 - Uses a global CoreGraphics Event Tap (`CGEventTapCreate`) listening to `NX_SYSDEFINED` events (subtype `NX_SUBTYPE_AUX_CONTROL_BUTTONS = 8`).
+- **Lock-Free Fast Path**:
+  - Event tap callback operates under strict macOS timing limits. Contended locks result in `kCGEventTapDisabledByTimeout`.
+  - Global state uses `OnceLock<Arc<AtomicBool/I32>>` and `AtomicUsize` for debounce timestamps, avoiding all mutexes and `RwLock`s.
 - Intercepts system auxiliary keys:
   - `NX_KEYTYPE_SOUND_UP` (0) $\to$ CW dial rotation (`direction: 1`).
   - `NX_KEYTYPE_SOUND_DOWN` (1) $\to$ CCW dial rotation (`direction: -1`).
   - `NX_KEYTYPE_PLAY` (16) $\to$ Media center click.
-- **Hardware-Level Event Consumption**:
-  - When volume lock is active (`is_hud_open` or `is_scroll_mode`):
-    - Emits `dial:rotate` or `scroll:tick` to the frontend.
-    - **Returns `null_mut()` from the callback**: This drops the event, instructing macOS to completely discard the keypress. System audio does not change and the macOS volume bezel does not appear. Zero echo feedback loop!
-    - For center click: returns `null_mut()` so Apple Music or Spotify does not play/pause while opening or navigating the HUD.
-  - When in natural volume mode (`locked_vol < 0`), returns the event pointer so macOS handles hardware volume changes natively.
+- **Hardware-Level Event Consumption & Immediate Volume Locking**:
+  - On initial center click when `!is_hud_open`, the callback synchronously sets `IS_HUD_OPEN_REF = true` and `LOCKED_VOL_REF = 50` before dispatching `do_show_hud`.
+  - While HUD is open (`is_hud_open == true`), rotary events are intercepted, `dial:rotate` is emitted, and `null_mut()` is returned unconditionally to consume the event completely so macOS neither adjusts system volume nor displays the native volume bezel.
+  - When in scroll mode, rotary events emit `scroll:tick` and return `null_mut()`.
+  - For center click: returns `null_mut()` so Apple Music or Spotify does not play/pause while opening, navigating, or confirming in the HUD.
 
 ---
 
