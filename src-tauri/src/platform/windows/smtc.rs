@@ -24,6 +24,8 @@ use windows::Media::{
 
 const SESSION_TITLE: &str = "Dial Control";
 
+/// Session id of the last non-Dial-Control app that held media focus (the "real player").
+static LAST_FOREIGN: Mutex<Option<String>> = Mutex::new(None);
 static WAKE: Mutex<Option<mpsc::Sender<()>>> = Mutex::new(None);
 
 /// What a media-button press means for the dial.
@@ -203,6 +205,9 @@ pub fn start(on_button: impl Fn(MediaButton) + Send + Sync + 'static) {
                 last_failure = None;
                 continue;
             }
+            if let Ok(mut slot) = LAST_FOREIGN.lock() {
+                *slot = Some(cur.clone());
+            }
             // After a failed attempt, don't churn our session again for a while.
             if last_failure.map(|t| t.elapsed() < Duration::from_secs(5)).unwrap_or(false) {
                 continue;
@@ -221,6 +226,55 @@ pub fn start(on_button: impl Fn(MediaButton) + Send + Sync + 'static) {
             last_failure = if regained { None } else { Some(Instant::now()) };
         }
     });
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum MediaCommand {
+    TogglePlayPause,
+    Next,
+    Previous,
+}
+
+/// Sends a transport command to the real player's media session. The synthetic media key
+/// cannot be used: Windows routes it to the *current* session, which is ours, so it would
+/// be swallowed. Returns false when there is no other session to control.
+pub fn forward_media(cmd: MediaCommand) -> bool {
+    unsafe {
+        let _ = crate::platform::windows::ffi::CoInitializeEx(std::ptr::null_mut(), 0);
+    }
+    let Ok(mgr) = SessionManager::RequestAsync().and_then(|op| op.join()) else {
+        return false;
+    };
+    let own = own_session_id(&mgr);
+    let wanted = LAST_FOREIGN.lock().ok().and_then(|g| g.clone());
+    let Ok(sessions) = mgr.GetSessions() else {
+        return false;
+    };
+    let mut fallback = None;
+    let mut target = None;
+    for session in sessions {
+        let id = session.SourceAppUserModelId().map(|s| s.to_string()).unwrap_or_default();
+        if Some(&id) == own.as_ref() {
+            continue;
+        }
+        if Some(&id) == wanted.as_ref() {
+            target = Some(session);
+            break;
+        }
+        fallback.get_or_insert(session);
+    }
+    let Some(session) = target.or(fallback) else {
+        crate::platform::diag::log("forward_media: no other media session to control");
+        return false;
+    };
+    let result = match cmd {
+        MediaCommand::TogglePlayPause => session.TryTogglePlayPauseAsync(),
+        MediaCommand::Next => session.TrySkipNextAsync(),
+        MediaCommand::Previous => session.TrySkipPreviousAsync(),
+    }
+    .and_then(|op| op.join());
+    crate::platform::diag::log(&format!("forward_media {:?} -> {:?}", cmd, result));
+    result.unwrap_or(false)
 }
 
 /// Asks the guard to verify (and if needed re-take) media focus. Cheap and non-blocking;
