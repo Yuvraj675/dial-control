@@ -198,35 +198,12 @@ impl WindowsBrightness {
         let last_set = Arc::new(AtomicUsize::new(0));
 
         let cached_poll = cached.clone();
-        let last_set_poll = last_set.clone();
 
-        // Continuous background poller: polls every 1.5 seconds so changes made outside
-        // the app (via laptop Fn keys, Windows Action Center, or Settings) are immediately synchronized.
+        // One-time startup probe in background thread to prime initial hardware brightness
         thread::spawn(move || {
-            // Initial poll
             if let Some(val) = query_dxva2_brightness().or_else(query_wmi_brightness) {
                 println!("[Windows Brightness] Initial hardware brightness detected: {}%", val);
                 cached_poll.store(val, Ordering::SeqCst);
-            }
-
-            loop {
-                thread::sleep(Duration::from_millis(1500));
-
-                let now = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_millis() as usize;
-
-                let last = last_set_poll.load(Ordering::SeqCst);
-                // If the user just stepped brightness through Dial Control within 2.5s, skip polling
-                // to avoid overwriting pending adjustments with transitional hardware sensor values.
-                if now.saturating_sub(last) < 2500 {
-                    continue;
-                }
-
-                if let Some(val) = query_dxva2_brightness().or_else(query_wmi_brightness) {
-                    cached_poll.store(val, Ordering::SeqCst);
-                }
             }
         });
 
@@ -287,8 +264,9 @@ impl WindowsBrightness {
 
 impl SystemBrightness for WindowsBrightness {
     fn get_brightness(&self) -> i32 {
-        // External monitor live DDC/CI check (< 1ms)
-        if let Some(val) = query_dxva2_brightness() {
+        // Query live hardware brightness: first check external monitors via DDC/CI (< 1ms),
+        // then fall back to internal laptop screens via WMI.
+        if let Some(val) = query_dxva2_brightness().or_else(query_wmi_brightness) {
             self.cached_brightness.store(val, Ordering::SeqCst);
             return val;
         }
