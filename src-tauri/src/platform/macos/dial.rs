@@ -46,6 +46,9 @@ fn with_app<F: FnOnce(AppHandle) + Send + 'static>(f: F) {
 /// Called from `do_show_hud`: moves the volume off 0%/100% so a CoreAudio-observed turn
 /// always has room to register in both directions.
 pub fn init_hud_rotation(curr_vol: i32) {
+    if let Some(app) = APP_HANDLE_REF.get() {
+        super::now_playing::reassert(app);
+    }
     let baseline = headroom_lock(curr_vol);
     ROTATION_BASELINE.store(baseline, Ordering::SeqCst);
     if baseline != curr_vol {
@@ -54,6 +57,11 @@ pub fn init_hud_rotation(curr_vol: i32) {
             state.platform.audio().set_volume(baseline);
         });
     }
+}
+
+/// App handle for platform code that has no `AppState` (e.g. media forwarding).
+pub fn app_handle() -> Option<&'static AppHandle> {
+    APP_HANDLE_REF.get()
 }
 
 fn emit_rotate(app: &AppHandle, direction: i32, volume_pct: i32) {
@@ -69,7 +77,8 @@ fn emit_rotate(app: &AppHandle, direction: i32, volume_pct: i32) {
     );
 }
 
-fn handle_center_click() {
+fn handle_center_click(source: &str) {
+    crate::platform::diag::log(&format!("click from {source}"));
     let now = now_millis();
     let action = classify_click(
         now,
@@ -79,8 +88,10 @@ fn handle_center_click() {
         flag(&IS_SCROLL_MODE_REF),
     );
     if action == ClickAction::Debounced {
+        crate::platform::diag::log(&format!("click from {source} debounced"));
         return;
     }
+    crate::platform::diag::log(&format!("click decision: {action:?}"));
     LAST_CLICK_TIME_MS.store(now, Ordering::SeqCst);
 
     match action {
@@ -157,6 +168,10 @@ unsafe extern "C" fn volume_listener(
             if !burst {
                 LAST_ROTATION_MS.store(now, Ordering::SeqCst);
             }
+            crate::platform::diag::log(&format!(
+                "dial turn {pct}% (baseline {baseline}%) dir {direction}{}",
+                if burst { " burst" } else { "" }
+            ));
             println!(
                 ">> [macOS CoreAudio DIAL TURN] {}% (baseline {}%) -> dir {}{}",
                 pct,
@@ -309,12 +324,17 @@ impl MacDial {
             return event;
         }
 
+        // Media keys we post ourselves (HUD media slices) must reach the player, not the dial.
+        if CGEventGetIntegerValueField(event, kCGEventSourceUnixProcessID) == std::process::id() as i64 {
+            return event;
+        }
+
         let key = decode_aux_key(data1 as i64);
 
         // 1. Center Click / Media Play-Pause Key: always dropped so Music/Spotify don't toggle.
         if key.key_type == NX_KEYTYPE_PLAY {
             if key.is_down && !key.is_repeat {
-                handle_center_click();
+                handle_center_click("event tap");
             }
             return std::ptr::null_mut();
         }
@@ -373,6 +393,28 @@ impl DialBackend for MacDial {
         let _ = LOCKED_VOL_REF.set(locked_vol);
         let _ = IS_SCROLL_MODE_REF.set(is_scroll_mode);
         let _ = APP_HANDLE_REF.set(app);
+
+        // Earbud Play/Pause/Next/Previous go to the Now Playing app, never to the event tap,
+        // so become that app. MediaPlayer handlers are registered and invoked on the main thread.
+        #[cfg(target_os = "macos")]
+        if let Some(app) = APP_HANDLE_REF.get() {
+            let _ = app.run_on_main_thread(|| {
+                super::now_playing::start(|cmd| {
+                    if crate::platform::dial_logic::remote_command_is_click(cmd) {
+                        handle_center_click("now playing");
+                    } else if flag(&IS_HUD_OPEN_REF) || flag(&IS_SCROLL_MODE_REF) {
+                        with_app(|app| {
+                            let state: tauri::State<crate::AppState> = app.state();
+                            if state.is_scroll_mode.load(Ordering::SeqCst) {
+                                crate::do_stop_scroll_mode(&app, &state);
+                            } else {
+                                crate::do_hide_hud(&app, &state);
+                            }
+                        });
+                    }
+                });
+            });
+        }
 
         #[cfg(target_os = "macos")]
         unsafe {

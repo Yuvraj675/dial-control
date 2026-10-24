@@ -758,6 +758,7 @@ dependencies = [
 name = "dial-control"
 version = "1.0.0"
 dependencies = [
+ "block2",
  "evdev",
  "futures-lite",
  "gtk",

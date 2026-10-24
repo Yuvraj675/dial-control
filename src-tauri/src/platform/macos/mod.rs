@@ -5,6 +5,7 @@ pub mod media;
 pub mod input;
 pub mod context;
 pub mod dial;
+pub mod now_playing;
 
 use crate::platform::traits::*;
 

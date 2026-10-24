@@ -11,6 +11,20 @@ impl MacMedia {
         Self
     }
 
+    /// Media keys go to the Now Playing app, which is Dial Control itself, so step aside
+    /// for the duration of the key press.
+    #[cfg(target_os = "macos")]
+    unsafe fn forward_key(key_type: u32) -> bool {
+        match super::dial::app_handle() {
+            Some(app) => {
+                let mut sent = false;
+                super::now_playing::forward_to_player(app, || sent = Self::post_media_key(key_type));
+                sent
+            }
+            None => Self::post_media_key(key_type),
+        }
+    }
+
     #[cfg(target_os = "macos")]
     unsafe fn post_media_key(key_type: u32) -> bool {
         let cls = objc_getClass(b"NSEvent\0".as_ptr() as *const _);
@@ -105,7 +119,7 @@ impl MediaControl for MacMedia {
     fn play_pause(&self) {
         #[cfg(target_os = "macos")]
         unsafe {
-            if Self::post_media_key(NX_KEYTYPE_PLAY) {
+            if Self::forward_key(NX_KEYTYPE_PLAY) {
                 return;
             }
         }
@@ -121,7 +135,7 @@ impl MediaControl for MacMedia {
     fn next_track(&self) {
         #[cfg(target_os = "macos")]
         unsafe {
-            if Self::post_media_key(NX_KEYTYPE_NEXT) {
+            if Self::forward_key(NX_KEYTYPE_NEXT) {
                 return;
             }
         }
@@ -137,7 +151,7 @@ impl MediaControl for MacMedia {
     fn prev_track(&self) {
         #[cfg(target_os = "macos")]
         unsafe {
-            if Self::post_media_key(NX_KEYTYPE_PREVIOUS) {
+            if Self::forward_key(NX_KEYTYPE_PREVIOUS) {
                 return;
             }
         }
