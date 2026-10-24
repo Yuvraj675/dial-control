@@ -88,6 +88,18 @@ pub fn send_os_notification(title: &str, body: &str) {
         cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
         let _ = cmd.args(["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", &script]).spawn();
     }
+
+    #[cfg(target_os = "macos")]
+    {
+        let script = format!(
+            r#"display notification "{body}" with title "{title}""#,
+            title = title.replace('"', "\\\""),
+            body = body.replace('"', "\\\"")
+        );
+        let _ = std::process::Command::new("osascript")
+            .args(["-e", &script])
+            .spawn();
+    }
 }
 
 pub(crate) fn do_stop_scroll_mode(app: &AppHandle, state: &AppState) {

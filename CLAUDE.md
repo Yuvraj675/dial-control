@@ -140,6 +140,19 @@ The CMF Buds Pro 2 rotary dial and smart case have **no proprietary Bluetooth pr
   - Returns `1` from the hook callback to **consume the key event**, completely blocking Windows from showing the volume slider or changing system volume.
   - When in Volume mode (`locked_vol < 0`), lets the volume change naturally.
 
+#### macOS Backend (`src-tauri/src/platform/macos/dial.rs`)
+- Uses a global CoreGraphics Event Tap (`CGEventTapCreate`) listening to `NX_SYSDEFINED` events (subtype `NX_SUBTYPE_AUX_CONTROL_BUTTONS = 8`).
+- Intercepts system auxiliary keys:
+  - `NX_KEYTYPE_SOUND_UP` (0) $\to$ CW dial rotation (`direction: 1`).
+  - `NX_KEYTYPE_SOUND_DOWN` (1) $\to$ CCW dial rotation (`direction: -1`).
+  - `NX_KEYTYPE_PLAY` (16) $\to$ Media center click.
+- **Hardware-Level Event Consumption**:
+  - When volume lock is active (`is_hud_open` or `is_scroll_mode`):
+    - Emits `dial:rotate` or `scroll:tick` to the frontend.
+    - **Returns `null_mut()` from the callback**: This drops the event, instructing macOS to completely discard the keypress. System audio does not change and the macOS volume bezel does not appear. Zero echo feedback loop!
+    - For center click: returns `null_mut()` so Apple Music or Spotify does not play/pause while opening or navigating the HUD.
+  - When in natural volume mode (`locked_vol < 0`), returns the event pointer so macOS handles hardware volume changes natively.
+
 ---
 
 ### 5.2 Scroll Mode
@@ -155,17 +168,21 @@ Turns the rotary dial into a continuous, physical mouse scroll wheel for long do
   - CCW rotation $\to$ scroll up (`delta: 1`).
 - **Windows (`src-tauri/src/platform/windows/input.rs`)**:
   - Emulates mouse wheel using Win32 `SendInput` with `MOUSEEVENTF_WHEEL`.
+- **macOS (`src-tauri/src/platform/macos/input.rs`)**:
+  - Emulates mouse wheel using CoreGraphics `CGEventCreateScrollWheelEvent2(null_mut(), kCGScrollEventUnitLine, 1, delta, 0, 0)`.
+  - Posts event directly to `kCGHIDEventTap`.
 
 #### Focus & Window Management Lifecycle
 1. User selects "Scroll Mode" in HUD.
 2. Frontend sets mode to `"scroll"`, displaying `"ROTATE TO SCROLL"` in the center.
 3. After 850ms, frontend calls `close_hud_for_scroll`, which hides the HUD window.
 4. **Why the HUD window MUST be hidden**:
-   - On Wayland and Windows, if any application window is visible and focused, mouse wheel events will be directed to that window or blocked from reaching the underlying browser/editor.
+   - On Wayland, Windows, and macOS, if any application window is visible and focused, mouse wheel events will be directed to that window or blocked from reaching the underlying browser/editor.
    - Hiding the HUD returns focus directly to the underlying application.
 5. Cross-platform OS notification sent on entry:
    - Linux: `notify-send -a "Dial Control" "Scroll Mode Active" "Rotate dial to scroll • Click dial or shortcut to exit"`
    - Windows: WinRT `ToastNotificationManager` via PowerShell with `CREATE_NO_WINDOW`.
+   - macOS: AppleScript notification (`display notification "Rotate dial to scroll • Click dial or shortcut to exit" with title "Scroll Mode Active"`).
 6. To exit scroll mode:
    - Click the dial center button, or press the global toggle shortcut.
    - Backend calls `do_stop_scroll_mode`, sends exit notification (`"Scroll Mode Exited"`), and restores volume lock state to `-1`.
