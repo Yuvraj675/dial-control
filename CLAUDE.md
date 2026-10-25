@@ -61,6 +61,7 @@ The goal of this project is to build and ship a **standalone desktop application
 
 ```
 dial-control/
+├── android/                # Native Kotlin Android app (Gradle; see §5.7)
 ├── assets/                 # App icons, visual assets, wallpapers
 ├── bin/                    # Local launcher executable (untracked)
 ├── config/                 # defaultProfiles.json (wheel slices & context rules)
@@ -352,6 +353,16 @@ Automatically switches the radial wheel's active profile based on the foreground
 - **App picker**: `list_installed_apps` scans XDG `applications` dirs incl. Flatpak (`parse_desktop_entry` skips `NoDisplay`/`Hidden`), the Start Menu `.lnk` files, or `/Applications` & co.
 - **Settings**: `ActionEditors.tsx` holds `LaunchTargetPicker`, `MacroEditor` and `TestRunButton` (runs the slice after 3s so the user can focus the target window). The slice hotkey recorder fills a macro step when `recordingStepIndex` is set.
 
+### 5.7 Android App (`android/`)
+- Native Kotlin, framework APIs only (no AndroidX / third-party deps), minSdk 26, target/compileSdk 36, package `com.yuvraj.dialcontrol`. Not Tauri: the wheel must draw over other apps, which needs native overlay/service components.
+- **Gesture model and decisions** live in `dial/DialLogic.kt`, a port of `dial_logic.rs` (click/multi-press classification, `reportedPlayingAfter`, brightness steps) plus Android-only pure functions (`classifyIndexChange`, `headroomIndex`, `shouldReclaim`). Keep both in sync; tests in `app/src/test/.../DialLogicTest.kt`.
+- **Clicks / double / triple press** (`media/OwnSession.kt`): Android routes AVRCP buttons to the session of the app that most recently started media playback, so an own `MediaSession` loops a silent `AudioTrack` (never requests audio focus, so the user's music keeps playing). `AudioPlaybackCallback` detects another media player starting and re-takes the session (new `AudioTrack`, 400ms delay, 1.5s cooldown); the HUD opening also re-takes it. The reported play state mirrors the earbuds like Windows/macOS.
+- **Turns** (`dial/VolumeWatcher.kt`): AVRCP Absolute Volume changes the `STREAM_MUSIC` index (`VOLUME_CHANGED_ACTION`). While the HUD or scroll mode is active the index is locked (`headroomIndex`: 1..max-1); each change away is one detent and is snapped back with flags 0; our restore echoes onto the locked index and is ignored. Volume mode releases the lock; closing restores the user's volume. The system volume panel for earbud-initiated changes cannot be hidden.
+- **Play/pause to the real player** (`media/PlayerForwarder.kt`): `MediaSessionManager.getActiveSessions` (needs notification access via the empty `MediaListener`) drives the other app's `TransportControls`; a synthetic media key would come back to our own session.
+- **Overlay, scroll, context, system actions** (`a11y/DialA11yService.kt`): `TYPE_ACCESSIBILITY_OVERLAY` wheel (`hud/WheelView.kt`, Canvas), `dispatchGesture` swipes (scroll mode: 22% of screen height per detent), foreground package from `TYPE_WINDOW_STATE_CHANGED`, `performGlobalAction`. It also starts `DialService` when the system binds it at boot (bound accessibility services are exempt from background foreground-service start limits; `BOOT_COMPLETED` may not start `mediaPlayback` services on Android 15+).
+- `DialService` (foreground, `mediaPlayback`) owns the session and volume watcher. `DialController` holds all state on the main thread. Profiles are package-name based (`profile/Profiles.kt`); there is no profile editor or desktop import yet.
+- **CI**: `.github/workflows/build-android.yml` is `workflow_dispatch` only (never on push). It runs the unit tests and uploads a release APK signed with the runner's throwaway debug key.
+
 ## 6. What Was Considered and Rejected (Archived Decisions)
 
 Understanding what failed in earlier builds prevents regression into past mistakes:
@@ -434,12 +445,13 @@ install -m 755 src-tauri/target/release/dial-control bin/dial-control
 2. Run `cargo check --manifest-path src-tauri/Cargo.toml` to verify Linux backend.
 3. Run `cargo check --target x86_64-pc-windows-msvc --manifest-path src-tauri/Cargo.toml` to verify Windows backend.
 4. Run `CC_aarch64_apple_darwin=clang cargo check --target aarch64-apple-darwin --manifest-path src-tauri/Cargo.toml` to verify macOS backend.
-5. **Rebuild every artifact after each completed prompt** (any prompt that changed code, config, scripts or assets; skip only for pure questions or docs-only edits), following the Mandatory Production Build Procedure above, so the local launcher and every package are always current:
+5. If `android/` changed: `cd android && ./gradlew testDebugUnitTest assembleDebug` (needs the Android SDK; `local.properties` with `sdk.dir` is git-ignored).
+6. **Rebuild every artifact after each completed prompt** (any prompt that changed code, config, scripts or assets; skip only for pure questions or docs-only edits), following the Mandatory Production Build Procedure above, so the local launcher and every package are always current:
    1. `npx @tauri-apps/cli build --no-bundle`
    2. `install -m 755 src-tauri/target/release/dial-control bin/dial-control`
    3. `./scripts/build-packages.sh` (regenerates the `.deb`, `.rpm`, `.pkg.tar.zst` and `.AppImage` in `dist-packages/`)
    - Run them in that order, only after steps 1-4 pass. Never substitute a plain `cargo build` (debug or release) for a binary the user may launch: it has no embedded frontend and shows "localhost not found".
    - If any build or packaging step fails, say which one and why in the final message; never report the packages as up to date when they are not. Windows and macOS installers come from the GitHub Actions workflows and cannot be built locally; state that they were not rebuilt.
-6. Check `git status` to ensure no accidental build artifacts or backup files are staged (`dist-packages/*.deb|rpm|AppImage|pkg.tar.zst`, `bin/` and `target/` are git-ignored and must stay untracked).
-7. Commit using author `Yuvraj675 <yuviyg675@gmail.com>` with **strictly NO co-authors**.
-8. Never run `git push`.
+7. Check `git status` to ensure no accidental build artifacts or backup files are staged (`dist-packages/*.deb|rpm|AppImage|pkg.tar.zst`, `bin/` and `target/` are git-ignored and must stay untracked).
+8. Commit using author `Yuvraj675 <yuviyg675@gmail.com>` with **strictly NO co-authors**.
+9. Never run `git push`.
