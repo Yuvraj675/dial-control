@@ -2,6 +2,12 @@ import { Extension, gettext as _ } from 'resource:///org/gnome/shell/extensions/
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
+import St from 'gi://St';
+import Clutter from 'gi://Clutter';
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
+
+const SCROLL_PILL_ROLE = 'dial-control-scroll';
 
 const DBUS_SCHEMA = `
 <node>
@@ -13,6 +19,9 @@ const DBUS_SCHEMA = `
             <arg type="s" direction="in" name="title" />
             <arg type="i" direction="in" name="x" />
             <arg type="i" direction="in" name="y" />
+        </method>
+        <method name="SetScrollMode">
+            <arg type="b" direction="in" name="active" />
         </method>
         <signal name="FocusChanged">
             <arg type="s" name="window" />
@@ -91,8 +100,28 @@ export default class FocusedWindowDbus extends Extension {
     }
   }
 
+  // Dial Control scroll mode: a red "SCROLL" pill in the top bar. Drawn by the Shell itself,
+  // so it never takes focus from the window being scrolled.
+  SetScrollMode(active) {
+    if (active && !this.#scrollPill) {
+      this.#scrollPill = new PanelMenu.Button(0.0, 'Dial Control Scroll Mode', true);
+      const label = new St.Label({
+        text: '\u2195 SCROLL',
+        y_align: Clutter.ActorAlign.CENTER,
+        style: 'background-color: #d71921; color: #ffffff; font-weight: bold; ' +
+          'border-radius: 9px; padding: 1px 9px; font-size: 0.85em;',
+      });
+      this.#scrollPill.add_child(label);
+      Main.panel.addToStatusArea(SCROLL_PILL_ROLE, this.#scrollPill, 0, 'right');
+    } else if (!active && this.#scrollPill) {
+      this.#scrollPill.destroy();
+      this.#scrollPill = null;
+    }
+  }
+
   #windowTracker = null;
   #focusConnection = null;
+  #scrollPill = null;
 
   enable() {
     this.#windowTracker = Shell.WindowTracker.get_default();
@@ -108,6 +137,8 @@ export default class FocusedWindowDbus extends Extension {
   }
 
   disable() {
+    this.SetScrollMode(false);
+
     if (this.#windowTracker && this.#focusConnection) {
       this.#windowTracker.disconnect(this.#focusConnection);
       this.#focusConnection = null;

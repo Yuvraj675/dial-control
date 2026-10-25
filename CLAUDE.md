@@ -255,8 +255,13 @@ Turns the rotary dial into a continuous, physical mouse scroll wheel for long do
    - Linux: `notify-send -a "Dial Control" "Scroll Mode Active" "Rotate dial to scroll • Click dial or shortcut to exit"`
    - Windows: WinRT `ToastNotificationManager` via PowerShell with `CREATE_NO_WINDOW`.
    - macOS: AppleScript notification (`display notification "Rotate dial to scroll • Click dial or shortcut to exit" with title "Scroll Mode Active"`).
-6. To exit scroll mode:
-   - Click the dial center button, or press the global toggle shortcut.
+6. **Persistent indicator (`src-tauri/src/scroll_indicator.rs`)**, never a window over the scrolled app (see §6):
+   - Tray icon swaps to a red-tinted variant (`scroll_variant`, generated from the default icon at runtime), tooltip changes, and the tray menu's "Exit Scroll Mode" item is enabled.
+   - GNOME: the bundled Shell extension exposes `SetScrollMode(b)` on `org.gnome.shell.extensions.FocusedWindow` and draws a red "SCROLL" pill in the top bar (Shell UI, so no focus loss). Takes effect after GNOME Shell reloads the extension (next login on Wayland); failures are ignored.
+   - Tone (`platform/cue.rs`): rising chirp on entry, falling on exit, generated as WAV and played with `pw-play`/`paplay`/`aplay` (Linux), `PlaySoundW` (Windows), `afplay` (macOS).
+   - `scroll_indicator::set` is idempotent and called from `close_hud_for_scroll`, `do_stop_scroll_mode` and `do_hide_hud`.
+7. To exit scroll mode:
+   - Click the dial center button, double press, press the global toggle shortcut, or use the tray's "Exit Scroll Mode".
    - Backend calls `do_stop_scroll_mode`, sends exit notification (`"Scroll Mode Exited"`), and restores volume lock state to `-1`.
 
 ---

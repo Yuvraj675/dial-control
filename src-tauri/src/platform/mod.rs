@@ -3,6 +3,7 @@ pub mod common;
 pub mod dial_logic;
 pub mod keymap;
 pub mod diag;
+pub mod cue;
 
 #[cfg(target_os = "linux")]
 pub mod linux;

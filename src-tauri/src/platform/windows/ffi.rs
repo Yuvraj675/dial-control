@@ -479,6 +479,14 @@ extern "system" {
     pub fn FreeLibrary(hLibModule: HINSTANCE) -> BOOL;
 }
 
+pub const SND_FILENAME: DWORD = 0x0002_0000;
+pub const SND_NODEFAULT: DWORD = 0x0002;
+
+#[link(name = "winmm")]
+extern "system" {
+    pub fn PlaySoundW(pszSound: *const u16, hmod: HINSTANCE, fdwSound: DWORD) -> BOOL;
+}
+
 #[link(name = "ole32")]
 extern "system" {
     pub fn CoInitializeEx(pvReserved: *mut c_void, dwCoInit: DWORD) -> HRESULT;
