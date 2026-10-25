@@ -1,4 +1,5 @@
 pub mod platform;
+mod scroll_indicator;
 
 use platform::{Platform, PlatformProvider};
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicUsize, Ordering};
@@ -163,6 +164,7 @@ pub(crate) fn do_stop_scroll_mode(app: &AppHandle, state: &AppState) {
 
     let _ = app.emit("hud:visibility", false);
     let _ = app.emit("scroll_mode:exit", ());
+    scroll_indicator::set(app, false);
     send_os_notification("Scroll Mode Exited", "Dial returned to standard mode");
     println!("[HUD] Stopped scroll mode");
 }
@@ -183,6 +185,7 @@ fn close_hud_for_scroll(app: AppHandle, state: tauri::State<AppState>) {
         let _ = window.hide();
     }
     let _ = app.emit("hud:visibility", false);
+    scroll_indicator::set(&app, true);
 
     send_os_notification(
         "Scroll Mode Active",
@@ -297,6 +300,7 @@ pub(crate) fn do_hide_hud(app: &AppHandle, state: &AppState) {
     let orig_vol = state.locked_vol.load(Ordering::SeqCst);
     state.is_hud_open.store(false, Ordering::SeqCst);
     state.is_scroll_mode.store(false, Ordering::SeqCst);
+    scroll_indicator::set(app, false);
     state.locked_vol.store(-1, Ordering::SeqCst);
     return_focus_to_previous_app(app);
     if let Some(window) = app.get_webview_window("hud") {
@@ -787,11 +791,14 @@ pub fn run() {
 
             // Build Tray Menu (Explicit MenuItems with proper labels and separator)
             let toggle_i = MenuItem::with_id(app, "toggle_hud", "Toggle Radial HUD", true, None::<&str>)?;
+            let exit_scroll_i =
+                MenuItem::with_id(app, scroll_indicator::EXIT_MENU_ID, "Exit Scroll Mode", false, None::<&str>)?;
             let settings_i = MenuItem::with_id(app, "open_settings", "Settings and Preferences", true, None::<&str>)?;
             let sep = PredefinedMenuItem::separator(app)?;
             let quit_i = MenuItem::with_id(app, "quit", "Quit Dial Control", true, None::<&str>)?;
 
-            let menu = Menu::with_items(app, &[&toggle_i, &settings_i, &sep, &quit_i])?;
+            let menu = Menu::with_items(app, &[&toggle_i, &exit_scroll_i, &settings_i, &sep, &quit_i])?;
+            app.manage(scroll_indicator::ExitScrollItem(exit_scroll_i.clone()));
 
             // Register default global activation shortcut (Super+Shift+D) for users without dial hardware
             use std::str::FromStr;
@@ -849,15 +856,19 @@ pub fn run() {
             }
 
             // Build Tray Icon
-            let _tray = TrayIconBuilder::with_id("main_tray")
+            let _tray = TrayIconBuilder::with_id(scroll_indicator::TRAY_ID)
                 .icon(app.default_window_icon().unwrap().clone())
                 .menu(&menu)
-                .tooltip("Dial Control — Active")
+                .tooltip(scroll_indicator::TOOLTIP_IDLE)
                 .show_menu_on_left_click(true)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "toggle_hud" => {
                         let state: tauri::State<AppState> = app.state();
                         toggle_hud(app.clone(), state);
+                    }
+                    scroll_indicator::EXIT_MENU_ID => {
+                        let state: tauri::State<AppState> = app.state();
+                        do_stop_scroll_mode(app, &state);
                     }
                     "open_settings" => {
                         show_settings(app.clone());
