@@ -1,4 +1,5 @@
 pub mod platform;
+mod actions;
 mod scroll_indicator;
 
 use platform::{Platform, PlatformProvider};
@@ -289,6 +290,12 @@ fn show_hud(app: AppHandle, state: tauri::State<AppState>) {
     do_show_hud(&app, &state);
 }
 
+/// Installed applications for the Settings app picker (launch slices and macro steps).
+#[tauri::command(async)]
+fn list_installed_apps() -> Vec<actions::InstalledApp> {
+    actions::list_installed_apps()
+}
+
 /// Lets the HUD webview append to the field diagnostic log (it has no file access).
 #[tauri::command(async)]
 fn diag_log(msg: String) {
@@ -454,86 +461,45 @@ fn execute_action(
         return;
     }
 
-    match action_type {
-        "hotkey" => {
-            if let Some(keys_arr) = action.get("keys").and_then(|k| k.as_array()) {
-                let keys: Vec<String> = keys_arr
-                    .iter()
-                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                    .collect();
-
-                // 1. Hide HUD immediately so the compositor can return focus to the target window
-                hide_hud(app, state.clone());
-
-                // macOS has its own authored shortcut (keys_mac), used exactly as written.
-                let native_keys: Option<Vec<String>> = if cfg!(target_os = "macos") {
-                    action.get("keys_mac").and_then(|k| k.as_array()).map(|arr| {
-                        arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect()
-                    })
-                } else {
-                    None
-                };
-
-                // 2. Micro-sleep in background thread to guarantee target window focus settles before typing
-                let platform = state.platform.clone();
-                std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_millis(120));
-                    println!("[Action] Emitting hotkeys to foreground window: {:?}", native_keys.as_ref().unwrap_or(&keys));
-                    match native_keys {
-                        Some(native) if !native.is_empty() => platform.input().emit_native_hotkey(&native),
-                        _ => platform.input().emit_hotkey(&keys),
-                    }
-                });
-            }
+    // The built-in terminal slice picks whichever terminal emulator is installed.
+    if action_type == "command" && (action_id == "file_terminal" || action_id.contains("terminal")) {
+        hide_hud(app, state);
+        println!("[Action] Spawning default terminal emulator...");
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            let mut cmd = std::process::Command::new("cmd");
+            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+            let _ = cmd
+                .args(["/c", "where wt.exe >nul 2>&1 && start wt.exe || where powershell.exe >nul 2>&1 && start powershell.exe || start cmd.exe"])
+                .spawn();
         }
-        "command" => {
-            hide_hud(app, state);
-            if action_id == "file_terminal" || action_id.contains("terminal") {
-                println!("[Action] Spawning default terminal emulator...");
-                #[cfg(target_os = "windows")]
-                {
-                    use std::os::windows::process::CommandExt;
-                    let mut cmd = std::process::Command::new("cmd");
-                    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-                    let _ = cmd
-                        .args(["/c", "where wt.exe >nul 2>&1 && start wt.exe || where powershell.exe >nul 2>&1 && start powershell.exe || start cmd.exe"])
-                        .spawn();
-                }
-                #[cfg(target_os = "macos")]
-                {
-                    let _ = std::process::Command::new("sh")
-                        .arg("-c")
-                        .arg("open -a iTerm 2>/dev/null || open -a Terminal")
-                        .spawn();
-                }
-                #[cfg(target_os = "linux")]
-                {
-                    let _ = std::process::Command::new("sh")
-                        .arg("-c")
-                        .arg("gtk-launch org.gnome.Ptyxis 2>/dev/null || gtk-launch org.gnome.Console 2>/dev/null || gtk-launch org.gnome.Terminal 2>/dev/null || x-terminal-emulator || ptyxis || gnome-terminal || kgx || konsole || alacritty || kitty || xfce4-terminal || foot || terminator || xterm")
-                        .spawn();
-                }
-            } else if let Some(cmd) = action.get("cmd").and_then(|v| v.as_str()) {
-                println!("[Action] Spawning command: {}", cmd);
-                #[cfg(target_os = "windows")]
-                {
-                    use std::os::windows::process::CommandExt;
-                    let mut proc = std::process::Command::new("cmd");
-                    proc.creation_flags(0x08000000); // CREATE_NO_WINDOW
-                    let _ = proc
-                        .args(["/c", "start", cmd])
-                        .spawn();
-                }
-                #[cfg(not(target_os = "windows"))]
-                {
-                    let _ = std::process::Command::new("sh")
-                        .arg("-c")
-                        .arg(cmd)
-                        .spawn();
-                }
-            }
+        #[cfg(target_os = "macos")]
+        {
+            let _ = std::process::Command::new("sh")
+                .arg("-c")
+                .arg("open -a iTerm 2>/dev/null || open -a Terminal")
+                .spawn();
         }
-        _ => {}
+        #[cfg(target_os = "linux")]
+        {
+            let _ = std::process::Command::new("sh")
+                .arg("-c")
+                .arg("gtk-launch org.gnome.Ptyxis 2>/dev/null || gtk-launch org.gnome.Console 2>/dev/null || gtk-launch org.gnome.Terminal 2>/dev/null || x-terminal-emulator || ptyxis || gnome-terminal || kgx || konsole || alacritty || kitty || xfce4-terminal || foot || terminator || xterm")
+                .spawn();
+        }
+        return;
+    }
+
+    // Hotkeys, app launches, commands, typed text and macros all run as a step list.
+    if let Some(steps) = actions::steps_for(&action) {
+        // Hide the HUD first so focus returns to the target window before anything is typed.
+        hide_hud(app, state.clone());
+        let platform = state.platform.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(120));
+            actions::run(&platform, &steps);
+        });
     }
 }
 
@@ -911,7 +877,8 @@ pub fn run() {
             set_recording_shortcut,
             load_config,
             save_config,
-            diag_log
+            diag_log,
+            list_installed_apps
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

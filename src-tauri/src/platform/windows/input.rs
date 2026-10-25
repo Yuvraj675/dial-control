@@ -61,6 +61,34 @@ impl VirtualInput for WindowsInput {
         }
     }
 
+    fn type_text(&self, text: &str) {
+        // KEYEVENTF_UNICODE types any character regardless of keyboard layout.
+        let mut inputs: Vec<INPUT> = Vec::new();
+        for unit in text.encode_utf16() {
+            for up in [false, true] {
+                let ki = KEYBDINPUT {
+                    wVk: 0,
+                    wScan: unit,
+                    dwFlags: KEYEVENTF_UNICODE | if up { KEYEVENTF_KEYUP } else { 0 },
+                    time: 0,
+                    dwExtraInfo: SYNTHETIC_INPUT_TAG,
+                };
+                inputs.push(INPUT { type_: INPUT_KEYBOARD, u: INPUT_UNION { ki } });
+            }
+        }
+        if inputs.is_empty() {
+            return;
+        }
+        unsafe {
+            let target_hwnd = get_last_target_hwnd();
+            if !target_hwnd.is_null() {
+                SetForegroundWindow(target_hwnd);
+                thread::sleep(Duration::from_millis(60));
+            }
+            SendInput(inputs.len() as u32, inputs.as_mut_ptr(), size_of::<INPUT>() as i32);
+        }
+    }
+
     fn emit_hotkey(&self, keys: &[String]) {
         if keys.is_empty() {
             return;

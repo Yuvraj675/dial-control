@@ -32,6 +32,8 @@ pub trait VirtualInput: Send + Sync {
     fn emit_native_hotkey(&self, keys: &[String]) {
         self.emit_hotkey(keys);
     }
+    /// Types `text` into the focused window as if entered on a keyboard.
+    fn type_text(&self, text: &str);
 }
 
 /// Abstract interface for rotary dial hardware listeners and event interceptors.

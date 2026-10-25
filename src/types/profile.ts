@@ -1,4 +1,32 @@
-export type ActionType = "mode" | "hotkey" | "key" | "command" | "mute" | "home" | "profile" | "close";
+export type ActionType =
+  | "mode"
+  | "hotkey"
+  | "key"
+  | "command"
+  | "launch"
+  | "text"
+  | "macro"
+  | "mute"
+  | "home"
+  | "profile"
+  | "close";
+
+/** One step of a macro slice; executed in order by the backend (`actions::Step`). */
+export type MacroStep =
+  | { kind: "hotkey"; keys: string[]; keys_mac?: string[] }
+  | { kind: "text"; text: string }
+  | { kind: "wait"; ms: number }
+  | { kind: "launch"; target: string }
+  | { kind: "command"; cmd: string }
+  | { kind: "media"; action: "playpause" | "next" | "prev" };
+
+export type MacroStepKind = MacroStep["kind"];
+
+/** An application found on this computer, as returned by `list_installed_apps`. */
+export interface InstalledApp {
+  name: string;
+  target: string;
+}
 
 export interface WheelAction {
   id: string;
@@ -9,6 +37,9 @@ export interface WheelAction {
   keys?: string[];       // For hotkeys: ["CTRL", "C"] (Windows & Linux)
   keys_mac?: string[];   // Same shortcut authored for macOS (Meta = Command); used as written
   cmd?: string;          // For shell commands
+  target?: string;       // For launch: app id / shortcut / .app, executable, file, folder or URL
+  text?: string;         // For typed text
+  steps?: MacroStep[];   // For macros
   desc?: string;
 }
 

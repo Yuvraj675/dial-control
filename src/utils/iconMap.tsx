@@ -42,6 +42,13 @@ import {
   Globe,
   Palette,
   Home,
+  Rocket,
+  AppWindow,
+  Type,
+  Workflow,
+  Link,
+  Zap,
+  Timer,
 } from "lucide-react";
 
 export const ICON_MAP: Record<string, React.FC<{ className?: string; size?: number; strokeWidth?: number }>> = {
@@ -102,6 +109,14 @@ export const ICON_MAP: Record<string, React.FC<{ className?: string; size?: numb
   palette: Palette,
   video: Video,
   monitor: Monitor,
+  // Launchers & automation
+  rocket: Rocket,
+  app: AppWindow,
+  type: Type,
+  macro: Workflow,
+  link: Link,
+  zap: Zap,
+  timer: Timer,
 };
 
 export function getActionIcon(iconKey: string, size = 18, className = "", strokeWidth = 1.75) {

@@ -95,6 +95,44 @@ impl VirtualInput for LinuxInput {
         self.emit_scroll(delta);
     }
 
+    fn type_text(&self, text: &str) {
+        use crate::platform::keymap::linux_us_char_key;
+        let keys: Option<Vec<(u16, bool)>> = text.chars().map(linux_us_char_key).collect();
+        let Some(keys) = keys else {
+            // Characters uinput cannot express (non-ASCII): Wayland virtual keyboard, then X11.
+            for (cmd, args) in [("wtype", &["--"][..]), ("xdotool", &["type", "--"][..])] {
+                let ok = std::process::Command::new(cmd).args(args).arg(text).status();
+                if matches!(ok, Ok(s) if s.success()) {
+                    return;
+                }
+            }
+            eprintln!("[Input] Cannot type non-ASCII text without wtype or xdotool: {:?}", text);
+            return;
+        };
+        if let Ok(mut guard) = self.device.lock() {
+            if let Some(ref mut dev) = *guard {
+                let shift = Key::KEY_LEFTSHIFT.code();
+                for (code, shifted) in keys {
+                    let mut down = Vec::new();
+                    if shifted {
+                        down.push(InputEvent::new(EventType::KEY, shift, 1));
+                    }
+                    down.push(InputEvent::new(EventType::KEY, code, 1));
+                    down.push(InputEvent::new(EventType::SYNCHRONIZATION, 0, 0));
+                    let _ = dev.emit(&down);
+                    sleep(Duration::from_millis(4));
+                    let mut up = vec![InputEvent::new(EventType::KEY, code, 0)];
+                    if shifted {
+                        up.push(InputEvent::new(EventType::KEY, shift, 0));
+                    }
+                    up.push(InputEvent::new(EventType::SYNCHRONIZATION, 0, 0));
+                    let _ = dev.emit(&up);
+                    sleep(Duration::from_millis(4));
+                }
+            }
+        }
+    }
+
     fn emit_hotkey(&self, key_names: &[String]) {
         if let Ok(mut guard) = self.device.lock() {
             if let Some(ref mut dev) = *guard {

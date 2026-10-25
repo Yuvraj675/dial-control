@@ -3,6 +3,8 @@ import { ProfilesConfig, WheelAction, ActionType, DialProfile, getOrderedProfile
 import { SYSTEM_ACTION_TEMPLATES } from "../../data/defaultProfiles";
 import { DonutRadialHUD } from "../hud/DonutRadialHUD";
 import { getActionIcon, ICON_MAP } from "../../utils/iconMap";
+import { comboToTokens, formatTokenForDisplay, parseKeysInput } from "../../utils/macro";
+import { LaunchTargetPicker, MacroEditor, TestRunButton } from "./ActionEditors";
 import {
   Palette,
   Layers,
@@ -56,6 +58,11 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
 
   // Slice Hotkey Recording State
   const [isRecordingSliceHotkey, setIsRecordingSliceHotkey] = useState(false);
+  // When set, the recorder fills this macro step instead of the slice's own keys.
+  const [recordingStepIndex, setRecordingStepIndex] = useState<number | null>(null);
+  React.useEffect(() => {
+    if (!isRecordingSliceHotkey) setRecordingStepIndex(null);
+  }, [isRecordingSliceHotkey]);
   const [stagedSliceCombo, setStagedSliceCombo] = useState<string>("");
   const stagedSliceComboRef = useRef<string>("");
   const heldSliceModifiersRef = useRef<Set<string>>(new Set());
@@ -373,69 +380,26 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
     }
   };
 
-  const comboToTokens = (combo: string): string[] => {
-    return combo.split("+").map((p) => {
-      const clean = p.trim().toUpperCase();
-      if (clean === "CTRL" || clean === "CONTROL") return "KEY_LEFTCTRL";
-      if (clean === "SHIFT") return "KEY_LEFTSHIFT";
-      if (clean === "ALT") return "KEY_LEFTALT";
-      if (clean === "SUPER" || clean === "META" || clean === "WIN") return "KEY_LEFTMETA";
-      if (clean === "SPACE") return "KEY_SPACE";
-      if (clean === "ENTER") return "KEY_ENTER";
-      if (clean === "TAB") return "KEY_TAB";
-      if (clean === "ESC" || clean === "ESCAPE") return "KEY_ESC";
-      if (clean === "BACKSLASH") return "KEY_BACKSLASH";
-      if (clean === "SLASH") return "KEY_SLASH";
-      if (clean === "GRAVE") return "KEY_GRAVE";
-      if (clean === "MINUS") return "KEY_MINUS";
-      if (clean === "EQUAL") return "KEY_EQUAL";
-      if (clean === "LEFT") return "KEY_LEFT";
-      if (clean === "RIGHT") return "KEY_RIGHT";
-      if (clean === "UP") return "KEY_UP";
-      if (clean === "DOWN") return "KEY_DOWN";
-      if (clean === "DELETE" || clean === "DEL") return "KEY_DELETE";
-      if (clean === "INSERT" || clean === "INS") return "KEY_INSERT";
-      if (clean === "HOME") return "KEY_HOME";
-      if (clean === "END") return "KEY_END";
-      if (clean === "PAGEUP" || clean === "PGUP") return "KEY_PAGEUP";
-      if (clean === "PAGEDOWN" || clean === "PGDN") return "KEY_PAGEDOWN";
-      if (/^F\d+$/.test(clean)) return `KEY_${clean}`;
-      if (clean.length === 1 && clean >= "A" && clean <= "Z") return `KEY_${clean}`;
-      if (clean.length === 1 && clean >= "0" && clean <= "9") return `KEY_${clean}`;
-      if (clean.startsWith("KEY_")) return clean;
-      return `KEY_${clean}`;
-    });
-  };
-
   const handleRawTokensChange = (val: string) => {
     setRawTokensInput(val);
-    const parts = val
-      .split(/[,+]/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-
-    const tokens = parts.map((p) => {
-      const clean = p.toUpperCase();
-      if (clean.startsWith("KEY_")) return clean;
-      const converted = comboToTokens(clean);
-      return converted[0] || `KEY_${clean}`;
-    });
-
-    handleUpdateAction({ keys: tokens });
+    handleUpdateAction({ keys: parseKeysInput(val) });
   };
 
-  const formatTokenForDisplay = (token: string): string => {
-    const clean = token.replace(/^KEY_/, "").toUpperCase();
-    if (clean === "LEFTCTRL" || clean === "RIGHTCTRL") return "CTRL";
-    if (clean === "LEFTSHIFT" || clean === "RIGHTSHIFT") return "SHIFT";
-    if (clean === "LEFTALT" || clean === "RIGHTALT") return "ALT";
-    if (clean === "LEFTMETA" || clean === "RIGHTMETA") return "SUPER";
-    return clean;
-  };
 
   // Slice Hotkey recorder listener
   React.useEffect(() => {
     if (!isRecordingSliceHotkey) return;
+
+    const applyRecordedKeys = (tokens: string[]) => {
+      const steps = actions[selectedActionIndex]?.steps;
+      if (recordingStepIndex !== null && steps?.[recordingStepIndex]?.kind === "hotkey") {
+        handleUpdateAction({
+          steps: steps.map((st, i) => (i === recordingStepIndex ? { kind: "hotkey", keys: tokens } : st)),
+        });
+      } else {
+        handleUpdateAction({ keys: tokens });
+      }
+    };
 
     heldSliceModifiersRef.current.clear();
     setStagedSliceCombo("");
@@ -461,7 +425,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
         !e.metaKey &&
         heldSliceModifiersRef.current.size === 0
       ) {
-        handleUpdateAction({ keys: [] });
+        applyRecordedKeys([]);
         setIsRecordingSliceHotkey(false);
         heldSliceModifiersRef.current.clear();
         setStagedSliceCombo("");
@@ -509,7 +473,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
         const hasMainKey = parts.some((p) => !["Super", "Ctrl", "Alt", "Shift"].includes(p));
         if (hasMainKey) {
           const tokens = comboToTokens(combo);
-          handleUpdateAction({ keys: tokens });
+          applyRecordedKeys(tokens);
           setIsRecordingSliceHotkey(false);
           heldSliceModifiersRef.current.clear();
           setStagedSliceCombo("");
@@ -547,7 +511,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
         const hasMainKey = parts.some((p) => !["Super", "Ctrl", "Alt", "Shift"].includes(p));
         if (hasMainKey) {
           const tokens = comboToTokens(combo);
-          handleUpdateAction({ keys: tokens });
+          applyRecordedKeys(tokens);
           setIsRecordingSliceHotkey(false);
           heldSliceModifiersRef.current.clear();
           setStagedSliceCombo("");
@@ -568,7 +532,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
       window.removeEventListener("keyup", onKeyUp, true);
       window.removeEventListener("blur", onBlur);
     };
-  }, [isRecordingSliceHotkey, selectedActionIndex, actions, activeProfile]);
+  }, [isRecordingSliceHotkey, recordingStepIndex, selectedActionIndex, actions, activeProfile]);
 
   // Download helper for JSON exports
   const downloadJson = (data: any, filename: string) => {
@@ -1303,15 +1267,34 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                             updates.icon = "close";
                           } else if (newType === "mute") {
                             updates.icon = "mute";
+                          } else if (newType === "launch") {
+                            updates.icon = "rocket";
+                            updates.target = selectedAction.target ?? "";
+                          } else if (newType === "text") {
+                            updates.icon = "type";
+                            updates.text = selectedAction.text ?? "";
+                          } else if (newType === "macro") {
+                            updates.icon = "macro";
+                            // Start from what the slice already did, so switching loses nothing.
+                            updates.steps =
+                              selectedAction.steps ??
+                              (selectedAction.type === "hotkey" && selectedAction.keys?.length
+                                ? [{ kind: "hotkey", keys: selectedAction.keys }]
+                                : []);
+                          } else if (newType === "command") {
+                            updates.icon = "terminal";
                           }
                           handleUpdateAction(updates);
                         }}
                         className="w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white focus:outline-none focus:border-white font-ndot uppercase tracking-wider"
                       >
                         <option value="hotkey">HOTKEY KEYPRESS</option>
+                        <option value="launch">OPEN APP / FILE / URL</option>
+                        <option value="command">RUN SHELL COMMAND</option>
+                        <option value="text">TYPE TEXT / SNIPPET</option>
+                        <option value="macro">MACRO (MULTI-STEP SEQUENCE)</option>
                         <option value="mode">INTERACTIVE MODE (SCROLL / VOLUME / BRIGHTNESS)</option>
                         <option value="key">MEDIA KEY (PLAY/NEXT/PREV)</option>
-                        <option value="command">SHELL COMMAND</option>
                         <option value="mute">MUTE AUDIO TOGGLE</option>
                         <option value="profile">DIAL LINK (SWITCH PROFILE)</option>
                         <option value="home">HOME DIAL LAUNCHER</option>
@@ -1520,17 +1503,79 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
 
                     {/* Command */}
                     {selectedAction.type === "command" && (
-                      <div>
-                        <label className="font-ndot text-[11px] text-neutral-400 mb-1.5 block uppercase tracking-wider">
+                      <div className="flex flex-col gap-2">
+                        <label className="font-ndot text-[11px] text-neutral-400 block uppercase tracking-wider">
                           Shell Command
                         </label>
                         <input
                           type="text"
                           value={selectedAction.cmd || ""}
                           onChange={(e) => handleUpdateAction({ cmd: e.target.value })}
-                          placeholder="gnome-terminal || xterm"
+                          placeholder="notify-send 'Hello' || echo done"
                           className="w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white font-ndot focus:outline-none focus:border-white tracking-wider"
                         />
+                        <span className="font-ndot text-[9px] text-neutral-500 uppercase tracking-wider">
+                          Runs with sh -c on Linux / macOS and cmd /c on Windows, from your home folder
+                        </span>
+                        <TestRunButton action={selectedAction} />
+                      </div>
+                    )}
+
+                    {/* Launch App / File / URL */}
+                    {selectedAction.type === "launch" && (
+                      <div className="flex flex-col gap-2">
+                        <label className="font-ndot text-[11px] text-neutral-400 block uppercase tracking-wider">
+                          Open
+                        </label>
+                        <LaunchTargetPicker
+                          value={selectedAction.target || ""}
+                          onChange={(target, appName) =>
+                            handleUpdateAction(
+                              appName && (!selectedAction.label || selectedAction.label === "NEW SHORTCUT")
+                                ? { target, label: appName.toUpperCase().slice(0, 14) }
+                                : { target }
+                            )
+                          }
+                        />
+                        <TestRunButton action={selectedAction} />
+                      </div>
+                    )}
+
+                    {/* Type Text */}
+                    {selectedAction.type === "text" && (
+                      <div className="flex flex-col gap-2">
+                        <label className="font-ndot text-[11px] text-neutral-400 block uppercase tracking-wider">
+                          Text To Type
+                        </label>
+                        <textarea
+                          value={selectedAction.text || ""}
+                          onChange={(e) => handleUpdateAction({ text: e.target.value })}
+                          rows={4}
+                          placeholder="Email signature, code snippet, canned reply..."
+                          className="w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white font-ndot focus:outline-none focus:border-white tracking-wider resize-y"
+                        />
+                        <TestRunButton action={selectedAction} />
+                      </div>
+                    )}
+
+                    {/* Macro */}
+                    {selectedAction.type === "macro" && (
+                      <div className="flex flex-col gap-2">
+                        <MacroEditor
+                          key={`${selectedProfileId}:${selectedActionIndex}`}
+                          steps={selectedAction.steps || []}
+                          onChange={(steps) => handleUpdateAction({ steps })}
+                          recordingStep={isRecordingSliceHotkey ? recordingStepIndex : null}
+                          stagedCombo={stagedSliceCombo}
+                          onRecordStep={(i) => {
+                            setRecordingStepIndex(i);
+                            heldSliceModifiersRef.current.clear();
+                            setStagedSliceCombo("");
+                            stagedSliceComboRef.current = "";
+                            setIsRecordingSliceHotkey(true);
+                          }}
+                        />
+                        <TestRunButton action={selectedAction} />
                       </div>
                     )}
 
