@@ -63,6 +63,7 @@ dial-control/
 | **Linux (X11 / Wayland)** | BlueZ D-Bus + `evdev` exclusive grab | WirePlumber (`wpctl`) / PulseAudio | `/sys/class/backlight` + GNOME Mutter D-Bus | GNOME FocusedWindow D-Bus + Hyprland/Sway/KDE/X11 | **Fully Functional** |
 | **Windows (10 / 11)** | Low-Level Hook (`WH_KEYBOARD_LL`) | Windows Core Audio COM (`IAudioEndpointVolume`) | Dual-layer: `dxva2.dll` (DDC/CI) + WMI/CIM | Win32 `GetForegroundWindow` + Process Image & Class Name | **Fully Functional** |
 | **macOS (Sonoma / Sequoia / Apple Silicon & Intel)** | CoreGraphics Event Tap (`kCGHIDEventTap`) | CoreAudio (`VirtualMasterVolume`) | DisplayServices hardware backlight | Cocoa `NSWorkspace` + AppleScript title query | **Fully Functional** |
+| **Android (8.0+)** | Own `MediaSession` (clicks) + `STREAM_MUSIC` volume watcher (turns) | `AudioManager` | `Settings.System.SCREEN_BRIGHTNESS` | Accessibility `TYPE_WINDOW_STATE_CHANGED` package name | **Early (untested on device)** |
 
 ---
 
@@ -117,6 +118,19 @@ The macOS backend uses native Apple frameworks (`CoreGraphics`, `CoreAudio`, `Co
 - **Active Application Context**: Monitors foreground applications in real time using `NSWorkspace` and AppleScript to extract active application bundle identifiers (e.g. `com.google.Chrome`, `com.microsoft.VSCode`, `com.spotify.client`) and window titles, matching them to custom dial profiles.
 - **Notification Center Integration**: Dispatches native macOS Notification Center alerts via `osascript` on scroll mode entry and exit.
 - **Permissions**: Requires a single user toggle under *System Settings $\to$ Privacy & Security $\to$ Accessibility* for global event interception and scroll emulation, matching standard macOS utilities like Alfred and Raycast.
+
+---
+
+## Android App (`android/`)
+
+A native Kotlin app (no third-party dependencies) with the same gesture model: turn = volume, click = play/pause, double press = open the wheel, triple press = previous track; with the wheel open, turn moves the highlight and click runs the slice.
+
+- **Dial input**: an own `MediaSession` looping silence (no audio focus, so your music keeps playing) receives the earbuds' Play/Pause/Next/Previous, and is re-claimed whenever another app starts playing. Turns are `STREAM_MUSIC` index changes; while the wheel is open the index is locked with headroom and each change is one detent.
+- **Wheel overlay, scroll mode, per-app profiles and system actions** run in an Accessibility Service (overlay window, `dispatchGesture` swipes, foreground package, back/home/recents/notifications/screenshot/lock).
+- **Phone slices**: media, scroll / volume / brightness modes, swipes (next Short / post), global actions, launch app, torch, mute, Do Not Disturb. Desktop hotkeys cannot be injected on Android without root.
+- **Setup** (main screen checklist): Accessibility service, notification access (to play/pause the real player), modify system settings (brightness), optional DND access. The main screen shows a live log of every dial signal (`adb logcat -s DialControl`).
+- **Known limits**: the system volume panel appears for dial turns and cannot be hidden; a click right after another app starts playing can still reach that app; there is no in-app profile editor yet.
+- **Build**: `cd android && ./gradlew testDebugUnitTest assembleRelease` (Android SDK 36, JDK 17+). The APK is also built by the manually triggered **Build Android APK** workflow (Actions tab -> Run workflow). CI APKs are signed with a throwaway debug key, so uninstall before installing a newer one.
 
 ---
 

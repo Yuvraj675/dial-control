@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Dial Control</string>
+    <string name="a11y_description">Shows the Dial Control wheel over other apps when you double press the earbud dial, detects the app in front to pick a profile, and performs the scroll gestures and system actions (back, home, screenshot…) you assign to wheel slices. Dial Control does not read screen content.</string>
+</resources>
