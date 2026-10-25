@@ -1,12 +1,8 @@
 name: Build Windows Release
 
+# Manual only: run it from the Actions tab ("Run workflow").
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    tags:
-      - 'v*'
 
 jobs:
   build-windows:

@@ -451,7 +451,7 @@ install -m 755 src-tauri/target/release/dial-control bin/dial-control
    2. `install -m 755 src-tauri/target/release/dial-control bin/dial-control`
    3. `./scripts/build-packages.sh` (regenerates the `.deb`, `.rpm`, `.pkg.tar.zst` and `.AppImage` in `dist-packages/`)
    - Run them in that order, only after steps 1-4 pass. Never substitute a plain `cargo build` (debug or release) for a binary the user may launch: it has no embedded frontend and shows "localhost not found".
-   - If any build or packaging step fails, say which one and why in the final message; never report the packages as up to date when they are not. Windows and macOS installers come from the GitHub Actions workflows and cannot be built locally; state that they were not rebuilt.
+   - If any build or packaging step fails, say which one and why in the final message; never report the packages as up to date when they are not. Windows and macOS installers come from the GitHub Actions workflows (all `workflow_dispatch` only, never on push; keep it that way) and cannot be built locally; state that they were not rebuilt.
 7. Check `git status` to ensure no accidental build artifacts or backup files are staged (`dist-packages/*.deb|rpm|AppImage|pkg.tar.zst`, `bin/` and `target/` are git-ignored and must stay untracked).
 8. Commit using author `Yuvraj675 <yuviyg675@gmail.com>` with **strictly NO co-authors**.
 9. Never run `git push`.
