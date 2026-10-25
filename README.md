@@ -176,7 +176,7 @@ Dial Control provides native, pre-assembled packages for all major Linux distrib
 
 ### Windows Packages
 
-Windows packages are compiled automatically via **GitHub Actions** (`.github/workflows/build-windows.yml`) on every push to `main`:
+Windows packages are compiled via **GitHub Actions** (`.github/workflows/build-windows.yml`), started manually from the Actions tab (**Run workflow**):
 - **`Dial Control_1.0.0_x64-setup.exe`**: Per-user NSIS Installer with automatic Start Menu and desktop integration.
 - **`Dial Control_1.0.0_x64_en-US.msi`**: Windows Installer package with standard Windows Add/Remove Programs integration.
 
@@ -184,7 +184,7 @@ Download the latest installer from the GitHub repository's **Actions** tab (unde
 
 ### macOS Packages
 
-macOS packages are compiled automatically via **GitHub Actions** (`.github/workflows/build-macos.yml`) on `macos-latest` runners:
+macOS packages are compiled via **GitHub Actions** (`.github/workflows/build-macos.yml`) on `macos-latest` runners, started manually from the Actions tab (**Run workflow**):
 - **`Dial Control_1.0.0_aarch64.dmg`**: Native Apple Silicon installer (M1/M2/M3/M4) with drag-to-Applications bundle.
 - **`Dial Control.app`**: Standalone application bundle (zipped).
 
@@ -301,7 +301,7 @@ This compiles:
 - `Dial Control_1.0.0_x64_en-US.msi` (WiX MSI Installer)
 under `src-tauri/target/release/bundle/`.
 
-Alternatively, push to GitHub to let the automated **GitHub Actions** workflow (`build-windows.yml`) compile the `.exe` and `.msi` installers in the cloud with zero local setup needed.
+Alternatively, run the **GitHub Actions** workflow (`build-windows.yml`) manually from the Actions tab to compile the `.exe` and `.msi` installers in the cloud with zero local setup needed.
 
 ### Building on macOS (Local Machine or CI)
 
@@ -317,7 +317,7 @@ npx @tauri-apps/cli build --bundles dmg,app
 
 Bundles will be generated under `src-tauri/target/release/bundle/dmg/` and `src-tauri/target/release/bundle/macos/`.
 
-Alternatively, push to GitHub to let the automated **GitHub Actions** workflow (`build-macos.yml`) build the `.dmg` installer and `.app` bundle automatically on GitHub's Apple Silicon runners.
+Alternatively, run the **GitHub Actions** workflow (`build-macos.yml`) manually from the Actions tab to build the `.dmg` installer and `.app` bundle on GitHub's Apple Silicon runners.
 
 ---
 
