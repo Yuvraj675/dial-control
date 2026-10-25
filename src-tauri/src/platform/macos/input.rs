@@ -39,6 +39,30 @@ impl VirtualInput for MacInput {
         }
     }
 
+    fn type_text(&self, text: &str) {
+        #[cfg(target_os = "macos")]
+        unsafe {
+            // One event per UTF-16 chunk; the keycode is ignored when a Unicode string is set.
+            let units: Vec<u16> = text.encode_utf16().collect();
+            for chunk in units.chunks(20) {
+                for down in [true, false] {
+                    let event = CGEventCreateKeyboardEvent(std::ptr::null_mut(), 0, down);
+                    if !event.is_null() {
+                        CGEventKeyboardSetUnicodeString(event, chunk.len() as _, chunk.as_ptr());
+                        CGEventPost(kCGHIDEventTap, event);
+                        CFRelease(event as CFTypeRef);
+                    }
+                }
+                sleep(Duration::from_millis(8));
+            }
+        }
+
+        #[cfg(not(target_os = "macos"))]
+        {
+            println!("[macOS Mock Input] type_text: {:?}", text);
+        }
+    }
+
     fn emit_native_hotkey(&self, keys: &[String]) {
         self.post_hotkey(crate::platform::keymap::mac_hotkey_literal(keys), keys);
     }

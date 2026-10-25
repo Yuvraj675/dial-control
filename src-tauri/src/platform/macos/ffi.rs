@@ -153,6 +153,7 @@ extern "C" {
         keyDown: bool,
     ) -> CGEventRef;
     pub fn CGEventSetFlags(event: CGEventRef, flags: u64);
+    pub fn CGEventKeyboardSetUnicodeString(event: CGEventRef, length: usize, string: *const u16);
     pub fn CGEventGetIntegerValueField(event: CGEventRef, field: u32) -> i64;
     pub fn CGMainDisplayID() -> u32;
 }

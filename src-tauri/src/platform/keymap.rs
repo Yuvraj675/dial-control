@@ -180,6 +180,57 @@ pub fn mac_hotkey_literal(keys: &[String]) -> Option<(u64, u16)> {
     keycode.map(|code| (flags, code))
 }
 
+/// Linux evdev key code and Shift state that type `c` on a US keyboard layout. Used to type
+/// text through uinput, which only sends key positions; other layouts need `wtype`/`xdotool`.
+pub fn linux_us_char_key(c: char) -> Option<(u16, bool)> {
+    const LETTERS: [u16; 26] = [
+        30, 48, 46, 32, 18, 33, 34, 35, 23, 36, 37, 38, 50, 49, 24, 25, 16, 19, 31, 20, 22, 47, 17, 45, 21, 44,
+    ];
+    let key = match c {
+        'a'..='z' => (LETTERS[(c as u8 - b'a') as usize], false),
+        'A'..='Z' => (LETTERS[(c as u8 - b'A') as usize], true),
+        '1'..='9' => ((c as u8 - b'1') as u16 + 2, false),
+        '0' => (11, false),
+        '!' => (2, true),
+        '@' => (3, true),
+        '#' => (4, true),
+        '$' => (5, true),
+        '%' => (6, true),
+        '^' => (7, true),
+        '&' => (8, true),
+        '*' => (9, true),
+        '(' => (10, true),
+        ')' => (11, true),
+        '-' => (12, false),
+        '_' => (12, true),
+        '=' => (13, false),
+        '+' => (13, true),
+        '\t' => (15, false),
+        '[' => (26, false),
+        '{' => (26, true),
+        ']' => (27, false),
+        '}' => (27, true),
+        '\n' => (28, false),
+        ';' => (39, false),
+        ':' => (39, true),
+        '\'' => (40, false),
+        '"' => (40, true),
+        '`' => (41, false),
+        '~' => (41, true),
+        '\\' => (43, false),
+        '|' => (43, true),
+        ',' => (51, false),
+        '<' => (51, true),
+        '.' => (52, false),
+        '>' => (52, true),
+        '/' => (53, false),
+        '?' => (53, true),
+        ' ' => (57, false),
+        _ => return None,
+    };
+    Some(key)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -304,5 +355,18 @@ mod tests {
         assert_eq!(mac_hotkey(&keys(&["KEY_LEFTCTRL"])), None);
         assert_eq!(mac_hotkey(&keys(&[])), None);
         assert_eq!(mac_hotkey(&keys(&["KEY_PLAYPAUSE"])), None);
+    }
+
+    #[test]
+    fn us_layout_characters() {
+        assert_eq!(linux_us_char_key('a'), Some((30, false)));
+        assert_eq!(linux_us_char_key('Z'), Some((44, true)));
+        assert_eq!(linux_us_char_key('1'), Some((2, false)));
+        assert_eq!(linux_us_char_key('0'), Some((11, false)));
+        assert_eq!(linux_us_char_key('@'), Some((3, true)));
+        assert_eq!(linux_us_char_key(' '), Some((57, false)));
+        assert_eq!(linux_us_char_key('\n'), Some((28, false)));
+        assert_eq!(linux_us_char_key('?'), Some((53, true)));
+        assert_eq!(linux_us_char_key('é'), None);
     }
 }

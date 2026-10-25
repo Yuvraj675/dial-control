@@ -345,6 +345,13 @@ Automatically switches the radial wheel's active profile based on the foreground
 
 ---
 
+### 5.6 Custom Slice Actions (`src-tauri/src/actions.rs`)
+- Slice types `hotkey`, `launch` (`target`), `command` (`cmd`), `text` (`text`) and `macro` (`steps`) are all reduced by `actions::steps_for` to a list of `Step`s (`hotkey`, `text`, `wait`, `launch`, `command`, `media`) and run in order on a worker thread after the HUD hides (120ms focus settle, 40ms between steps, waits capped at 10s). Malformed macro steps are skipped, not fatal. Frontend mirror: `MacroStep` in `types/profile.ts`, helpers in `utils/macro.ts`.
+- **Launch** (`launch_invocation`, pure + tested per OS): Linux `*.desktop` -> `gtk-launch <id>`, URLs and paths -> `xdg-open`, anything else -> `sh -c`; Windows `cmd /c start "" <target>` (Start Menu `.lnk`, App Paths names, files, URLs); macOS `open` for paths/URLs/`.app`, `open -a <name>` otherwise. `~/` is expanded before spawning. Commands: `sh -c` / `cmd /c` with `CREATE_NO_WINDOW`, cwd = home. The built-in terminal slice keeps its own emulator fallback chain.
+- **Type text** (`VirtualInput::type_text`): Windows `SendInput` + `KEYEVENTF_UNICODE`; macOS `CGEventKeyboardSetUnicodeString`; Linux uinput with the US-layout map `keymap::linux_us_char_key` (other layouts produce wrong characters), and `wtype` / `xdotool type` only for non-ASCII text.
+- **App picker**: `list_installed_apps` scans XDG `applications` dirs incl. Flatpak (`parse_desktop_entry` skips `NoDisplay`/`Hidden`), the Start Menu `.lnk` files, or `/Applications` & co.
+- **Settings**: `ActionEditors.tsx` holds `LaunchTargetPicker`, `MacroEditor` and `TestRunButton` (runs the slice after 3s so the user can focus the target window). The slice hotkey recorder fills a macro step when `recordingStepIndex` is set.
+
 ## 6. What Was Considered and Rejected (Archived Decisions)
 
 Understanding what failed in earlier builds prevents regression into past mistakes:
