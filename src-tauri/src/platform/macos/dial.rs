@@ -1,6 +1,6 @@
 use crate::platform::dial_logic::{
-    classify_click, classify_volume_change, decode_aux_key, headroom_lock, is_rotation_burst,
-    now_millis, scroll_delta_for, ClickAction, VolumeAction,
+    classify_click, classify_multi_press, classify_volume_change, decode_aux_key, headroom_lock, is_rotation_burst,
+    now_millis, scroll_delta_for, ClickAction, GestureAction, MultiPress, RemoteCommand, VolumeAction,
 };
 use crate::platform::traits::{DialBackend, PlatformProvider};
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU32, AtomicU64, Ordering};
@@ -17,6 +17,7 @@ static LOCKED_VOL_REF: OnceLock<Arc<AtomicI32>> = OnceLock::new();
 static IS_SCROLL_MODE_REF: OnceLock<Arc<AtomicBool>> = OnceLock::new();
 static APP_HANDLE_REF: OnceLock<AppHandle> = OnceLock::new();
 static LAST_CLICK_TIME_MS: AtomicU64 = AtomicU64::new(0);
+static LAST_GESTURE_TIME_MS: AtomicU64 = AtomicU64::new(0);
 static TAP_PORT_REF: AtomicU64 = AtomicU64::new(0);
 
 /// Volume the dial snaps back to while the HUD is open. Separate from `locked_vol`
@@ -102,8 +103,42 @@ fn handle_center_click(source: &str) {
                 crate::do_stop_scroll_mode(&app, &state);
             });
         }
-        ClickAction::OpenHud => {
-            println!(">> [macOS NATIVE DIAL CLICK] -> Opening HUD");
+        ClickAction::PlayPause => {
+            println!(">> [macOS NATIVE DIAL CLICK] -> Play/Pause");
+            with_app(|app| {
+                let state: tauri::State<crate::AppState> = app.state();
+                state.platform.media().play_pause();
+            });
+        }
+        ClickAction::Confirm => {
+            println!(">> [macOS NATIVE DIAL CLICK] -> Dispatched action select to HUD");
+            with_app(|app| {
+                let _ = app.emit("dial:click", ());
+            });
+        }
+        ClickAction::Debounced => {}
+    }
+}
+
+/// Double press (Now Playing Next) and triple press (Previous).
+fn handle_multi_press(gesture: MultiPress, source: &str) {
+    let now = now_millis();
+    let action = classify_multi_press(
+        gesture,
+        now,
+        LAST_GESTURE_TIME_MS.load(Ordering::SeqCst),
+        CLICK_DEBOUNCE_MS,
+        flag(&IS_HUD_OPEN_REF),
+        flag(&IS_SCROLL_MODE_REF),
+    );
+    crate::platform::diag::log(&format!("{gesture:?} press from {source}: {action:?}"));
+    if action == GestureAction::Debounced {
+        return;
+    }
+    LAST_GESTURE_TIME_MS.store(now, Ordering::SeqCst);
+
+    match action {
+        GestureAction::OpenHud => {
             // Flip the flag synchronously so rotation ticks arriving while the window
             // animates in are already intercepted.
             if let Some(arc) = IS_HUD_OPEN_REF.get() {
@@ -114,13 +149,19 @@ fn handle_center_click(source: &str) {
                 crate::do_show_hud(&app, &state);
             });
         }
-        ClickAction::Confirm => {
-            println!(">> [macOS NATIVE DIAL CLICK] -> Dispatched action select to HUD");
-            with_app(|app| {
-                let _ = app.emit("dial:click", ());
-            });
-        }
-        ClickAction::Debounced => {}
+        GestureAction::Dismiss => with_app(|app| {
+            let state: tauri::State<crate::AppState> = app.state();
+            crate::do_hide_hud(&app, &state);
+        }),
+        GestureAction::ExitScroll => with_app(|app| {
+            let state: tauri::State<crate::AppState> = app.state();
+            crate::do_stop_scroll_mode(&app, &state);
+        }),
+        GestureAction::PreviousTrack => with_app(|app| {
+            let state: tauri::State<crate::AppState> = app.state();
+            state.platform.media().prev_track();
+        }),
+        GestureAction::Debounced => {}
     }
 }
 
@@ -333,7 +374,8 @@ impl MacDial {
 
         let key = decode_aux_key(data1 as i64);
 
-        // 1. Center Click / Media Play-Pause Key: always dropped so Music/Spotify don't toggle.
+        // 1. Center Click / Media Play-Pause Key: dropped here; handle_center_click forwards it to
+        //    the player itself when the HUD is closed.
         if key.key_type == NX_KEYTYPE_PLAY {
             if key.is_down && !key.is_repeat {
                 handle_center_click("event tap");
@@ -401,19 +443,13 @@ impl DialBackend for MacDial {
         #[cfg(target_os = "macos")]
         if let Some(app) = APP_HANDLE_REF.get() {
             let _ = app.run_on_main_thread(|| {
-                super::now_playing::start(|cmd| {
-                    if crate::platform::dial_logic::remote_command_is_click(cmd) {
-                        handle_center_click("now playing");
-                    } else if flag(&IS_HUD_OPEN_REF) || flag(&IS_SCROLL_MODE_REF) {
-                        with_app(|app| {
-                            let state: tauri::State<crate::AppState> = app.state();
-                            if state.is_scroll_mode.load(Ordering::SeqCst) {
-                                crate::do_stop_scroll_mode(&app, &state);
-                            } else {
-                                crate::do_hide_hud(&app, &state);
-                            }
-                        });
+                super::now_playing::start(|cmd| match cmd {
+                    RemoteCommand::Next => handle_multi_press(MultiPress::Double, "now playing"),
+                    RemoteCommand::Previous => handle_multi_press(MultiPress::Triple, "now playing"),
+                    cmd if crate::platform::dial_logic::remote_command_is_click(cmd) => {
+                        handle_center_click("now playing")
                     }
+                    _ => {}
                 });
             });
         }

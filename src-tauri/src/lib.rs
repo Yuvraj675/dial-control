@@ -161,11 +161,6 @@ pub(crate) fn do_stop_scroll_mode(app: &AppHandle, state: &AppState) {
         state.platform.audio().set_volume(orig_vol);
     }
 
-    #[cfg(target_os = "windows")]
-    {
-        crate::platform::windows::dial::cleanup_hud_rotation();
-    }
-
     let _ = app.emit("hud:visibility", false);
     let _ = app.emit("scroll_mode:exit", ());
     send_os_notification("Scroll Mode Exited", "Dial returned to standard mode");
@@ -313,11 +308,6 @@ pub(crate) fn do_hide_hud(app: &AppHandle, state: &AppState) {
 
     if orig_vol >= 0 {
         state.platform.audio().set_volume(orig_vol);
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        crate::platform::windows::dial::cleanup_hud_rotation();
     }
 
     let _ = app.emit("hud:visibility", false);
