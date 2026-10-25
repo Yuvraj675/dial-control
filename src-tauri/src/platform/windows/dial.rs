@@ -1,6 +1,6 @@
 use crate::platform::dial_logic::{
-    classify_click, classify_floating_change, consumer_click_edge, now_millis, ClickAction,
-    FloatingAction, CLICK_DEBOUNCE_MS, FLOAT_RECENTER_LEVEL,
+    classify_click, classify_floating_change, classify_multi_press, consumer_click_edge, now_millis,
+    ClickAction, FloatingAction, GestureAction, MultiPress, CLICK_DEBOUNCE_MS, FLOAT_RECENTER_LEVEL,
 };
 use crate::platform::traits::{DialBackend, PlatformProvider};
 use crate::platform::windows::ffi::*;
@@ -24,8 +24,8 @@ static APP_HANDLE_REF: RwLock<Option<AppHandle>> = RwLock::new(None);
 static HOOK_HANDLE: AtomicUsize = AtomicUsize::new(0);
 static FLYOUT_HOOK_HANDLE: AtomicUsize = AtomicUsize::new(0);
 static LAST_DIAL_CLICK_TIME: AtomicUsize = AtomicUsize::new(0);
+static LAST_GESTURE_TIME: AtomicUsize = AtomicUsize::new(0);
 static LAST_AUDIO_NOTIFY_TIME: AtomicUsize = AtomicUsize::new(0);
-static HAS_ROTATED: AtomicBool = AtomicBool::new(false);
 
 static LAST_AUDIO_LEVEL_BITS: AtomicU32 = AtomicU32::new(0);
 static LAST_SET_LEVEL_BITS: AtomicU32 = AtomicU32::new(0);
@@ -54,7 +54,6 @@ fn set_last_set_level(lvl: f32) {
 }
 
 pub fn init_hud_rotation(curr_vol: i32) {
-    HAS_ROTATED.store(false, Ordering::SeqCst);
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
@@ -76,10 +75,6 @@ pub fn init_hud_rotation(curr_vol: i32) {
     ECHO_ARMED.store(true, Ordering::SeqCst);
     set_last_audio_level(target);
     LAST_AUDIO_NOTIFY_TIME.store(now, Ordering::SeqCst);
-}
-
-pub fn cleanup_hud_rotation() {
-    HAS_ROTATED.store(false, Ordering::SeqCst);
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -150,32 +145,12 @@ fn handle_dial_click(source: &str) {
                 crate::do_stop_scroll_mode(&app, &state);
             });
         }
-        ClickAction::OpenHud => {
-            crate::platform::diag::log("click decision: open HUD");
-            crate::platform::windows::smtc::request_focus_check();
-            // Flip the flag immediately so rotation arriving before the window is up is intercepted.
-            if let Ok(guard) = IS_HUD_OPEN_REF.read() {
-                if let Some(ref is_open) = *guard {
-                    is_open.store(true, Ordering::SeqCst);
-                }
-            }
-            HAS_ROTATED.store(false, Ordering::SeqCst);
-            unsafe {
-                AllowSetForegroundWindow(GetCurrentProcessId());
-            }
-            println!("[Windows Dial] Dial click ({}) -> Opening HUD", source);
+        ClickAction::PlayPause => {
+            crate::platform::diag::log("click decision: play/pause (HUD closed)");
+            println!("[Windows Dial] Dial click ({}) -> Play/Pause", source);
             with_app(|app| {
                 let state: tauri::State<AppState> = app.state();
-                crate::do_show_hud(&app, &state);
-            });
-        }
-        ClickAction::Confirm if !HAS_ROTATED.load(Ordering::SeqCst) => {
-            crate::platform::diag::log("click decision: toggle close (no rotation since open)");
-            // Clicked again without rotating -> toggle the HUD closed.
-            println!("[Windows Dial] Dial click ({}) without rotation -> Toggling HUD closed", source);
-            with_app(|app| {
-                let state: tauri::State<AppState> = app.state();
-                crate::do_hide_hud(&app, &state);
+                state.platform.media().play_pause();
             });
         }
         ClickAction::Confirm => {
@@ -186,6 +161,61 @@ fn handle_dial_click(source: &str) {
             });
         }
         ClickAction::Debounced => {}
+    }
+}
+
+/// Double press (AVRCP Next) and triple press (AVRCP Previous), fed by our media session
+/// and the keyboard hook; the shared debounce keeps one press from acting twice.
+fn handle_multi_press(gesture: MultiPress, source: &str) {
+    let now = now_millis();
+    let last = LAST_GESTURE_TIME.load(Ordering::SeqCst);
+    let action = classify_multi_press(
+        gesture,
+        now,
+        last as u64,
+        CLICK_DEBOUNCE_MS,
+        read_flag(&IS_HUD_OPEN_REF),
+        read_flag(&IS_SCROLL_MODE_REF),
+    );
+    crate::platform::diag::log(&format!("{gesture:?} press from {source}: {action:?}"));
+    if action == GestureAction::Debounced
+        || LAST_GESTURE_TIME
+            .compare_exchange(last, now as usize, Ordering::SeqCst, Ordering::SeqCst)
+            .is_err()
+    {
+        return;
+    }
+
+    match action {
+        GestureAction::OpenHud => {
+            crate::platform::windows::smtc::request_focus_check();
+            // Flip the flag immediately so rotation arriving before the window is up is intercepted.
+            if let Ok(guard) = IS_HUD_OPEN_REF.read() {
+                if let Some(ref is_open) = *guard {
+                    is_open.store(true, Ordering::SeqCst);
+                }
+            }
+            unsafe {
+                AllowSetForegroundWindow(GetCurrentProcessId());
+            }
+            with_app(|app| {
+                let state: tauri::State<AppState> = app.state();
+                crate::do_show_hud(&app, &state);
+            });
+        }
+        GestureAction::Dismiss => with_app(|app| {
+            let state: tauri::State<AppState> = app.state();
+            crate::do_hide_hud(&app, &state);
+        }),
+        GestureAction::ExitScroll => with_app(|app| {
+            let state: tauri::State<AppState> = app.state();
+            crate::do_stop_scroll_mode(&app, &state);
+        }),
+        GestureAction::PreviousTrack => with_app(|app| {
+            let state: tauri::State<AppState> = app.state();
+            state.platform.media().prev_track();
+        }),
+        GestureAction::Debounced => {}
     }
 }
 
@@ -250,26 +280,17 @@ unsafe extern "system" fn low_level_keyboard_proc(
                 }
                 return 1;
             }
-            VK_MEDIA_NEXT_TRACK | VK_MEDIA_PREV_TRACK if is_hud_open || is_scroll_mode => {
-                // Gesture:
-                // Double-click (Next Track) or Triple-click (Prev Track) while HUD is open
-                // immediately cancels/dismisses HUD without executing any tool, and swallows
-                // the keys so background media players (Spotify) do NOT skip tracks!
+            VK_MEDIA_NEXT_TRACK | VK_MEDIA_PREV_TRACK => {
+                // A physical keyboard key keeps its normal meaning while the HUD is closed.
+                let injected = kbd.flags & LLKHF_INJECTED != 0;
+                if !injected && !is_hud_open && !is_scroll_mode {
+                    return CallNextHookEx(hhook, n_code, w_param, l_param);
+                }
+                // Earbud double press (Next) opens the HUD, triple press (Previous) goes back a
+                // track; with the HUD open either one dismisses it. Swallowed so no player skips.
                 if is_key_down {
-                    println!("[Windows Dial] Intercepted Next/Prev Track while HUD open -> Cancelling / Dismissing HUD");
-                    if let Ok(guard) = APP_HANDLE_REF.read() {
-                        if let Some(ref app) = *guard {
-                            let app = app.clone();
-                            thread::spawn(move || {
-                                let state: tauri::State<AppState> = app.state();
-                                if state.is_scroll_mode.load(Ordering::SeqCst) {
-                                    crate::do_stop_scroll_mode(&app, &state);
-                                } else {
-                                    crate::do_hide_hud(&app, &state);
-                                }
-                            });
-                        }
-                    }
+                    let gesture = if vk == VK_MEDIA_NEXT_TRACK { MultiPress::Double } else { MultiPress::Triple };
+                    handle_multi_press(gesture, "keyboard hook");
                 }
                 return 1;
             }
@@ -281,7 +302,6 @@ unsafe extern "system" fn low_level_keyboard_proc(
                 }
                 if is_key_down {
                     let dir = if vk == VK_VOLUME_UP { 1 } else { -1 };
-                    HAS_ROTATED.store(true, Ordering::SeqCst);
 
                     if is_scroll_mode {
                         let scroll_delta = crate::platform::dial_logic::scroll_delta_for(dir);
@@ -666,7 +686,6 @@ unsafe extern "system" fn callback_on_notify(
     // A real turn consumes the echo window: turning straight back onto the level we last
     // set must count as a detent, not as Windows' duplicate notification.
     ECHO_ARMED.store(false, Ordering::SeqCst);
-    HAS_ROTATED.store(true, Ordering::SeqCst);
     LAST_AUDIO_NOTIFY_TIME.store(now, Ordering::SeqCst);
 
     println!(
@@ -882,17 +901,9 @@ impl DialBackend for WindowsDial {
         // to us instead of to YouTube / the active player (which would pause itself).
         crate::platform::windows::smtc::start(|button| match button {
             crate::platform::windows::smtc::MediaButton::Click => handle_dial_click("smtc"),
-            crate::platform::windows::smtc::MediaButton::Cancel => {
-                if read_flag(&IS_HUD_OPEN_REF) || read_flag(&IS_SCROLL_MODE_REF) {
-                    with_app(|app| {
-                        let state: tauri::State<AppState> = app.state();
-                        if state.is_scroll_mode.load(Ordering::SeqCst) {
-                            crate::do_stop_scroll_mode(&app, &state);
-                        } else {
-                            crate::do_hide_hud(&app, &state);
-                        }
-                    });
-                }
+            crate::platform::windows::smtc::MediaButton::Next => handle_multi_press(MultiPress::Double, "smtc"),
+            crate::platform::windows::smtc::MediaButton::Previous => {
+                handle_multi_press(MultiPress::Triple, "smtc")
             }
             crate::platform::windows::smtc::MediaButton::Ignore => {}
         });

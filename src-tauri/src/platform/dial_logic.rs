@@ -43,7 +43,9 @@ pub enum ClickAction {
     /// Contact bounce or a duplicate observation of the same press.
     Debounced,
     ExitScroll,
-    OpenHud,
+    /// HUD closed: the dial behaves like normal earbuds, so the click toggles the real player.
+    PlayPause,
+    /// HUD open: run the highlighted slice (no rotation needed).
     Confirm,
 }
 
@@ -59,9 +61,50 @@ pub fn classify_click(
     } else if is_scroll_mode {
         ClickAction::ExitScroll
     } else if !is_hud_open {
-        ClickAction::OpenHud
+        ClickAction::PlayPause
     } else {
         ClickAction::Confirm
+    }
+}
+
+/// Multi-press gestures. The earbuds decide the gesture themselves and send a single AVRCP
+/// Next (double press) or Previous (triple press) instead of several clicks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MultiPress {
+    Double,
+    Triple,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GestureAction {
+    Debounced,
+    OpenHud,
+    /// Close the HUD without running a slice.
+    Dismiss,
+    ExitScroll,
+    /// HUD closed: a triple press keeps its normal meaning.
+    PreviousTrack,
+}
+
+pub fn classify_multi_press(
+    gesture: MultiPress,
+    now_ms: u64,
+    last_gesture_ms: u64,
+    debounce_ms: u64,
+    is_hud_open: bool,
+    is_scroll_mode: bool,
+) -> GestureAction {
+    if last_gesture_ms != 0 && now_ms.saturating_sub(last_gesture_ms) < debounce_ms {
+        GestureAction::Debounced
+    } else if is_scroll_mode {
+        GestureAction::ExitScroll
+    } else if is_hud_open {
+        GestureAction::Dismiss
+    } else {
+        match gesture {
+            MultiPress::Double => GestureAction::OpenHud,
+            MultiPress::Triple => GestureAction::PreviousTrack,
+        }
     }
 }
 
@@ -230,7 +273,7 @@ pub enum RemoteCommand {
 }
 
 /// Play / Pause / Toggle are the dial click; Next / Previous are the double / triple press
-/// gestures that dismiss the HUD.
+/// gestures (see `classify_multi_press`).
 pub fn remote_command_is_click(cmd: RemoteCommand) -> bool {
     matches!(cmd, RemoteCommand::Play | RemoteCommand::Pause | RemoteCommand::Toggle)
 }
@@ -277,13 +320,14 @@ mod tests {
 
     #[test]
     fn first_click_ever_is_never_debounced() {
-        // LAST_CLICK starts at 0; a clock reading near 0 (fresh VM, tests) must still open.
-        assert_eq!(classify_click(10, 0, 400, false, false), ClickAction::OpenHud);
+        // LAST_CLICK starts at 0; a clock reading near 0 (fresh VM, tests) must still act.
+        assert_eq!(classify_click(10, 0, 400, false, false), ClickAction::PlayPause);
     }
 
     #[test]
     fn click_state_machine() {
-        assert_eq!(classify_click(10_000, 0, 400, false, false), ClickAction::OpenHud);
+        // HUD closed: a click is play/pause, it never opens the HUD.
+        assert_eq!(classify_click(10_000, 0, 400, false, false), ClickAction::PlayPause);
         assert_eq!(classify_click(10_000, 5_000, 400, true, false), ClickAction::Confirm);
         assert_eq!(classify_click(10_000, 5_000, 400, false, true), ClickAction::ExitScroll);
         // Scroll mode wins even if the HUD flag is still set.
@@ -295,7 +339,20 @@ mod tests {
         // Raw Input and the keyboard hook both see one press 15ms apart.
         assert_eq!(classify_click(10_015, 10_000, 400, true, false), ClickAction::Debounced);
         assert_eq!(classify_click(10_399, 10_000, 400, false, false), ClickAction::Debounced);
-        assert_eq!(classify_click(10_400, 10_000, 400, false, false), ClickAction::OpenHud);
+        assert_eq!(classify_click(10_400, 10_000, 400, false, false), ClickAction::PlayPause);
+    }
+
+    #[test]
+    fn multi_press_state_machine() {
+        use MultiPress::*;
+        assert_eq!(classify_multi_press(Double, 10_000, 0, 400, false, false), GestureAction::OpenHud);
+        assert_eq!(classify_multi_press(Triple, 10_000, 0, 400, false, false), GestureAction::PreviousTrack);
+        assert_eq!(classify_multi_press(Double, 10_000, 0, 400, true, false), GestureAction::Dismiss);
+        assert_eq!(classify_multi_press(Triple, 10_000, 0, 400, true, false), GestureAction::Dismiss);
+        assert_eq!(classify_multi_press(Double, 10_000, 0, 400, true, true), GestureAction::ExitScroll);
+        assert_eq!(classify_multi_press(Triple, 10_000, 0, 400, false, true), GestureAction::ExitScroll);
+        // SMTC and the keyboard hook can both observe one Next press.
+        assert_eq!(classify_multi_press(Double, 10_100, 10_000, 400, true, false), GestureAction::Debounced);
     }
 
     #[test]

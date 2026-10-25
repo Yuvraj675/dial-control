@@ -114,6 +114,19 @@ dial-control/
 The CMF Buds Pro 2 rotary dial and smart case have **no proprietary Bluetooth protocol**. They implement standard Bluetooth AVRCP (Audio/Video Remote Control Profile):
 - **Rotation**: Emits standard AVRCP Volume Up (`KEY_VOLUMEUP`) and Volume Down (`KEY_VOLUMEDOWN`) commands to the host OS.
 - **Center Click**: Emits standard media key events (`KEY_PLAYPAUSE`, `KEY_PLAYCD`, `KEY_PAUSECD`, or `KEY_VOICECOMMAND`).
+- **Double / Triple Press**: The earbuds recognise the gesture themselves and send a single AVRCP Next (`KEY_NEXTSONG`) / Previous (`KEY_PREVIOUSSONG`), provided Nothing X is set to Double = Next track, Triple = Previous track (same setup as the Orbit project, `temp/orbit_ref`).
+
+#### Gesture Model (all platforms, `dial_logic::classify_click` / `classify_multi_press`)
+The dial behaves like normal earbuds until the user asks for the HUD, so play/pause never needs the wheel:
+
+| Gesture | HUD closed | HUD open | Scroll mode |
+|---|---|---|---|
+| Turn | system volume (passes through) | move highlight / drive gauge | scroll |
+| Click | play/pause forwarded to the real player (`media().play_pause()`) | run the highlighted slice (no rotation needed) | exit |
+| Double press (Next) | open HUD | dismiss | exit |
+| Triple press (Previous) | previous track (`media().prev_track()`) | dismiss | exit |
+
+The global shortcut still toggles the HUD directly. A click with the HUD open always confirms; the earlier "click without rotating = dismiss" rule made slice 0 (SCROLL) unselectable and was removed.
 
 #### Linux Backend (`src-tauri/src/platform/linux/dial.rs`)
 1. **Hardware Click Grabber (`start_input_grabber`)**:
@@ -122,8 +135,9 @@ The CMF Buds Pro 2 rotary dial and smart case have **no proprietary Bluetooth pr
    - **Exclusively grabs the device** (`device.grab()`). This is critical: without the exclusive grab, clicking the dial would simultaneously toggle media playback in Spotify/YouTube while trying to open the HUD.
    - Intercepts clicks with a 500ms software debounce.
    - If scroll mode is active $\to$ exits scroll mode.
-   - If HUD is closed $\to$ opens HUD.
+   - If HUD is closed $\to$ forwards play/pause to the player (the device is grabbed, so nothing else would).
    - If HUD is already open $\to$ dispatches `dial:click` to trigger the selected slice action.
+   - `KEY_NEXTSONG` / `KEY_PREVIOUSSONG` go through `classify_multi_press` (open HUD / dismiss / previous track).
 
 2. **BlueZ AVRCP Volume Listener (`start_bluez_listener`)**:
    - Subscribes to system D-Bus signals for `org.freedesktop.DBus.Properties.PropertiesChanged` on interface `org.bluez.MediaTransport1`.
@@ -158,16 +172,11 @@ The CMF Buds Pro 2 rotary dial and smart case have **no proprietary Bluetooth pr
   3. **Low-Level Keyboard Hook (`WH_KEYBOARD_LL`)**:
      - Intercepts center clicks (`VK_MEDIA_PLAY_PAUSE`, `VK_PAUSE`, `VK_MEDIA_STOP`), next/prev track gestures (`VK_MEDIA_NEXT_TRACK`, `VK_MEDIA_PREV_TRACK`), and physical keyboard volume keys in a dedicated Win32 message pump thread.
      - **Complete KeyDown and KeyUp Interception**: Both `WM_KEYDOWN` and `WM_KEYUP` for media keys are swallowed so background players (Spotify, YouTube, Chrome) never receive accidental play/pause or song-skip commands.
-     - **Dial Click Toggle vs Confirm (`has_rotated`)**:
-       - When `!is_hud_open`: opens the HUD and resets `has_rotated` to false.
-       - When `is_hud_open` and `!has_rotated`: the user clicked the dial again without rotating. This acts as a clean **toggle/dismiss**, immediately closing the HUD without playing audio or executing any tool!
-       - When `is_hud_open` and `has_rotated`: the user turned the dial to highlight a tool. Clicking confirms and executes the highlighted tool (`dial:click`).
-     - **Double-Click / Triple-Click Dismiss**:
-       - Double-pressing (`VK_MEDIA_NEXT_TRACK`) or triple-pressing (`VK_MEDIA_PREV_TRACK`) while the HUD is open immediately cancels and closes the HUD without executing any tool.
+     - **Clicks and gestures** follow the shared Gesture Model above (`handle_dial_click`, `handle_multi_press`). Injected `VK_MEDIA_NEXT_TRACK` / `VK_MEDIA_PREV_TRACK` are the double / triple press and are swallowed; physical keyboard Next/Prev pass through while the HUD is closed.
      - In **volume mode** (HUD open, `locked_vol < 0`) keyboard volume keys pass through so Windows changes the volume natively and the endpoint callback mirrors it on the gauge.
   4. **Own Media Session (`windows/smtc.rs`) — the click path that works while YouTube is playing**:
      - Bluetooth AVRCP play/pause/next/previous never reach the keyboard path; Windows routes them to the *current media session* (SMTC). When a browser tab or player holds that role it pauses itself and Dial Control never sees the click.
-     - Dial Control therefore registers as a media session: a muted `MediaPlayer` looping generated silence (`%TEMP%\dial-control\silence.wav`) with its own `SystemMediaTransportControls` (`CommandManager` disabled). `ButtonPressed`: Play/Pause = dial click (`handle_dial_click("smtc")`), Next/Previous = cancel/dismiss gestures.
+     - Dial Control therefore registers as a media session: a muted `MediaPlayer` looping generated silence (`%TEMP%\dial-control\silence.wav`) with its own `SystemMediaTransportControls` (`CommandManager` disabled). `ButtonPressed`: Play/Pause = dial click (`handle_dial_click("smtc")`), Next/Previous = double/triple press (`handle_multi_press`).
      - **Mirror the earbuds' play state**: AVRCP has no toggle; the earbuds alternate PAUSE/PLAY based on their own idea of the playback state. Always reporting `Playing` made Windows drop every PLAY (a no-op), so each selection needed two physical clicks. After each press the session reports the state the earbuds now expect (`REPORT_PLAYING`, `status_after_button`), and `reassert` ends on that state instead of `Playing`.
      - **Focus guard (event-driven, never polling)**: woken by `CurrentSessionChanged` and by dial activity (`smtc::request_focus_check()` on HUD open and rotation), it compares `GetCurrentSession()` with our own session id and re-asserts (pause/play cycle, 3 backoff attempts). After a failed attempt it backs off 5s so it never churns the session; a 10s timer is only a safety net. A continuous 1s poll was tried and caused click lag and dropped presses.
      - **Field diagnostics**: `platform::diag` writes timestamped lines (clicks, SMTC buttons, focus changes, HUD shown) to `%TEMP%\dial-control\dial-control.log`; release builds have no console, so ask users for this file.
@@ -198,7 +207,7 @@ The CMF Buds Pro 2 rotary dial and smart case have **no proprietary Bluetooth pr
   - Each callback wraps its `NSEvent` work in `objc_autoreleasePoolPush/Pop` (the tap thread has no pool).
 - **Aux key decoding** (`dial_logic::decode_aux_key`): `data1 = [key_type:16][key_state:8][flags:8]`, key-down is `key_state == 0x0A` exactly (0x0B is key-up; testing bit 0 misread every key-up as a second detent).
 - **CoreAudio Volume Listener (AVRCP Absolute Volume)**: Bluetooth absolute volume updates the output device volume directly instead of posting a media key, so `AudioObjectAddPropertyListener` on the default output device's `VirtualMasterVolume` detects turns (re-bound on `kAudioHardwarePropertyDefaultOutputDevice` changes). `init_hud_rotation` moves the volume into `6..94` for headroom (`ROTATION_BASELINE`); turns snap back on a worker thread (never inside the HAL listener). Shares `classify_volume_change` with the tests.
-- **Own Now Playing session (`macos/now_playing.rs`)**: earbud AVRCP Play/Pause/Next/Previous never reach the event tap; `mediaremoted` routes them to the Now Playing app (Music, Spotify, a YouTube tab), which toggled playback instead of opening the HUD. Dial Control registers `MPRemoteCommandCenter` handlers, publishes an explicit `MPNowPlayingInfoCenter.playbackState` (macOS does not infer it) and loops silence through `AVAudioPlayer` (`$TMPDIR/dial-control/silence.wav`), because apps playing real audio otherwise win. Play/Pause/Toggle = dial click, Next/Previous = dismiss; the reported state mirrors the earbuds (`dial_logic::reported_playing_after`).
+- **Own Now Playing session (`macos/now_playing.rs`)**: earbud AVRCP Play/Pause/Next/Previous never reach the event tap; `mediaremoted` routes them to the Now Playing app (Music, Spotify, a YouTube tab), which toggled playback instead of opening the HUD. Dial Control registers `MPRemoteCommandCenter` handlers, publishes an explicit `MPNowPlayingInfoCenter.playbackState` (macOS does not infer it) and loops silence through `AVAudioPlayer` (`$TMPDIR/dial-control/silence.wav`), because apps playing real audio otherwise win. Play/Pause/Toggle = dial click, Next/Previous = double/triple press (`handle_multi_press`); the reported state mirrors the earbuds (`dial_logic::reported_playing_after`).
   - **Re-taking the session needs a real state change** (`take_back`: opposite state, fresh info, silence restarted from 0, then the reported state); re-announcing the same state is ignored (finding from the Orbit project, `temp/orbit_ref`). Triggers: HUD open and close, foreground app change (context poller), dial rotation (throttled to 2s), 0.9s after a forwarded command.
   - **Media slices**: AppleScript `playpause` / `next track` / `previous track` to Spotify or Music when one is playing (Apple Events bypass Now Playing); otherwise step aside (`forward_to_player`: publish stopped, post the NX key, reclaim). The event tap passes through aux keys whose source pid is our own.
   - Known gaps: a click in the instant after another app started playing still reaches that app; the system volume bezel for AVRCP Absolute Volume turns is drawn by macOS and cannot be hidden with public APIs.
@@ -211,10 +220,10 @@ The CMF Buds Pro 2 rotary dial and smart case have **no proprietary Bluetooth pr
   - `NX_KEYTYPE_SOUND_DOWN` (1) $\to$ CCW dial rotation (`direction: -1`).
   - `NX_KEYTYPE_PLAY` (16) $\to$ Media center click.
 - **Hardware-Level Event Consumption & Immediate Volume Locking**:
-  - On initial center click when `!is_hud_open`, the callback synchronously sets `IS_HUD_OPEN_REF = true` before dispatching `do_show_hud` (which captures the real volume; no placeholder lock).
+  - On a double press (Now Playing Next) when `!is_hud_open`, `handle_multi_press` synchronously sets `IS_HUD_OPEN_REF = true` before dispatching `do_show_hud` (which captures the real volume; no placeholder lock).
   - While HUD is open (`is_hud_open == true`), rotary events are intercepted, `dial:rotate` is emitted, and `null_mut()` is returned unconditionally to consume the event completely so macOS neither adjusts system volume nor displays the native volume bezel.
   - When in scroll mode, rotary events emit `scroll:tick` and return `null_mut()`.
-  - For center click: returns `null_mut()` so Apple Music or Spotify does not play/pause while opening, navigating, or confirming in the HUD.
+  - For center click: returns `null_mut()`; with the HUD closed `handle_center_click` re-sends play/pause to the player itself (our own pid passes the tap).
 
 ---
 

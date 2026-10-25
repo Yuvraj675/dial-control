@@ -1,3 +1,6 @@
+use crate::platform::dial_logic::{
+    classify_click, classify_multi_press, now_millis, ClickAction, GestureAction, MultiPress,
+};
 use crate::platform::traits::{DialBackend, PlatformProvider};
 use futures_lite::stream::StreamExt;
 use std::collections::HashMap;
@@ -14,6 +17,10 @@ const KEY_PLAYPAUSE: u16 = 164;
 const KEY_PLAYCD: u16 = 200;
 const KEY_PAUSECD: u16 = 201;
 const KEY_VOICECOMMAND: u16 = 582;
+/// Double press (the earbuds send AVRCP Next).
+const KEY_NEXTSONG: u16 = 163;
+/// Triple press (AVRCP Previous).
+const KEY_PREVIOUSSONG: u16 = 165;
 
 pub struct LinuxDial;
 
@@ -65,7 +72,8 @@ fn start_input_grabber(
     is_scroll_mode: Arc<AtomicBool>,
 ) {
     thread::spawn(move || {
-        let mut last_click_time = Instant::now() - Duration::from_secs(1);
+        let mut last_click_ms: u64 = 0;
+        let mut last_gesture_ms: u64 = 0;
 
         loop {
             let dev_path = match find_cmf_input_device() {
@@ -98,33 +106,58 @@ fn start_input_grabber(
                         for ev in events {
                             if ev.event_type() == evdev::EventType::KEY && ev.value() == 1 {
                                 let code = ev.code();
-                                if code == KEY_PLAYCD
+                                let is_click = code == KEY_PLAYCD
                                     || code == KEY_PAUSECD
                                     || code == KEY_PLAYPAUSE
-                                    || code == KEY_VOICECOMMAND
-                                {
-                                    let now = Instant::now();
-                                    if now.duration_since(last_click_time) > Duration::from_millis(500) {
-                                        last_click_time = now;
+                                    || code == KEY_VOICECOMMAND;
+                                let gesture = match code {
+                                    KEY_NEXTSONG => Some(MultiPress::Double),
+                                    KEY_PREVIOUSSONG => Some(MultiPress::Triple),
+                                    _ => None,
+                                };
+                                let now = now_millis();
+                                let is_open = is_hud_open.load(Ordering::SeqCst);
+                                let is_scroll = is_scroll_mode.load(Ordering::SeqCst);
+                                let state: tauri::State<crate::AppState> = app.state();
 
-                                        let state: tauri::State<crate::AppState> = app.state();
-                                        if is_scroll_mode.load(Ordering::SeqCst) {
+                                if is_click {
+                                    let action = classify_click(now, last_click_ms, 500, is_open, is_scroll);
+                                    if action != ClickAction::Debounced {
+                                        last_click_ms = now;
+                                    }
+                                    match action {
+                                        ClickAction::ExitScroll => {
                                             println!(">> [NATIVE DIAL CLICK] -> Exiting Scroll Mode");
                                             crate::do_stop_scroll_mode(&app, &state);
-                                            continue;
                                         }
-
-                                        let was_open = is_hud_open.load(Ordering::SeqCst);
-
-                                        if !was_open {
-                                            println!(">> [NATIVE DIAL CLICK] -> Opening HUD");
-                                            crate::do_show_hud(&app, &state);
-                                        } else {
+                                        ClickAction::PlayPause => {
+                                            // The device is grabbed, so pass the click on to the player ourselves.
+                                            println!(">> [NATIVE DIAL CLICK] -> Play/Pause");
+                                            let platform = state.platform.clone();
+                                            thread::spawn(move || platform.media().play_pause());
+                                        }
+                                        ClickAction::Confirm => {
                                             println!(">> [NATIVE DIAL CLICK] -> Dispatched action select to HUD");
-                                            if let Some(window) = app.get_webview_window("hud") {
-                                                let _ = window.emit("dial:click", ());
-                                            }
+                                            let _ = app.emit("dial:click", ());
                                         }
+                                        ClickAction::Debounced => {}
+                                    }
+                                } else if let Some(gesture) = gesture {
+                                    let action =
+                                        classify_multi_press(gesture, now, last_gesture_ms, 500, is_open, is_scroll);
+                                    if action != GestureAction::Debounced {
+                                        last_gesture_ms = now;
+                                    }
+                                    println!(">> [NATIVE DIAL {:?} PRESS] -> {:?}", gesture, action);
+                                    match action {
+                                        GestureAction::OpenHud => crate::do_show_hud(&app, &state),
+                                        GestureAction::Dismiss => crate::do_hide_hud(&app, &state),
+                                        GestureAction::ExitScroll => crate::do_stop_scroll_mode(&app, &state),
+                                        GestureAction::PreviousTrack => {
+                                            let platform = state.platform.clone();
+                                            thread::spawn(move || platform.media().prev_track());
+                                        }
+                                        GestureAction::Debounced => {}
                                     }
                                 }
                             }

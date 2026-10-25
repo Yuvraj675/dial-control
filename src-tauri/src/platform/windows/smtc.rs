@@ -33,17 +33,22 @@ static WAKE: Mutex<Option<mpsc::Sender<()>>> = Mutex::new(None);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MediaButton {
     Click,
-    Cancel,
+    /// Double press: opens the HUD (or dismisses it).
+    Next,
+    /// Triple press: previous track (or dismisses the HUD).
+    Previous,
     Ignore,
 }
 
 /// Play / Pause (AVRCP has no toggle) are the dial click; Next / Previous are the
-/// double / triple press gestures that dismiss the HUD.
+/// double / triple press gestures.
 pub fn classify_button(button: i32) -> MediaButton {
     if button == Button::Play.0 || button == Button::Pause.0 {
         MediaButton::Click
-    } else if button == Button::Next.0 || button == Button::Previous.0 {
-        MediaButton::Cancel
+    } else if button == Button::Next.0 {
+        MediaButton::Next
+    } else if button == Button::Previous.0 {
+        MediaButton::Previous
     } else {
         MediaButton::Ignore
     }
@@ -334,9 +339,9 @@ mod tests {
     }
 
     #[test]
-    fn next_and_previous_cancel() {
-        assert_eq!(classify_button(Button::Next.0), MediaButton::Cancel);
-        assert_eq!(classify_button(Button::Previous.0), MediaButton::Cancel);
+    fn next_and_previous_are_the_multi_press_gestures() {
+        assert_eq!(classify_button(Button::Next.0), MediaButton::Next);
+        assert_eq!(classify_button(Button::Previous.0), MediaButton::Previous);
     }
 
     #[test]
