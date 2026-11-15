@@ -4,11 +4,11 @@ import { ArrowUp, ArrowDown, Keyboard, Plus, Search, Trash2, AppWindow } from "l
 import type { InstalledApp, MacroStep, MacroStepKind, WheelAction } from "../../types/profile";
 import { describeStep, MACRO_STEP_KINDS, MAX_WAIT_MS, moveItem, newStep, parseKeysInput } from "../../utils/macro";
 
-const LABEL = "font-ndot text-[11px] text-neutral-400 mb-1.5 block uppercase tracking-wider";
+const LABEL = "font-dot text-[11px] text-neutral-400 mb-1.5 block uppercase tracking-wider";
 const INPUT =
-  "w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white font-ndot focus:outline-none focus:border-white tracking-wider";
+  "w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white font-dot focus:outline-none focus:border-white tracking-wider";
 const SMALL_BTN =
-  "px-2.5 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-neutral-300 font-ndot text-[10px] tracking-wider uppercase transition-all cursor-pointer disabled:opacity-30 disabled:cursor-default";
+  "px-2.5 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-neutral-300 font-dot text-[10px] tracking-wider uppercase transition-all cursor-pointer disabled:opacity-30 disabled:cursor-default";
 
 // Scanning the app folders takes a moment; do it once per Settings session.
 let appsPromise: Promise<InstalledApp[]> | null = null;
@@ -56,13 +56,13 @@ export const LaunchTargetPicker: React.FC<{ value: string; onChange: (target: st
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
-          className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white hover:bg-neutral-200 text-black font-ndot text-[10px] font-bold tracking-wider uppercase cursor-pointer"
+          className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white hover:bg-neutral-200 text-black font-dot text-[10px] font-bold tracking-wider uppercase cursor-pointer"
         >
           <AppWindow className="w-3.5 h-3.5" />
           <span>{open ? "CLOSE" : "APPS"}</span>
         </button>
       </div>
-      {chosen && <span className="font-ndot text-[10px] text-neutral-500 tracking-wider uppercase">→ {chosen.name}</span>}
+      {chosen && <span className="font-dot text-[10px] text-neutral-500 tracking-wider uppercase">→ {chosen.name}</span>}
       {open && (
         <div className="flex flex-col rounded-xl bg-[#0E1015] border border-white/10 overflow-hidden">
           <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5">
@@ -73,14 +73,14 @@ export const LaunchTargetPicker: React.FC<{ value: string; onChange: (target: st
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search installed apps"
-              className="flex-1 bg-transparent text-xs text-white font-ndot tracking-wider focus:outline-none"
+              className="flex-1 bg-transparent text-xs text-white font-dot tracking-wider focus:outline-none"
             />
           </div>
           <div className="max-h-56 overflow-y-auto">
             {apps === null ? (
-              <div className="px-3 py-3 font-ndot text-[10px] text-neutral-500 tracking-wider">SCANNING APPS…</div>
+              <div className="px-3 py-3 font-dot text-[10px] text-neutral-500 tracking-wider">SCANNING APPS…</div>
             ) : filtered.length === 0 ? (
-              <div className="px-3 py-3 font-ndot text-[10px] text-neutral-500 tracking-wider">NO MATCHING APPS</div>
+              <div className="px-3 py-3 font-dot text-[10px] text-neutral-500 tracking-wider">NO MATCHING APPS</div>
             ) : (
               filtered.map((a) => (
                 <button
@@ -91,7 +91,7 @@ export const LaunchTargetPicker: React.FC<{ value: string; onChange: (target: st
                     setOpen(false);
                     setQuery("");
                   }}
-                  className={`w-full text-left px-3 py-1.5 text-xs font-ndot tracking-wider cursor-pointer hover:bg-white/[0.08] ${
+                  className={`w-full text-left px-3 py-1.5 text-xs font-dot tracking-wider cursor-pointer hover:bg-white/[0.08] ${
                     a.target === value ? "text-white bg-white/[0.06]" : "text-neutral-300"
                   }`}
                 >
@@ -120,10 +120,10 @@ const KeysField: React.FC<{
     return (
       <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-950/20 border border-red-500/40">
         <span className="w-2 h-2 rounded-full bg-red-500 animate-ping shrink-0" />
-        <span className="font-ndot text-[11px] text-red-300 tracking-widest uppercase">
+        <span className="font-dot text-[11px] text-red-300 tracking-widest uppercase">
           {stagedCombo ? stagedCombo.toUpperCase() : "PRESS KEYS…"}
         </span>
-        <span className="ml-auto font-ndot text-[9px] text-neutral-500 tracking-wider">ESC CANCEL</span>
+        <span className="ml-auto font-dot text-[9px] text-neutral-500 tracking-wider">ESC CANCEL</span>
       </div>
     );
   }
@@ -190,7 +190,7 @@ const StepFields: React.FC<{
             }
             className={`${INPUT} w-28`}
           />
-          <span className="font-ndot text-[10px] text-neutral-500 tracking-wider">MILLISECONDS (MAX 10 000)</span>
+          <span className="font-dot text-[10px] text-neutral-500 tracking-wider">MILLISECONDS (MAX 10 000)</span>
         </div>
       );
     case "launch":
@@ -239,7 +239,7 @@ export const MacroEditor: React.FC<{
     <div className="flex flex-col gap-2">
       <label className={LABEL}>Macro Steps (run top to bottom)</label>
       {steps.length === 0 && (
-        <div className="px-3 py-3 rounded-lg border border-dashed border-white/15 font-ndot text-[10px] text-neutral-500 tracking-wider">
+        <div className="px-3 py-3 rounded-lg border border-dashed border-white/15 font-dot text-[10px] text-neutral-500 tracking-wider">
           NO STEPS YET. ADD ONE BELOW, E.G. OPEN APP → WAIT → HOTKEY → TYPE TEXT.
         </div>
       )}
@@ -249,7 +249,7 @@ export const MacroEditor: React.FC<{
         return (
           <div key={i} className={`rounded-xl border ${isOpen ? "border-white/25 bg-[#111317]" : "border-white/10 bg-[#0E1015]"}`}>
             <div className="flex items-center gap-2 px-3 py-2">
-              <span className="w-5 h-5 shrink-0 rounded-full bg-white/[0.08] flex items-center justify-center font-ndot text-[10px] text-neutral-300">
+              <span className="w-5 h-5 shrink-0 rounded-full bg-white/[0.08] flex items-center justify-center font-dot text-[10px] text-neutral-300">
                 {i + 1}
               </span>
               <button
@@ -257,8 +257,8 @@ export const MacroEditor: React.FC<{
                 onClick={() => setExpanded(isOpen ? null : i)}
                 className="flex-1 min-w-0 text-left cursor-pointer"
               >
-                <span className="font-ndot text-[10px] text-neutral-500 tracking-wider">{kindLabel}</span>
-                <span className="block truncate font-ndot text-xs text-white tracking-wider">{describeStep(step)}</span>
+                <span className="font-dot text-[10px] text-neutral-500 tracking-wider">{kindLabel}</span>
+                <span className="block truncate font-dot text-xs text-white tracking-wider">{describeStep(step)}</span>
               </button>
               <button type="button" disabled={i === 0} onClick={() => onChange(moveItem(steps, i, -1))} className={SMALL_BTN} title="Move up">
                 <ArrowUp className="w-3 h-3" />

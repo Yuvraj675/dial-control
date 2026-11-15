@@ -25,7 +25,7 @@ import com.yuvraj.dialcontrol.media.MediaListener
 
 /**
  * Setup screen, styled like the desktop Settings window (#07080A background, #0C0E14 cards,
- * Ndot uppercase labels, signal red). Permission checklist, listener control, a button into the
+ * dot-matrix uppercase labels, signal red). Permission checklist, listener control, a button into the
  * desktop Settings UI, and a live log of every dial signal.
  */
 class MainActivity : Activity() {
@@ -35,8 +35,8 @@ class MainActivity : Activity() {
     private val border = Color.argb(26, 255, 255, 255)
     private val muted = Color.parseColor("#A3A3A3")
     private val dim = Color.parseColor("#737373")
-    private val ndot by lazy { resources.getFont(R.font.ndot57) }
-    private val body by lazy { resources.getFont(R.font.ntype82) }
+    private val dot by lazy { resources.getFont(R.font.doto) }
+    private val body by lazy { resources.getFont(R.font.hanken_grotesk) }
 
     private lateinit var checklist: LinearLayout
     private lateinit var serviceButton: TextView
@@ -53,8 +53,8 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(pad, dp(36), pad, pad)
         }
-        root.addView(text("DIAL CONTROL", 30f, Color.WHITE, ndot))
-        status = text("", 12f, muted, ndot).apply { setPadding(0, dp(6), 0, 0) }
+        root.addView(text("DIAL CONTROL", 30f, Color.WHITE, dot))
+        status = text("", 12f, muted, dot).apply { setPadding(0, dp(6), 0, 0) }
         root.addView(status)
 
         root.addView(primaryButton("CUSTOMIZE WHEEL") { startActivity(Intent(this, SettingsActivity::class.java)) })
@@ -85,7 +85,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             addView(section("DIAL LOG"), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-            addView(text("COPY", 11f, red, ndot).apply {
+            addView(text("COPY", 11f, red, dot).apply {
                 setPadding(dp(12), dp(24), 0, dp(8))
                 setOnClickListener {
                     getSystemService(ClipboardManager::class.java)
@@ -177,12 +177,12 @@ class MainActivity : Activity() {
         }
         addView(LinearLayout(this@MainActivity).apply {
             orientation = LinearLayout.VERTICAL
-            addView(text(title, 12.5f, Color.WHITE, ndot))
+            addView(text(title, 12.5f, Color.WHITE, dot))
             addView(text(detail, 12f, if (done == true) red else muted, body).apply { setPadding(0, dp(2), 0, 0) })
         })
     }
 
-    private fun section(t: String) = text(t, 11f, dim, ndot).apply {
+    private fun section(t: String) = text(t, 11f, dim, dot).apply {
         letterSpacing = 0.15f
         setPadding(0, dp(24), 0, dp(8))
     }
@@ -203,7 +203,7 @@ class MainActivity : Activity() {
         background = rounded(card, border)
     }
 
-    private fun button(t: String, onClick: () -> Unit) = text(t, 13f, Color.WHITE, ndot).apply {
+    private fun button(t: String, onClick: () -> Unit) = text(t, 13f, Color.WHITE, dot).apply {
         gravity = Gravity.CENTER
         letterSpacing = 0.1f
         setPadding(0, dp(15), 0, dp(15))

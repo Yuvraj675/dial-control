@@ -652,7 +652,7 @@ export function App() {
                     setSelectedIndex(0);
                     setCurrentMode("menu");
                   }}
-                  className="bg-transparent text-white text-[11px] font-ndot tracking-wider focus:outline-none uppercase cursor-pointer"
+                  className="bg-transparent text-white text-[11px] font-dot tracking-wider focus:outline-none uppercase cursor-pointer"
                 >
                   {getOrderedProfileIds(config).map((id) => {
                     const p = config.profiles[id];

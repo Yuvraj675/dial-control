@@ -283,12 +283,12 @@ export const DonutRadialHUD: React.FC<DonutRadialHUDProps> = ({
                   </motion.div>
 
                   {/* Profile Context Tag */}
-                  <div className="font-ndot text-[10px] text-neutral-400 tracking-widest uppercase mt-2">
+                  <div className="font-dot text-[10px] text-neutral-400 tracking-widest uppercase mt-2">
                     {profile.name}
                   </div>
 
-                  {/* Main Action Text in Ndot57 */}
-                  <div className="font-ndot text-sm text-white tracking-widest uppercase mt-0.5">
+                  {/* Main action text in the dot-matrix face */}
+                  <div className="font-dot text-sm text-white tracking-widest uppercase mt-0.5">
                     {activeAction?.label}
                   </div>
                 </div>
@@ -308,14 +308,14 @@ export const DonutRadialHUD: React.FC<DonutRadialHUDProps> = ({
                   <motion.div
                     initial={{ opacity: 0, y: 3 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="font-ndot text-sm text-white tracking-widest uppercase font-bold"
+                    className="font-dot text-sm text-white tracking-widest uppercase font-bold"
                   >
                     ROTATE TO SCROLL
                   </motion.div>
-                  <span className="font-ndot text-[9px] uppercase text-neutral-400 tracking-widest mt-1">
+                  <span className="font-dot text-[9px] uppercase text-neutral-400 tracking-widest mt-1">
                     CW: DOWN • CCW: UP
                   </span>
-                  <span className="font-ndot text-[8px] uppercase text-neutral-500 tracking-wider mt-0.5">
+                  <span className="font-dot text-[8px] uppercase text-neutral-500 tracking-wider mt-0.5">
                     CLICK DIAL TO STOP
                   </span>
                 </div>
@@ -329,11 +329,11 @@ export const DonutRadialHUD: React.FC<DonutRadialHUDProps> = ({
                     key={gaugeValue}
                     initial={{ scale: 0.95 }}
                     animate={{ scale: 1 }}
-                    className="font-ndot text-4xl text-white tracking-widest"
+                    className="font-dot text-4xl text-white tracking-widest"
                   >
                     {Math.round(gaugeValue)}%
                   </motion.div>
-                  <span className="font-ndot text-[11px] uppercase text-neutral-400 tracking-widest mt-1">
+                  <span className="font-dot text-[11px] uppercase text-neutral-400 tracking-widest mt-1">
                     {currentMode === "volume" ? "VOLUME" : "BRIGHTNESS"}
                   </span>
                 </div>

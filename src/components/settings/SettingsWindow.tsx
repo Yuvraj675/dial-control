@@ -856,11 +856,11 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
   }
 
   return (
-    <div className="flex h-full w-full bg-[#07080A] text-white font-ndot overflow-hidden select-none">
+    <div className="flex h-full w-full bg-[#07080A] text-white font-dot overflow-hidden select-none">
       {/* ── Left Sidebar Navigation ────────────────────────────────────────── */}
       <div className="w-72 shrink-0 flex flex-col justify-between border-r border-white/[0.08] bg-[#0C0D11] p-5 h-full">
         <div>
-          {/* App Title in Ndot57 */}
+          {/* App title in the dot-matrix face */}
           <div className="flex items-center gap-3 px-2 py-3 mb-6 border-b border-white/[0.06] pb-5">
             <img
               src={`${import.meta.env.BASE_URL}app-icon.png`}
@@ -869,8 +869,8 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
               draggable={false}
             />
             <div>
-              <div className="font-ndot text-sm text-white tracking-widest whitespace-nowrap">DIAL CONTROL</div>
-              <div className="text-[10px] font-ndot text-neutral-400 uppercase tracking-wider">
+              <div className="font-dot text-sm text-white tracking-widest whitespace-nowrap">DIAL CONTROL</div>
+              <div className="text-[10px] font-dot text-neutral-400 uppercase tracking-wider">
                 RADIAL CONTROLLER
               </div>
             </div>
@@ -888,7 +888,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
               }`}
             >
               <Layers className="w-4 h-4 text-white shrink-0" />
-              <span className="font-ndot tracking-wider text-[11px] uppercase">PROFILES & DIALS</span>
+              <span className="font-dot tracking-wider text-[11px] uppercase">PROFILES & DIALS</span>
             </button>
 
             <button
@@ -901,7 +901,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
               }`}
             >
               <Palette className="w-4 h-4 text-white shrink-0" />
-              <span className="font-ndot tracking-wider text-[11px] uppercase">AESTHETICS</span>
+              <span className="font-dot tracking-wider text-[11px] uppercase">AESTHETICS</span>
             </button>
 
             <button
@@ -914,20 +914,20 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
               }`}
             >
               <Keyboard className="w-4 h-4 text-white shrink-0" />
-              <span className="font-ndot tracking-wider text-[11px] uppercase">SHORTCUT & HARDWARE</span>
+              <span className="font-dot tracking-wider text-[11px] uppercase">SHORTCUT & HARDWARE</span>
             </button>
           </div>
         </div>
 
         {/* Bottom Save Action - Permanently pinned */}
         <div className="pt-4 border-t border-white/[0.08] mt-auto">
-          <p className="mb-3 px-1 text-[9px] leading-snug text-neutral-500 font-ndot uppercase tracking-wider">
+          <p className="mb-3 px-1 text-[9px] leading-snug text-neutral-500 font-dot uppercase tracking-wider">
             Independent project. Not affiliated with, endorsed by or connected to Nothing Technology Limited.
           </p>
           <button
             type="button"
             onClick={handleSave}
-            className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-white hover:bg-neutral-200 text-black text-xs font-bold transition-all shadow-md font-ndot uppercase tracking-widest cursor-pointer"
+            className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-white hover:bg-neutral-200 text-black text-xs font-bold transition-all shadow-md font-dot uppercase tracking-widest cursor-pointer"
           >
             {saveSuccess ? (
               <>
@@ -947,10 +947,10 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
         <div className="h-16 border-b border-white/[0.08] flex items-center justify-between px-8 bg-[#0C0D11]/80 backdrop-blur-md shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-2.5 h-2.5 rounded-full red-led mr-1 shrink-0" />
-            <span className="font-ndot text-xs text-neutral-400 uppercase tracking-widest shrink-0">
+            <span className="font-dot text-xs text-neutral-400 uppercase tracking-widest shrink-0">
               TELEMETRY //
             </span>
-            <span className="font-ndot text-xs tracking-widest uppercase text-white truncate">
+            <span className="font-dot text-xs tracking-widest uppercase text-white truncate">
               {activeTab === "profiles"
                 ? "WHEEL CONFIGURATION"
                 : activeTab === "appearance"
@@ -966,7 +966,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                 setShareMessage(null);
                 setIsShareModalOpen(true);
               }}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-white font-ndot text-[11px] tracking-wider uppercase transition-all cursor-pointer"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-white font-dot text-[11px] tracking-wider uppercase transition-all cursor-pointer"
               title="Import or Export dials and full configuration"
             >
               <Share2 className="w-3.5 h-3.5 text-neutral-300" />
@@ -974,10 +974,10 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
             </button>
 
             <div className="flex items-center gap-2">
-              <span className="font-ndot text-[11px] text-neutral-400 tracking-wider whitespace-nowrap">
+              <span className="font-dot text-[11px] text-neutral-400 tracking-wider whitespace-nowrap">
                 GLOBAL SHORTCUT:
               </span>
-              <span className="font-ndot text-xs text-white px-2.5 py-1 rounded-md bg-white/[0.06] border border-white/10 tracking-widest whitespace-nowrap">
+              <span className="font-dot text-xs text-white px-2.5 py-1 rounded-md bg-white/[0.06] border border-white/10 tracking-widest whitespace-nowrap">
                 {shortcutText || "NONE"}
               </span>
             </div>
@@ -993,10 +993,10 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                   <Keyboard className="w-4 h-4" />
                 </div>
                 <div>
-                  <div className="font-ndot text-xs text-white tracking-widest">
+                  <div className="font-dot text-xs text-white tracking-widest">
                     GLOBAL ACTIVATION SHORTCUT // {shortcutText || "NONE"}
                   </div>
-                  <div className="font-ndot text-[10px] text-neutral-400 tracking-wider mt-0.5">
+                  <div className="font-dot text-[10px] text-neutral-400 tracking-wider mt-0.5">
                     No CMF Buds dial case? Open the radial HUD using this shortcut anywhere. The dial is 100% keyboard navigable (Arrow keys to cycle, Enter/Space to select, Esc to close).
                   </div>
                 </div>
@@ -1008,7 +1008,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                     setShowShortcutBanner(false);
                     localStorage.setItem("dial_shortcut_banner_dismissed", "true");
                   }}
-                  className="px-3 py-1.5 rounded-lg bg-white/[0.08] hover:bg-white/15 text-white font-ndot text-[10px] tracking-wider uppercase transition-all cursor-pointer"
+                  className="px-3 py-1.5 rounded-lg bg-white/[0.08] hover:bg-white/15 text-white font-dot text-[10px] tracking-wider uppercase transition-all cursor-pointer"
                 >
                   GOT IT
                 </button>
@@ -1020,7 +1020,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
             {/* Column 1: Profiles List */}
             <div className="w-64 shrink-0 border-r border-white/[0.08] p-4 flex flex-col gap-2 overflow-y-auto bg-[#0C0D11]/40">
               <div className="flex items-center justify-between mb-2">
-                <div className="font-ndot text-[10px] uppercase text-neutral-500 tracking-widest">
+                <div className="font-dot text-[10px] uppercase text-neutral-500 tracking-widest">
                   DIALS ({Object.keys(currentConfig.profiles).length})
                 </div>
                 <div className="flex items-center gap-1">
@@ -1043,7 +1043,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                   <button
                     type="button"
                     onClick={() => setIsNewDialOpen(true)}
-                    className="flex items-center gap-1 px-2 py-1 rounded bg-white/[0.08] hover:bg-white/15 text-white text-[10px] font-ndot tracking-wider uppercase transition-all cursor-pointer"
+                    className="flex items-center gap-1 px-2 py-1 rounded bg-white/[0.08] hover:bg-white/15 text-white text-[10px] font-dot tracking-wider uppercase transition-all cursor-pointer"
                     title="Add custom dial menu"
                   >
                     <Plus className="w-3 h-3" />
@@ -1073,10 +1073,10 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                         {getActionIcon(prof.icon, 16)}
                       </div>
                       <div className="min-w-0">
-                        <div className="font-ndot text-xs tracking-wider truncate uppercase">
+                        <div className="font-dot text-xs tracking-wider truncate uppercase">
                           {prof.name}
                         </div>
-                        <div className="text-[10px] font-ndot text-neutral-500 tracking-widest truncate">
+                        <div className="text-[10px] font-dot text-neutral-500 tracking-widest truncate">
                           {prof.actions.length} SLICES
                         </div>
                       </div>
@@ -1102,8 +1102,8 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
             {/* Column 2: Slices List */}
             <div className="w-64 shrink-0 border-r border-white/[0.08] p-4 flex flex-col overflow-y-auto">
               <div className="flex items-center justify-between mb-3">
-                <div className="font-ndot text-[10px] uppercase text-neutral-500 tracking-widest">
-                  WHEEL ORDER
+                <div className="font-dot text-[10px] uppercase text-neutral-500 tracking-wide whitespace-nowrap">
+                  SLICES
                 </div>
                 <div className="flex gap-1">
                   <button
@@ -1159,10 +1159,10 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                       {getActionIcon(act.icon, 14)}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="font-ndot text-xs tracking-wider truncate uppercase">
+                      <div className="font-dot text-xs tracking-wider truncate uppercase">
                         {act.label}
                       </div>
-                      <div className="text-[10px] font-ndot text-neutral-500 uppercase tracking-widest">
+                      <div className="text-[10px] font-dot text-neutral-500 uppercase tracking-widest">
                         {act.type}
                       </div>
                     </div>
@@ -1177,13 +1177,13 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                 {/* Profile Context Matching Section */}
                 <div className="p-4 rounded-xl bg-white/[0.03] border border-white/10">
                   <div className="flex items-center justify-between mb-3 gap-2">
-                    <div className="font-ndot text-xs uppercase text-neutral-400 tracking-widest truncate">
+                    <div className="font-dot text-xs uppercase text-neutral-400 tracking-widest truncate">
                       DIAL CONTEXT & TRIGGERS // {activeProfile.name.toUpperCase()}
                     </div>
                     <button
                       type="button"
                       onClick={() => handleExportSingleDial(selectedProfileId)}
-                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/10 border border-white/10 text-white text-[10px] font-ndot tracking-wider uppercase transition-all cursor-pointer whitespace-nowrap shrink-0"
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/10 border border-white/10 text-white text-[10px] font-dot tracking-wider uppercase transition-all cursor-pointer whitespace-nowrap shrink-0"
                       title="Export this single dial as JSON"
                     >
                       <Download className="w-3 h-3 text-neutral-300" />
@@ -1193,19 +1193,19 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
 
                   <div className="flex flex-col gap-3">
                     <div>
-                      <label className="font-ndot text-[11px] text-neutral-400 mb-1 block uppercase tracking-wider">
+                      <label className="font-dot text-[11px] text-neutral-400 mb-1 block uppercase tracking-wider">
                         Dial Name
                       </label>
                       <input
                         type="text"
                         value={activeProfile.name}
                         onChange={(e) => handleUpdateProfileMeta({ name: e.target.value })}
-                        className="w-full px-3 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white focus:outline-none focus:border-white font-ndot uppercase tracking-wider"
+                        className="w-full px-3 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white focus:outline-none focus:border-white font-dot uppercase tracking-wider"
                       />
                     </div>
 
                     <div>
-                      <label className="font-ndot text-[11px] text-neutral-400 mb-1 block uppercase tracking-wider">
+                      <label className="font-dot text-[11px] text-neutral-400 mb-1 block uppercase tracking-wider">
                         Context App Patterns (Comma separated)
                       </label>
                       <input
@@ -1217,7 +1217,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                           })
                         }
                         placeholder="*chrome*, *spotify*, *code*"
-                        className="w-full px-3 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white focus:outline-none focus:border-white font-ndot tracking-wider"
+                        className="w-full px-3 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white focus:outline-none focus:border-white font-dot tracking-wider"
                       />
                     </div>
                   </div>
@@ -1226,26 +1226,26 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                 {/* Slice Inspector */}
                 {selectedAction && (
                   <div className="p-4 rounded-xl bg-white/[0.03] border border-white/10 flex flex-col gap-4">
-                    <div className="font-ndot text-xs uppercase text-neutral-400 tracking-widest">
+                    <div className="font-dot text-xs uppercase text-neutral-400 tracking-widest">
                       SLICE INSPECTOR // {selectedActionIndex + 1} ({selectedAction.label})
                     </div>
 
                     {/* Label */}
                     <div>
-                      <label className="font-ndot text-[11px] text-neutral-400 mb-1.5 block uppercase tracking-wider">
+                      <label className="font-dot text-[11px] text-neutral-400 mb-1.5 block uppercase tracking-wider">
                         Label
                       </label>
                       <input
                         type="text"
                         value={selectedAction.label}
                         onChange={(e) => handleUpdateAction({ label: e.target.value.toUpperCase() })}
-                        className="w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white focus:outline-none focus:border-white font-ndot tracking-wider uppercase"
+                        className="w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white focus:outline-none focus:border-white font-dot tracking-wider uppercase"
                       />
                     </div>
 
                     {/* Icon Selector */}
                     <div>
-                      <label className="font-ndot text-[11px] text-neutral-400 mb-1.5 block uppercase tracking-wider">
+                      <label className="font-dot text-[11px] text-neutral-400 mb-1.5 block uppercase tracking-wider">
                         Vector Icon
                       </label>
                       <div className="flex items-center gap-3">
@@ -1255,7 +1255,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                         <select
                           value={selectedAction.icon}
                           onChange={(e) => handleUpdateAction({ icon: e.target.value })}
-                          className="flex-1 px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white focus:outline-none focus:border-white font-ndot uppercase tracking-wider"
+                          className="flex-1 px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white focus:outline-none focus:border-white font-dot uppercase tracking-wider"
                         >
                           {availableIcons.map((ic) => (
                             <option key={ic} value={ic}>
@@ -1268,7 +1268,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
 
                     {/* Action Type */}
                     <div>
-                      <label className="font-ndot text-[11px] text-neutral-400 mb-1.5 block uppercase tracking-wider">
+                      <label className="font-dot text-[11px] text-neutral-400 mb-1.5 block uppercase tracking-wider">
                         Action Type
                       </label>
                       <select
@@ -1314,7 +1314,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                           }
                           handleUpdateAction(updates);
                         }}
-                        className="w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white focus:outline-none focus:border-white font-ndot uppercase tracking-wider"
+                        className="w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white focus:outline-none focus:border-white font-dot uppercase tracking-wider"
                       >
                         {onAndroid ? (
                           <>
@@ -1342,7 +1342,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                     {/* Mode Subtype Selector */}
                     {selectedAction.type === "mode" && (
                       <div>
-                        <label className="font-ndot text-[11px] text-neutral-400 mb-1.5 block uppercase tracking-wider">
+                        <label className="font-dot text-[11px] text-neutral-400 mb-1.5 block uppercase tracking-wider">
                           Interactive Mode Target
                         </label>
                         <select
@@ -1362,7 +1362,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                               desc: val === "scroll" ? "Rotate to scroll" : val === "brightness" ? "Rotate to adjust brightness" : "Rotate to adjust volume",
                             });
                           }}
-                          className="w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white focus:outline-none focus:border-white font-ndot uppercase tracking-wider"
+                          className="w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white focus:outline-none focus:border-white font-dot uppercase tracking-wider"
                         >
                           <option value="scroll">SCROLL WHEEL EMULATION</option>
                           <option value="volume">VOLUME GAUGE</option>
@@ -1374,7 +1374,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                     {/* Phone Action Selector (Android) */}
                     {selectedAction.type === "system" && (
                       <div>
-                        <label className="font-ndot text-[11px] text-neutral-400 mb-1.5 block uppercase tracking-wider">
+                        <label className="font-dot text-[11px] text-neutral-400 mb-1.5 block uppercase tracking-wider">
                           Phone Action
                         </label>
                         <select
@@ -1383,7 +1383,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                             const def = ANDROID_SYSTEM_ACTIONS.find((a) => a.action === e.target.value);
                             if (def) handleUpdateAction({ action: def.action, icon: def.icon, label: def.label });
                           }}
-                          className="w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white focus:outline-none focus:border-white font-ndot uppercase tracking-wider"
+                          className="w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white focus:outline-none focus:border-white font-dot uppercase tracking-wider"
                         >
                           {ANDROID_SYSTEM_ACTIONS.map((a) => (
                             <option key={a.action} value={a.action}>
@@ -1397,7 +1397,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                     {/* Media Key Action Selector */}
                     {selectedAction.type === "key" && (
                       <div>
-                        <label className="font-ndot text-[11px] text-neutral-400 mb-1.5 block uppercase tracking-wider">
+                        <label className="font-dot text-[11px] text-neutral-400 mb-1.5 block uppercase tracking-wider">
                           Media Action
                         </label>
                         <select
@@ -1413,7 +1413,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                                 : "PLAY / PAUSE";
                             handleUpdateAction({ action: act, icon, label });
                           }}
-                          className="w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white focus:outline-none focus:border-white font-ndot uppercase tracking-wider"
+                          className="w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white focus:outline-none focus:border-white font-dot uppercase tracking-wider"
                         >
                           <option value="playpause">PLAY / PAUSE</option>
                           <option value="next">NEXT TRACK</option>
@@ -1425,7 +1425,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                     {/* Target Profile Selector */}
                     {selectedAction.type === "profile" && (
                       <div>
-                        <label className="font-ndot text-[11px] text-neutral-400 mb-1.5 block uppercase tracking-wider">
+                        <label className="font-dot text-[11px] text-neutral-400 mb-1.5 block uppercase tracking-wider">
                           Target Profile / Dial
                         </label>
                         <select
@@ -1438,7 +1438,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                                 e.target.value.toUpperCase(),
                             })
                           }
-                          className="w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white focus:outline-none focus:border-white font-ndot uppercase tracking-wider"
+                          className="w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white focus:outline-none focus:border-white font-dot uppercase tracking-wider"
                         >
                           {getOrderedProfileIds(currentConfig).map((id) => (
                             <option key={id} value={id}>
@@ -1452,14 +1452,14 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                     {/* Keystrokes with Interactive Recorder */}
                     {selectedAction.type === "hotkey" && (
                       <div className="flex flex-col gap-2">
-                        <label className="font-ndot text-[11px] text-neutral-400 block uppercase tracking-wider">
+                        <label className="font-dot text-[11px] text-neutral-400 block uppercase tracking-wider">
                           Key Combination
                         </label>
                         {isRecordingSliceHotkey ? (
                           <div className="flex flex-col gap-2.5 p-3.5 rounded-xl bg-red-950/20 border border-red-500/40">
                             <div className="flex items-center gap-2">
                               <span className="w-2 h-2 rounded-full bg-red-500 animate-ping shrink-0" />
-                              <span className="font-ndot text-[11px] text-red-400 uppercase tracking-widest">
+                              <span className="font-dot text-[11px] text-red-400 uppercase tracking-widest">
                                 RECORDING COMBINATION...
                               </span>
                             </div>
@@ -1468,28 +1468,28 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                                 <>
                                   {stagedSliceCombo.split("+").map((keyPart, i) => (
                                     <React.Fragment key={i}>
-                                      {i > 0 && <span className="text-red-400 font-ndot text-xs">+</span>}
-                                      <div className="px-2.5 py-1 rounded bg-red-500/20 border border-red-500/60 text-red-100 font-ndot text-xs tracking-widest shadow-sm">
+                                      {i > 0 && <span className="text-red-400 font-dot text-xs">+</span>}
+                                      <div className="px-2.5 py-1 rounded bg-red-500/20 border border-red-500/60 text-red-100 font-dot text-xs tracking-widest shadow-sm">
                                         {keyPart.toUpperCase()}
                                       </div>
                                     </React.Fragment>
                                   ))}
                                   {!stagedSliceCombo.split("+").some((p) => !["Super", "Ctrl", "Alt", "Shift"].includes(p)) && (
                                     <>
-                                      <span className="text-neutral-500 font-ndot text-xs">+</span>
-                                      <div className="px-2 py-0.5 rounded border border-dashed border-white/20 text-neutral-400 font-ndot text-[10px] tracking-wider animate-pulse">
+                                      <span className="text-neutral-500 font-dot text-xs">+</span>
+                                      <div className="px-2 py-0.5 rounded border border-dashed border-white/20 text-neutral-400 font-dot text-[10px] tracking-wider animate-pulse">
                                         PRESS KEY...
                                       </div>
                                     </>
                                   )}
                                 </>
                               ) : (
-                                <span className="text-neutral-500 font-ndot text-[10px] tracking-wider">
+                                <span className="text-neutral-500 font-dot text-[10px] tracking-wider">
                                   Press modifier keys (Ctrl, Alt, Shift, Super) + key...
                                 </span>
                               )}
                             </div>
-                            <div className="text-[10px] font-ndot text-neutral-500 flex items-center justify-between">
+                            <div className="text-[10px] font-dot text-neutral-500 flex items-center justify-between">
                               <span>Release to save</span>
                               <span>ESC to cancel • Backspace to clear</span>
                             </div>
@@ -1501,14 +1501,14 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                                 {selectedAction.keys && selectedAction.keys.length > 0 ? (
                                   selectedAction.keys.map((tok, i) => (
                                     <React.Fragment key={i}>
-                                      {i > 0 && <span className="text-neutral-500 font-ndot text-xs">+</span>}
-                                      <div className="px-2.5 py-1 rounded bg-[#181B22] border border-white/15 text-white font-ndot text-xs tracking-wider shadow-sm">
+                                      {i > 0 && <span className="text-neutral-500 font-dot text-xs">+</span>}
+                                      <div className="px-2.5 py-1 rounded bg-[#181B22] border border-white/15 text-white font-dot text-xs tracking-wider shadow-sm">
                                         {formatTokenForDisplay(tok)}
                                       </div>
                                     </React.Fragment>
                                   ))
                                 ) : (
-                                  <span className="text-neutral-500 font-ndot text-[11px] tracking-wider">
+                                  <span className="text-neutral-500 font-dot text-[11px] tracking-wider">
                                     NO SHORTCUT SET
                                   </span>
                                 )}
@@ -1522,7 +1522,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                                     setStagedSliceCombo("");
                                     stagedSliceComboRef.current = "";
                                   }}
-                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-neutral-200 text-black font-ndot text-[10px] font-bold tracking-wider uppercase transition-all cursor-pointer shadow-sm"
+                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-neutral-200 text-black font-dot text-[10px] font-bold tracking-wider uppercase transition-all cursor-pointer shadow-sm"
                                 >
                                   <Keyboard className="w-3.5 h-3.5 text-black" />
                                   <span>RECORD</span>
@@ -1531,7 +1531,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                                   <button
                                     type="button"
                                     onClick={() => handleUpdateAction({ keys: [] })}
-                                    className="px-2.5 py-1.5 rounded-lg bg-white/[0.06] hover:bg-red-500/20 hover:text-red-300 text-neutral-400 font-ndot text-[10px] tracking-wider uppercase transition-all cursor-pointer"
+                                    className="px-2.5 py-1.5 rounded-lg bg-white/[0.06] hover:bg-red-500/20 hover:text-red-300 text-neutral-400 font-dot text-[10px] tracking-wider uppercase transition-all cursor-pointer"
                                     title="Clear keystrokes"
                                   >
                                     CLEAR
@@ -1541,10 +1541,10 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                             </div>
                             <div className="flex flex-col gap-1.5 pt-2 border-t border-white/5">
                               <div className="flex items-center justify-between">
-                                <label className="font-ndot text-[10px] text-neutral-400 uppercase tracking-wider">
+                                <label className="font-dot text-[10px] text-neutral-400 uppercase tracking-wider">
                                   RAW TOKENS / DIRECT EDIT
                                 </label>
-                                <span className="font-ndot text-[9px] text-neutral-500 uppercase tracking-wider">
+                                <span className="font-dot text-[9px] text-neutral-500 uppercase tracking-wider">
                                   e.g. KEY_LEFTALT, KEY_F4 or Alt+F4
                                 </span>
                               </div>
@@ -1553,7 +1553,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                                 value={rawTokensInput}
                                 onChange={(e) => handleRawTokensChange(e.target.value)}
                                 placeholder="KEY_LEFTCTRL, KEY_C or Ctrl+C"
-                                className="w-full px-3 py-1.5 rounded-lg bg-[#0E1015] border border-white/10 text-xs text-neutral-200 font-ndot tracking-wider focus:outline-none focus:border-white focus:text-white uppercase transition-all"
+                                className="w-full px-3 py-1.5 rounded-lg bg-[#0E1015] border border-white/10 text-xs text-neutral-200 font-dot tracking-wider focus:outline-none focus:border-white focus:text-white uppercase transition-all"
                               />
                             </div>
                           </div>
@@ -1564,7 +1564,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                     {/* Command */}
                     {selectedAction.type === "command" && (
                       <div className="flex flex-col gap-2">
-                        <label className="font-ndot text-[11px] text-neutral-400 block uppercase tracking-wider">
+                        <label className="font-dot text-[11px] text-neutral-400 block uppercase tracking-wider">
                           Shell Command
                         </label>
                         <input
@@ -1572,9 +1572,9 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                           value={selectedAction.cmd || ""}
                           onChange={(e) => handleUpdateAction({ cmd: e.target.value })}
                           placeholder="notify-send 'Hello' || echo done"
-                          className="w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white font-ndot focus:outline-none focus:border-white tracking-wider"
+                          className="w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white font-dot focus:outline-none focus:border-white tracking-wider"
                         />
-                        <span className="font-ndot text-[9px] text-neutral-500 uppercase tracking-wider">
+                        <span className="font-dot text-[9px] text-neutral-500 uppercase tracking-wider">
                           Runs with sh -c on Linux / macOS and cmd /c on Windows, from your home folder
                         </span>
                         <TestRunButton action={selectedAction} />
@@ -1584,7 +1584,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                     {/* Launch App / File / URL */}
                     {selectedAction.type === "launch" && (
                       <div className="flex flex-col gap-2">
-                        <label className="font-ndot text-[11px] text-neutral-400 block uppercase tracking-wider">
+                        <label className="font-dot text-[11px] text-neutral-400 block uppercase tracking-wider">
                           Open
                         </label>
                         <LaunchTargetPicker
@@ -1604,7 +1604,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                     {/* Type Text */}
                     {selectedAction.type === "text" && (
                       <div className="flex flex-col gap-2">
-                        <label className="font-ndot text-[11px] text-neutral-400 block uppercase tracking-wider">
+                        <label className="font-dot text-[11px] text-neutral-400 block uppercase tracking-wider">
                           Text To Type
                         </label>
                         <textarea
@@ -1612,7 +1612,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                           onChange={(e) => handleUpdateAction({ text: e.target.value })}
                           rows={4}
                           placeholder="Email signature, code snippet, canned reply..."
-                          className="w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white font-ndot focus:outline-none focus:border-white tracking-wider resize-y"
+                          className="w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white font-dot focus:outline-none focus:border-white tracking-wider resize-y"
                         />
                         <TestRunButton action={selectedAction} />
                       </div>
@@ -1641,7 +1641,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
 
                     {/* Description */}
                     <div>
-                      <label className="font-ndot text-[11px] text-neutral-400 mb-1.5 block uppercase tracking-wider">
+                      <label className="font-dot text-[11px] text-neutral-400 mb-1.5 block uppercase tracking-wider">
                         Telemetry Hint
                       </label>
                       <input
@@ -1649,7 +1649,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                         value={selectedAction.desc || ""}
                         onChange={(e) => handleUpdateAction({ desc: e.target.value.toUpperCase() })}
                         placeholder="e.g. CLIPBOARD COPY"
-                        className="w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white font-ndot focus:outline-none focus:border-white uppercase tracking-wider"
+                        className="w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white font-dot focus:outline-none focus:border-white uppercase tracking-wider"
                       />
                     </div>
                   </div>
@@ -1662,7 +1662,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
         {/* Tab 2: Aesthetics */}
         <div className={`flex-1 overflow-y-auto p-8 max-w-2xl flex flex-col gap-8 ${activeTab === "appearance" ? "" : "hidden"}`}>
           <div className="p-7 rounded-2xl bg-[#0C0E14] border border-white/10 flex flex-col gap-4 shadow-sm">
-            <div className="font-ndot text-xs uppercase text-neutral-400 tracking-widest">
+            <div className="font-dot text-xs uppercase text-neutral-400 tracking-widest">
               ACCENT ILLUMINATION
             </div>
             <div className="grid grid-cols-3 gap-3.5">
@@ -1683,7 +1683,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                       },
                     })
                   }
-                  className={`flex items-center gap-3 p-3.5 rounded-xl border text-xs font-ndot uppercase tracking-wider transition-all cursor-pointer ${
+                  className={`flex items-center gap-3 p-3.5 rounded-xl border text-xs font-dot uppercase tracking-wider transition-all cursor-pointer ${
                     currentConfig.settings.theme === th.id
                       ? "bg-white/10 border-white/30 text-white font-bold shadow-sm"
                       : "bg-[#111317] border-white/5 text-neutral-400 hover:text-white"
@@ -1700,9 +1700,9 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
           </div>
 
           <div className="p-7 rounded-2xl bg-[#0C0E14] border border-white/10 flex flex-col gap-4 shadow-sm">
-            <div className="flex justify-between items-center font-ndot text-xs text-neutral-400 uppercase tracking-wider">
+            <div className="flex justify-between items-center font-dot text-xs text-neutral-400 uppercase tracking-wider">
               <span>Outer Bezel Radius</span>
-              <span className="font-ndot text-white px-2.5 py-1 rounded-md bg-white/[0.06] border border-white/10 tracking-widest text-xs">
+              <span className="font-dot text-white px-2.5 py-1 rounded-md bg-white/[0.06] border border-white/10 tracking-widest text-xs">
                 {currentConfig.settings.dial_radius} PX
               </span>
             </div>
@@ -1725,9 +1725,9 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
           </div>
 
           <div className="p-7 rounded-2xl bg-[#0C0E14] border border-white/10 flex flex-col gap-4 shadow-sm">
-            <div className="flex justify-between items-center font-ndot text-xs text-neutral-400 uppercase tracking-wider">
+            <div className="flex justify-between items-center font-dot text-xs text-neutral-400 uppercase tracking-wider">
               <span>Donut Ring Width</span>
-              <span className="font-ndot text-white px-2.5 py-1 rounded-md bg-white/[0.06] border border-white/10 tracking-widest text-xs">
+              <span className="font-dot text-white px-2.5 py-1 rounded-md bg-white/[0.06] border border-white/10 tracking-widest text-xs">
                 {currentConfig.settings.donut_thickness} PX
               </span>
             </div>
@@ -1751,9 +1751,9 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
 
           {/* Live Preview Card */}
           <div className="p-7 rounded-2xl bg-[#0C0E14] border border-white/10 flex flex-col gap-4 shadow-sm">
-            <div className="flex items-center justify-between font-ndot text-xs text-neutral-400 uppercase tracking-widest">
+            <div className="flex items-center justify-between font-dot text-xs text-neutral-400 uppercase tracking-widest">
               <span>LIVE DIAL PREVIEW</span>
-              <span className="text-[10px] text-neutral-500 font-ndot tracking-wider">AESTHETIC SIMULATOR</span>
+              <span className="text-[10px] text-neutral-500 font-dot tracking-wider">AESTHETIC SIMULATOR</span>
             </div>
             <div className="w-full h-80 rounded-xl bg-[#07080B] border border-white/[0.06] flex items-center justify-center overflow-hidden relative">
               <DonutRadialHUD
@@ -1775,15 +1775,15 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
           {/* Global Shortcut Card */}
           <div className="p-7 rounded-2xl bg-[#0C0E14] border border-white/10 flex flex-col gap-6 shadow-sm">
             <div>
-              <div className="font-ndot text-sm text-white uppercase tracking-widest flex items-center justify-between">
+              <div className="font-dot text-sm text-white uppercase tracking-widest flex items-center justify-between">
                 <span>GLOBAL ACTIVATION SHORTCUT</span>
                 {shortcutStatus && (
-                  <span className="text-[11px] text-green-400 font-ndot tracking-wider bg-green-500/10 px-2.5 py-0.5 rounded border border-green-500/30">
+                  <span className="text-[11px] text-green-400 font-dot tracking-wider bg-green-500/10 px-2.5 py-0.5 rounded border border-green-500/30">
                     {shortcutStatus}
                   </span>
                 )}
               </div>
-              <div className="text-[11px] font-ndot text-neutral-400 mt-2 uppercase tracking-wider leading-relaxed">
+              <div className="text-[11px] font-dot text-neutral-400 mt-2 uppercase tracking-wider leading-relaxed">
                 Press this shortcut anywhere in your OS to trigger the radial HUD. The dial is also 100% keyboard navigable (Arrow keys cycle, Space / Enter selects, Esc closes).
               </div>
             </div>
@@ -1797,7 +1797,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                       <div className="w-3 h-3 rounded-full bg-red-500" />
                       <div className="absolute w-5 h-5 rounded-full bg-red-500/40 animate-ping" />
                     </div>
-                    <span className="font-ndot text-xs text-white tracking-widest uppercase font-bold">
+                    <span className="font-dot text-xs text-white tracking-widest uppercase font-bold">
                       RECORDING... PRESS KEYS TOGETHER
                     </span>
                   </div>
@@ -1812,7 +1812,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                           setStagedCombo("");
                           stagedComboRef.current = "";
                         }}
-                        className="px-3 py-1.5 rounded-lg bg-white hover:bg-neutral-200 text-black font-ndot text-[11px] tracking-wider uppercase font-bold cursor-pointer shadow-sm"
+                        className="px-3 py-1.5 rounded-lg bg-white hover:bg-neutral-200 text-black font-dot text-[11px] tracking-wider uppercase font-bold cursor-pointer shadow-sm"
                       >
                         SAVE
                       </button>
@@ -1825,7 +1825,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                         setStagedCombo("");
                         stagedComboRef.current = "";
                       }}
-                      className="text-neutral-400 hover:text-white text-[11px] font-ndot uppercase tracking-wider px-2 py-1 rounded hover:bg-white/10 cursor-pointer"
+                      className="text-neutral-400 hover:text-white text-[11px] font-dot uppercase tracking-wider px-2 py-1 rounded hover:bg-white/10 cursor-pointer"
                     >
                       CANCEL (ESC)
                     </button>
@@ -1837,28 +1837,28 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                     <>
                       {stagedCombo.split("+").map((keyPart, i) => (
                         <React.Fragment key={i}>
-                          {i > 0 && <span className="text-red-400 font-ndot text-sm">+</span>}
-                          <div className="px-4 py-2 rounded-lg bg-red-500/20 border border-red-500/60 text-red-100 font-ndot text-sm tracking-widest shadow-md">
+                          {i > 0 && <span className="text-red-400 font-dot text-sm">+</span>}
+                          <div className="px-4 py-2 rounded-lg bg-red-500/20 border border-red-500/60 text-red-100 font-dot text-sm tracking-widest shadow-md">
                             {keyPart.toUpperCase()}
                           </div>
                         </React.Fragment>
                       ))}
                       {!stagedCombo.split("+").some(p => !["Super", "Ctrl", "Alt", "Shift"].includes(p)) && (
                         <>
-                          <span className="text-neutral-500 font-ndot text-sm">+</span>
-                          <div className="px-3 py-2 rounded-lg border border-dashed border-white/20 text-neutral-400 font-ndot text-xs tracking-wider animate-pulse">
+                          <span className="text-neutral-500 font-dot text-sm">+</span>
+                          <div className="px-3 py-2 rounded-lg border border-dashed border-white/20 text-neutral-400 font-dot text-xs tracking-wider animate-pulse">
                             PRESS ANY KEY...
                           </div>
                         </>
                       )}
                     </>
                   ) : (
-                    <span className="text-neutral-500 font-ndot text-xs tracking-wider">
+                    <span className="text-neutral-500 font-dot text-xs tracking-wider">
                       Press and hold modifier keys (Super, Ctrl, Alt, Shift) + your desired key...
                     </span>
                   )}
                 </div>
-                <div className="text-[10px] font-ndot text-neutral-400 tracking-wider flex items-center justify-between">
+                <div className="text-[10px] font-dot text-neutral-400 tracking-wider flex items-center justify-between">
                   <span>Release keys to auto-save combination.</span>
                   <span>ESC to cancel • Backspace to disable</span>
                 </div>
@@ -1870,14 +1870,14 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                     {shortcutText ? (
                       shortcutText.split("+").map((keyPart, i) => (
                         <React.Fragment key={i}>
-                          {i > 0 && <span className="text-neutral-500 font-ndot text-sm">+</span>}
-                          <div className="px-4 py-2 rounded-xl bg-[#14171F] border border-white/20 text-white font-ndot text-sm tracking-widest shadow-inner">
+                          {i > 0 && <span className="text-neutral-500 font-dot text-sm">+</span>}
+                          <div className="px-4 py-2 rounded-xl bg-[#14171F] border border-white/20 text-white font-dot text-sm tracking-widest shadow-inner">
                             {keyPart.toUpperCase()}
                           </div>
                         </React.Fragment>
                       ))
                     ) : (
-                      <span className="text-neutral-500 font-ndot text-xs tracking-wider">
+                      <span className="text-neutral-500 font-dot text-xs tracking-wider">
                         NO SHORTCUT CONFIGURED
                       </span>
                     )}
@@ -1892,7 +1892,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                         setStagedCombo("");
                         stagedComboRef.current = "";
                       }}
-                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white hover:bg-neutral-200 text-black font-ndot text-xs tracking-wider uppercase transition-all font-bold cursor-pointer shadow-md"
+                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white hover:bg-neutral-200 text-black font-dot text-xs tracking-wider uppercase transition-all font-bold cursor-pointer shadow-md"
                     >
                       <Keyboard className="w-4 h-4 text-black" />
                       <span>RECORD SHORTCUT</span>
@@ -1901,7 +1901,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                       <button
                         type="button"
                         onClick={() => handleSaveShortcut("")}
-                        className="px-4 py-2.5 rounded-xl bg-white/[0.06] hover:bg-red-500/20 hover:text-red-300 text-neutral-400 font-ndot text-xs tracking-wider uppercase transition-all cursor-pointer"
+                        className="px-4 py-2.5 rounded-xl bg-white/[0.06] hover:bg-red-500/20 hover:text-red-300 text-neutral-400 font-dot text-xs tracking-wider uppercase transition-all cursor-pointer"
                         title="Remove shortcut"
                       >
                         CLEAR
@@ -1911,7 +1911,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                 </div>
 
                 <div className="w-full flex items-center gap-3 pt-3 border-t border-white/5">
-                  <span className="font-ndot text-[11px] text-neutral-400 uppercase tracking-wider whitespace-nowrap">
+                  <span className="font-dot text-[11px] text-neutral-400 uppercase tracking-wider whitespace-nowrap">
                     EDIT DIRECTLY:
                   </span>
                   <input
@@ -1919,7 +1919,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                     value={shortcutText}
                     onChange={(e) => handleSaveShortcut(e.target.value)}
                     placeholder="e.g. Super+Shift+D, Alt+F4, Ctrl+Space"
-                    className="flex-1 px-3.5 py-1.5 rounded-lg bg-[#111317] border border-white/10 text-xs text-white font-ndot uppercase tracking-wider focus:outline-none focus:border-white"
+                    className="flex-1 px-3.5 py-1.5 rounded-lg bg-[#111317] border border-white/10 text-xs text-white font-dot uppercase tracking-wider focus:outline-none focus:border-white"
                   />
                 </div>
               </div>
@@ -1927,7 +1927,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
 
             {/* Quick Presets */}
             <div className="pt-2">
-              <div className="font-ndot text-[11px] text-neutral-500 uppercase tracking-widest mb-3">
+              <div className="font-dot text-[11px] text-neutral-500 uppercase tracking-widest mb-3">
                 QUICK PRESETS:
               </div>
               <div className="flex flex-wrap gap-2.5">
@@ -1942,7 +1942,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                     key={p.val}
                     type="button"
                     onClick={() => handleSaveShortcut(p.val)}
-                    className={`px-3.5 py-2 rounded-xl border text-[11px] font-ndot tracking-wider uppercase transition-all cursor-pointer ${
+                    className={`px-3.5 py-2 rounded-xl border text-[11px] font-dot tracking-wider uppercase transition-all cursor-pointer ${
                       shortcutText === p.val
                         ? "bg-white/[0.15] border-white/40 text-white font-bold shadow-sm"
                         : "bg-white/[0.03] border-white/5 text-neutral-400 hover:text-white hover:bg-white/[0.08]"
@@ -1957,10 +1957,10 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
 
           <div className="flex items-center justify-between p-6 rounded-2xl bg-[#0C0E14] border border-white/10 shadow-sm">
             <div>
-              <div className="font-ndot text-xs text-white uppercase tracking-wider">
+              <div className="font-dot text-xs text-white uppercase tracking-wider">
                 EARBUD AUDIO FEEDBACK
               </div>
-              <div className="text-[10px] font-ndot text-neutral-400 mt-1 uppercase tracking-wider">
+              <div className="text-[10px] font-dot text-neutral-400 mt-1 uppercase tracking-wider">
                 Emit hardware audio tone in earbuds on rotation steps
               </div>
             </div>
@@ -1982,10 +1982,10 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
 
           <div className="flex items-center justify-between p-6 rounded-2xl bg-[#0C0E14] border border-white/10 shadow-sm">
             <div>
-              <div className="font-ndot text-xs text-white uppercase tracking-wider">
+              <div className="font-dot text-xs text-white uppercase tracking-wider">
                 START RESIDENT IN TRAY
               </div>
-              <div className="text-[10px] font-ndot text-neutral-400 mt-1 uppercase tracking-wider">
+              <div className="text-[10px] font-dot text-neutral-400 mt-1 uppercase tracking-wider">
                 Stay resident in top bar / tray icon when settings window is closed
               </div>
             </div>
@@ -2012,7 +2012,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
           <div className="w-full max-w-lg bg-[#0E1015] border border-white/20 rounded-2xl p-6 shadow-2xl flex flex-col gap-5">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <div className="font-ndot text-sm text-white tracking-widest uppercase">
+              <div className="font-dot text-sm text-white tracking-widest uppercase">
                 CREATE CUSTOM DIAL MENU
               </div>
               <button
@@ -2025,7 +2025,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
 
             <div className="flex flex-col gap-4">
               <div>
-                <label className="font-ndot text-[11px] text-neutral-400 mb-1.5 block uppercase tracking-wider">
+                <label className="font-dot text-[11px] text-neutral-400 mb-1.5 block uppercase tracking-wider">
                   Dial Name
                 </label>
                 <input
@@ -2033,12 +2033,12 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                   value={newDialName}
                   onChange={(e) => setNewDialName(e.target.value)}
                   placeholder="e.g. Discord, Blender, Spotify"
-                  className="w-full px-3.5 py-2.5 rounded-lg bg-[#14161D] border border-white/10 text-xs text-white font-ndot tracking-wider focus:outline-none focus:border-white uppercase"
+                  className="w-full px-3.5 py-2.5 rounded-lg bg-[#14161D] border border-white/10 text-xs text-white font-dot tracking-wider focus:outline-none focus:border-white uppercase"
                 />
               </div>
 
               <div>
-                <label className="font-ndot text-[11px] text-neutral-400 mb-1.5 block uppercase tracking-wider">
+                <label className="font-dot text-[11px] text-neutral-400 mb-1.5 block uppercase tracking-wider">
                   Icon
                 </label>
                 <div className="flex items-center gap-3">
@@ -2048,7 +2048,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                   <select
                     value={newDialIcon}
                     onChange={(e) => setNewDialIcon(e.target.value)}
-                    className="flex-1 px-3.5 py-2.5 rounded-lg bg-[#14161D] border border-white/10 text-xs text-white font-ndot uppercase tracking-wider focus:outline-none focus:border-white"
+                    className="flex-1 px-3.5 py-2.5 rounded-lg bg-[#14161D] border border-white/10 text-xs text-white font-dot uppercase tracking-wider focus:outline-none focus:border-white"
                   >
                     {availableIcons.map((ic) => (
                       <option key={ic} value={ic}>
@@ -2060,7 +2060,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
               </div>
 
               <div>
-                <label className="font-ndot text-[11px] text-neutral-400 mb-1.5 block uppercase tracking-wider">
+                <label className="font-dot text-[11px] text-neutral-400 mb-1.5 block uppercase tracking-wider">
                   Context Window Patterns (Comma separated)
                 </label>
                 <input
@@ -2068,13 +2068,13 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                   value={newDialPatterns}
                   onChange={(e) => setNewDialPatterns(e.target.value)}
                   placeholder="*discord*, *blender*, *figma*"
-                  className="w-full px-3.5 py-2.5 rounded-lg bg-[#14161D] border border-white/10 text-xs text-white font-ndot tracking-wider focus:outline-none focus:border-white"
+                  className="w-full px-3.5 py-2.5 rounded-lg bg-[#14161D] border border-white/10 text-xs text-white font-dot tracking-wider focus:outline-none focus:border-white"
                 />
               </div>
 
               {/* Import Slices from other dials */}
               <div>
-                <label className="font-ndot text-[11px] text-neutral-400 mb-2 block uppercase tracking-wider">
+                <label className="font-dot text-[11px] text-neutral-400 mb-2 block uppercase tracking-wider">
                   Import Slices From Other Dials (Optional)
                 </label>
                 <div className="max-h-40 overflow-y-auto rounded-lg bg-[#14161D] border border-white/10 p-2 flex flex-col gap-1.5">
@@ -2102,10 +2102,10 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                         <div className="p-1 rounded bg-white/[0.05] text-white">
                           {getActionIcon(act.icon, 12)}
                         </div>
-                        <span className="font-ndot text-xs text-white uppercase tracking-wider flex-1 truncate">
+                        <span className="font-dot text-xs text-white uppercase tracking-wider flex-1 truncate">
                           {act.label}
                         </span>
-                        <span className="font-ndot text-[10px] text-neutral-500 uppercase">
+                        <span className="font-dot text-[10px] text-neutral-500 uppercase">
                           {sourceName}
                         </span>
                       </label>
@@ -2118,13 +2118,13 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
             <div className="flex justify-end gap-3 border-t border-white/10 pt-4">
               <button
                 onClick={() => setIsNewDialOpen(false)}
-                className="px-4 py-2 rounded-lg bg-white/[0.08] hover:bg-white/15 text-white font-ndot text-xs uppercase tracking-wider"
+                className="px-4 py-2 rounded-lg bg-white/[0.08] hover:bg-white/15 text-white font-dot text-xs uppercase tracking-wider"
               >
                 CANCEL
               </button>
               <button
                 onClick={handleCreateNewDial}
-                className="px-5 py-2 rounded-lg bg-white text-black font-ndot text-xs font-bold uppercase tracking-widest hover:bg-neutral-200 transition-all"
+                className="px-5 py-2 rounded-lg bg-white text-black font-dot text-xs font-bold uppercase tracking-widest hover:bg-neutral-200 transition-all"
               >
                 CREATE DIAL
               </button>
@@ -2138,7 +2138,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
           <div className="w-full max-w-md bg-[#0E1015] border border-white/20 rounded-2xl p-6 shadow-2xl flex flex-col gap-4">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <div className="font-ndot text-sm text-white tracking-widest uppercase">
+              <div className="font-dot text-sm text-white tracking-widest uppercase">
                 ADD SLICE FROM ANOTHER DIAL
               </div>
               <button
@@ -2173,10 +2173,10 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                     {getActionIcon(act.icon, 14)}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="font-ndot text-xs text-white uppercase tracking-wider truncate">
+                    <div className="font-dot text-xs text-white uppercase tracking-wider truncate">
                       {act.label}
                     </div>
-                    <div className="font-ndot text-[10px] text-neutral-500 uppercase tracking-widest">
+                    <div className="font-dot text-[10px] text-neutral-500 uppercase tracking-widest">
                       {act.type} • {sourceName}
                     </div>
                   </div>
@@ -2187,7 +2187,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
             <div className="flex justify-end pt-2">
               <button
                 onClick={() => setIsImportActionOpen(false)}
-                className="px-4 py-2 rounded-lg bg-white/[0.08] hover:bg-white/15 text-white font-ndot text-xs uppercase tracking-wider"
+                className="px-4 py-2 rounded-lg bg-white/[0.08] hover:bg-white/15 text-white font-dot text-xs uppercase tracking-wider"
               >
                 CLOSE
               </button>
@@ -2203,7 +2203,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div className="flex items-center gap-2.5">
                 <Share2 className="w-4 h-4 text-white" />
-                <span className="font-ndot text-sm text-white tracking-widest uppercase">
+                <span className="font-dot text-sm text-white tracking-widest uppercase">
                   SHARE & BACKUP // IMPORT & EXPORT
                 </span>
               </div>
@@ -2221,7 +2221,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
             {/* Notification alert if import / export succeeded */}
             {shareMessage && (
               <div
-                className={`p-3 rounded-xl border flex items-center gap-2.5 font-ndot text-xs tracking-wider ${
+                className={`p-3 rounded-xl border flex items-center gap-2.5 font-dot text-xs tracking-wider ${
                   shareMessage.isError
                     ? "bg-red-500/15 border-red-500/30 text-red-200"
                     : "bg-emerald-500/15 border-emerald-500/30 text-emerald-200"
@@ -2241,10 +2241,10 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
               <div className="p-4 rounded-xl bg-white/[0.03] border border-white/10 flex flex-col gap-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="font-ndot text-xs text-white uppercase tracking-wider">
+                    <div className="font-dot text-xs text-white uppercase tracking-wider">
                       EXPORT SINGLE DIAL
                     </div>
-                    <div className="text-[10px] font-ndot text-neutral-400 mt-0.5 tracking-wider">
+                    <div className="text-[10px] font-dot text-neutral-400 mt-0.5 tracking-wider">
                       Share this specific dial profile with friends or the community.
                     </div>
                   </div>
@@ -2255,7 +2255,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                   <select
                     id="export-dial-select"
                     defaultValue={selectedProfileId}
-                    className="flex-1 px-3 py-2 rounded-lg bg-[#14161D] border border-white/10 text-xs text-white font-ndot uppercase tracking-wider focus:outline-none focus:border-white"
+                    className="flex-1 px-3 py-2 rounded-lg bg-[#14161D] border border-white/10 text-xs text-white font-dot uppercase tracking-wider focus:outline-none focus:border-white"
                   >
                     {getOrderedProfileIds(currentConfig).map((id) => (
                       <option key={id} value={id}>
@@ -2273,7 +2273,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                         isError: false,
                       });
                     }}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white/[0.08] hover:bg-white/15 text-white font-ndot text-xs tracking-wider uppercase transition-all cursor-pointer font-bold whitespace-nowrap"
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white/[0.08] hover:bg-white/15 text-white font-dot text-xs tracking-wider uppercase transition-all cursor-pointer font-bold whitespace-nowrap"
                   >
                     <Download className="w-3.5 h-3.5" />
                     <span>DOWNLOAD</span>
@@ -2284,10 +2284,10 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
               {/* Option 2: Export Full Configuration */}
               <div className="p-4 rounded-xl bg-white/[0.03] border border-white/10 flex items-center justify-between gap-4">
                 <div>
-                  <div className="font-ndot text-xs text-white uppercase tracking-wider">
+                  <div className="font-dot text-xs text-white uppercase tracking-wider">
                     EXPORT ENTIRE BACKUP
                   </div>
-                  <div className="text-[10px] font-ndot text-neutral-400 mt-0.5 tracking-wider">
+                  <div className="text-[10px] font-dot text-neutral-400 mt-0.5 tracking-wider">
                     Full backup of all {Object.keys(currentConfig.profiles).length} dials, wheel ordering, aesthetics, and shortcuts.
                   </div>
                 </div>
@@ -2300,7 +2300,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                       isError: false,
                     });
                   }}
-                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-white/[0.08] hover:bg-white/15 text-white font-ndot text-xs tracking-wider uppercase transition-all cursor-pointer font-bold whitespace-nowrap shrink-0"
+                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-white/[0.08] hover:bg-white/15 text-white font-dot text-xs tracking-wider uppercase transition-all cursor-pointer font-bold whitespace-nowrap shrink-0"
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span>EXPORT ALL</span>
@@ -2311,10 +2311,10 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
               <div className="p-4 rounded-xl bg-white/[0.03] border border-white/10 flex flex-col gap-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="font-ndot text-xs text-white uppercase tracking-wider">
+                    <div className="font-dot text-xs text-white uppercase tracking-wider">
                       IMPORT FROM JSON
                     </div>
-                    <div className="text-[10px] font-ndot text-neutral-400 mt-0.5 tracking-wider">
+                    <div className="text-[10px] font-dot text-neutral-400 mt-0.5 tracking-wider">
                       Auto-detects either a single shared dial or a full configuration file.
                     </div>
                   </div>
@@ -2332,7 +2332,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed border-white/20 hover:border-white/50 bg-white/[0.02] hover:bg-white/[0.06] text-white font-ndot text-xs tracking-widest uppercase transition-all cursor-pointer"
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed border-white/20 hover:border-white/50 bg-white/[0.02] hover:bg-white/[0.06] text-white font-dot text-xs tracking-widest uppercase transition-all cursor-pointer"
                 >
                   <Upload className="w-4 h-4 text-white" />
                   <span>SELECT .JSON FILE TO IMPORT</span>
@@ -2347,7 +2347,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                   setIsShareModalOpen(false);
                   setShareMessage(null);
                 }}
-                className="px-5 py-2 rounded-lg bg-white/[0.08] hover:bg-white/15 text-white font-ndot text-xs uppercase tracking-wider cursor-pointer"
+                className="px-5 py-2 rounded-lg bg-white/[0.08] hover:bg-white/15 text-white font-dot text-xs uppercase tracking-wider cursor-pointer"
               >
                 CLOSE
               </button>
