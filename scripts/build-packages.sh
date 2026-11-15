@@ -37,6 +37,12 @@ npx @tauri-apps/cli build --bundles appimage || true
 if [ -f "src-tauri/target/release/bundle/appimage/Dial Control_${VERSION}_amd64.AppImage" ]; then
     cp "src-tauri/target/release/bundle/appimage/Dial Control_${VERSION}_amd64.AppImage" dist-packages/Dial-Control-${VERSION}-amd64.AppImage
     chmod +x dist-packages/Dial-Control-${VERSION}-amd64.AppImage
+elif [ "${REQUIRE_APPIMAGE:-0}" = "1" ]; then
+    # CI sets this so a failed AppImage bundle fails the job instead of silently shipping without it.
+    echo "ERROR: the AppImage was not produced (see the Tauri output above)." >&2
+    exit 1
+else
+    echo "WARNING: no AppImage produced; continuing with the distro packages only." >&2
 fi
 
 echo "==> [3/5] Assembling Debian (.deb) package..."
