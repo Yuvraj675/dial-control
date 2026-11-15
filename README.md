@@ -19,6 +19,11 @@
 
 ---
 
+<div align="center">
+  <img src="docs/images/hud-demo.gif" alt="The radial wheel cycling through its slices as the dial turns" width="360" />
+  <br /><sub>Turning the dial moves the highlight; a click runs the slice.</sub>
+</div>
+
 Dial Control behaves like normal earbuds until you ask for more. **Double-press the dial** (or hit a shortcut) and an animated donut-shaped wheel appears with actions chosen for the app you are using. Turn the dial to move the highlight, click to run it. Inspired by [KnifeLemon/Filee](https://github.com/KnifeLemon/Filee) and the Nothing OS dot-matrix look.
 
 ## Features
@@ -32,6 +37,16 @@ Dial Control behaves like normal earbuds until you ask for more. **Double-press 
 - **Custom profiles**: build your own wheels with icons, title/class matching rules and slices imported from other profiles.
 - **Keyboard-only mode**: a global shortcut (default `Super+Shift+D`, rebindable) works without any earbuds.
 - **Lightweight tray daemon**: Rust + Tauri, single instance, hot-reloaded settings.
+
+## Screenshots
+
+| System wheel | Code & Editor wheel |
+|:---:|:---:|
+| <img src="docs/images/hud-wheel.png" alt="System controls wheel" width="320" /> | <img src="docs/images/hud-code.png" alt="Code and editor wheel" width="320" /> |
+
+The wheel changes with the app in front of you. Profiles, slices, icons and shortcuts are edited in the Settings window:
+
+<img src="docs/images/settings.png" alt="Settings window with the profile list, wheel slices and slice inspector" width="760" />
 
 ## Platform support
 
@@ -102,6 +117,16 @@ Then grant **Accessibility** access under *System Settings → Privacy & Securit
 | Click | Play/pause on the real player | Run highlighted slice | Exit |
 | Double press | **Open wheel** | Dismiss | Exit |
 | Triple press | Previous track | Dismiss | Exit |
+
+```mermaid
+flowchart LR
+    A["CMF Buds Pro 2 dial<br/>(Bluetooth AVRCP)"] --> B["OS media / volume layer"]
+    B --> C{"Dial Control<br/>intercepts"}
+    C -->|"wheel closed"| D["Normal behaviour:<br/>volume, play/pause, previous"]
+    C -->|"double press"| E["Radial wheel opens"]
+    E -->|"turn"| F["Move highlight"]
+    E -->|"click"| G["Run slice:<br/>hotkey, app, macro, mode"]
+```
 
 Clicks and turns are intercepted at the lowest practical layer per OS (exclusive `evdev` grab, Core Audio callbacks, event taps, own media sessions) so background players never see the presses meant for the wheel. While the wheel is open, volume is held at a baseline with headroom and every turn is echo-filtered into a single detent. Full details live in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/PLATFORMS.md](docs/PLATFORMS.md).
 
