@@ -17,5 +17,5 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 ## [1.0.0]
 
 - Radial HUD with context-aware profiles, scroll mode, volume/brightness gauges, custom actions and macros.
-- Linux, Windows and macOS backends; native Android app (early).
+- Linux, Windows and macOS backends; Android app started (work in progress, not released).
 - Normal earbud behaviour by default; double press opens the wheel.

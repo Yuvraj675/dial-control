@@ -61,3 +61,26 @@ A plain `cargo build --release` skips the frontend and produces a binary that po
 | Window shows "localhost not found" | Binary built without the frontend; use the production build above. |
 | Events fire twice | Emit each Tauri event once (`app.emit` already broadcasts to all webviews). |
 | `GLIBC_2.39 not found` | Build or run on a newer distribution. |
+
+## 8. Creating a release
+
+CI workflows only build and upload *artifacts* (they are manual by design), so a GitHub Release is assembled by hand.
+
+1. **Bump the version** in `package.json`, `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json` (keep them equal), and the version strings in `scripts/build-packages.sh` / `dist-packages/PKGBUILD`.
+2. **Update `CHANGELOG.md`**: move *Unreleased* entries under the new version and date.
+3. **Run every check** from [CONTRIBUTING.md](../CONTRIBUTING.md#checks).
+4. **Commit and tag**:
+   ```bash
+   git commit --author="Yuvraj675 <yuviyg675@gmail.com>" -am "chore(release): v1.1.0"
+   git tag -a v1.1.0 -m "Dial Control v1.1.0"
+   git push origin main --tags
+   ```
+5. **Build the installers**:
+   - Linux: `npx @tauri-apps/cli build --no-bundle && ./scripts/build-packages.sh` (files land in `dist-packages/`).
+   - Windows / macOS: GitHub → **Actions** → *Build Windows Release* / *Build macOS Release* → **Run workflow**, then download the artifacts from the finished run.
+6. **Publish**: GitHub → **Releases → Draft a new release**, pick the tag, paste the changelog section, attach the `.deb`, `.rpm`, `.pkg.tar.zst`, `.AppImage`, `.exe`, `.msi` and `.dmg`, then publish. Or from the CLI:
+   ```bash
+   gh release create v1.1.0 dist-packages/*.{deb,rpm,zst,AppImage} <downloaded .exe/.msi/.dmg> \
+     --title "Dial Control v1.1.0" --notes-file release-notes.md
+   ```
+7. Tick *Set as a pre-release* until the macOS/Windows builds have been tried on real hardware. Android is not part of releases yet.

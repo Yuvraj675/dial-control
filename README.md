@@ -4,13 +4,14 @@
 
 # Dial Control
 
-**Turn the rotary dial on your CMF Buds Pro 2 case into a context-aware radial controller for Linux, Windows, macOS and Android.**
+**Turn the rotary dial on your CMF Buds Pro 2 case into a context-aware radial controller for Linux, Windows and macOS (Android coming soon).**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Tauri v2](https://img.shields.io/badge/Tauri-v2-24C8DB?logo=tauri&logoColor=white)](https://v2.tauri.app/)
 [![Rust](https://img.shields.io/badge/Rust-stable-orange?logo=rust)](https://www.rust-lang.org/)
 [![React 19](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
-![Platforms](https://img.shields.io/badge/platforms-Linux%20%7C%20Windows%20%7C%20macOS%20%7C%20Android-lightgrey)
+![Platforms](https://img.shields.io/badge/platforms-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey)
+![Android](https://img.shields.io/badge/Android-coming%20soon-yellow)
 
 [Features](#features) · [Install](#install) · [How it works](#how-it-works) · [Build from source](#build-from-source) · [Docs](#documentation) · [Contributing](#contributing)
 
@@ -39,7 +40,7 @@ Dial Control behaves like normal earbuds until you ask for more. **Double-press 
 | **Linux** (X11 / Wayland) | BlueZ D-Bus + `evdev` exclusive grab | WirePlumber / PulseAudio | Mutter D-Bus, `/sys/class/backlight` | GNOME Shell extension, Hyprland, Sway, KDE, X11 | Functional |
 | **Windows** 10 / 11 | Core Audio callback, `WH_KEYBOARD_LL`, Raw Input, own SMTC session | WASAPI | DDC/CI (`dxva2`) + WMI | Win32 foreground window | Functional |
 | **macOS** 14+ (Apple Silicon & Intel) | CoreGraphics event tap, CoreAudio listener, own Now Playing session | CoreAudio | DisplayServices | `NSWorkspace` + AppleScript | Functional |
-| **Android** 8.0+ | Own `MediaSession` + `STREAM_MUSIC` watcher | `AudioManager` | `Settings.System` | Accessibility service | Early, untested on hardware |
+| **Android** 8.0+ | Own `MediaSession` + `STREAM_MUSIC` watcher | `AudioManager` | `Settings.System` | Accessibility service | **Coming soon** (work in progress, no release yet) |
 
 Windows and macOS decision logic is unit-tested on any host; the OS integrations themselves are verified by compilation in CI-style checks, so field reports are welcome (see [Troubleshooting](#troubleshooting)).
 
@@ -91,7 +92,7 @@ Then grant **Accessibility** access under *System Settings → Privacy & Securit
 
 ### Android
 
-See [Android](docs/PLATFORMS.md#android). Build with `cd android && ./gradlew testDebugUnitTest assembleRelease`, or run the **Build Android APK** workflow. CI APKs use a throwaway debug key, so uninstall before installing a newer one.
+> **Coming soon.** The Android app is a work in progress: it is untested on real hardware and no APK is published. The source lives in `android/` and is described in [docs/PLATFORMS.md](docs/PLATFORMS.md#android) for contributors.
 
 ## How it works
 
@@ -147,7 +148,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib                           
 cargo check --manifest-path src-tauri/Cargo.toml                                  # Linux
 cargo check --target x86_64-pc-windows-msvc --manifest-path src-tauri/Cargo.toml  # Windows
 CC_aarch64_apple_darwin=clang cargo check --target aarch64-apple-darwin --manifest-path src-tauri/Cargo.toml  # macOS
-cd android && ./gradlew testDebugUnitTest assembleDebug                           # Android (needs SDK + JDK 17+)
+cd android && ./gradlew testDebugUnitTest assembleDebug                           # Android WIP (needs SDK + JDK 17+)
 ```
 
 ## Tiling window managers
@@ -176,7 +177,6 @@ for_window [app_id="dial-control" title="Dial Control HUD"] floating enable, bor
 | No per-app profiles on GNOME Wayland | Log out and in once so the bundled extension loads. |
 | macOS says the app is "damaged" | Run the `xattr` command in [macOS](#macos). |
 | Clicks still pause the video on Windows/macOS | Send the diagnostics log with your report: `%TEMP%\dial-control\dial-control.log` (Windows) or `$TMPDIR/dial-control/dial-control.log` (macOS). |
-| Android: nothing happens | Complete the checklist on the main screen; watch `adb logcat -s DialControl`. |
 
 ## Documentation
 

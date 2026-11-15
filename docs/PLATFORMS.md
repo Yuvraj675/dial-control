@@ -44,6 +44,8 @@ The macOS backend uses native Apple frameworks (`CoreGraphics`, `CoreAudio`, `Co
 
 ## Android
 
+> **Status: work in progress / coming soon.** Not released and untested on real devices.
+
 A native Kotlin app (framework APIs only, minSdk 26) with the same gesture model: turn = volume, click = play/pause, double press = open the wheel, triple press = previous track; with the wheel open, turn moves the highlight and click runs the slice.
 
 - **UI**: the desktop React bundle (`npm run build` → `dist/`) is copied into the APK assets by Gradle (`copyWebUi`, so build the frontend first) and runs in WebViews: the wheel overlay and a landscape `SettingsActivity`. `assets/shim/shim.js` implements `window.__TAURI_INTERNALS__` and sets `__DIAL_PLATFORM__ = "android"`, so `invoke`/events land in Kotlin (`web/Commands.kt`, `web/WebUi.kt`). Profiles are edited with the same editor as on desktop, limited to phone-capable slice types.
