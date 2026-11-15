@@ -15,7 +15,6 @@ import {
   Plus,
   Trash2,
   Check,
-  Disc,
   Keyboard,
   X,
   FolderInput,
@@ -863,9 +862,12 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
         <div>
           {/* App Title in Ndot57 */}
           <div className="flex items-center gap-3 px-2 py-3 mb-6 border-b border-white/[0.06] pb-5">
-            <div className="w-9 h-9 rounded-full bg-white flex items-center justify-center text-black shadow-md shrink-0">
-              <Disc className="w-5 h-5 text-black animate-spin-slow" />
-            </div>
+            <img
+              src={`${import.meta.env.BASE_URL}app-icon.png`}
+              alt="Dial Control"
+              className="w-9 h-9 shrink-0 drop-shadow-md"
+              draggable={false}
+            />
             <div>
               <div className="font-ndot text-sm text-white tracking-widest whitespace-nowrap">DIAL CONTROL</div>
               <div className="text-[10px] font-ndot text-neutral-400 uppercase tracking-wider">
