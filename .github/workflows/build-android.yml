@@ -34,7 +34,7 @@ jobs:
         run: ./gradlew --no-daemon assembleRelease
 
       - name: Upload APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dial-control-android
           path: android/app/build/outputs/apk/release/*.apk

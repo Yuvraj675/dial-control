@@ -59,7 +59,7 @@ jobs:
           for p in '*.deb' '*.rpm' '*.pkg.tar.zst' '*.AppImage'; do
             ls dist-packages/$p >/dev/null 2>&1 || { echo "::error::missing $p"; exit 1; }
           done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dial-control-linux
           path: |
@@ -84,7 +84,7 @@ jobs:
           targets: x86_64-pc-windows-msvc
       - run: pnpm install
       - run: npx @tauri-apps/cli build
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dial-control-windows
           path: |
@@ -107,7 +107,7 @@ jobs:
           targets: aarch64-apple-darwin
       - run: pnpm install
       - run: npx @tauri-apps/cli build
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dial-control-macos
           path: src-tauri/target/**/bundle/dmg/*.dmg
