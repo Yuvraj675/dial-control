@@ -4,18 +4,18 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-16
+
+First release.
+
 ### Added
-- Android: the desktop React UI now runs in WebViews (settings screen and wheel) through a Tauri-compatible shim, so profiles are edited the same way as on desktop; phone "system" slices (back, home, screenshot, torch, DND, swipes…).
-- MIT license, contributing guide, security policy and refreshed documentation.
+- Radial HUD with context-aware profiles, a Home switcher and custom profiles.
+- Normal earbud behaviour by default (turn = volume, click = play/pause, triple press = previous); double press opens the wheel.
+- Scroll mode with tray, GNOME top-bar and audio indicators; volume and brightness gauges.
+- Custom slices: hotkeys, launch app/file/URL, shell command, type text and multi-step macros.
+- Linux (BlueZ/evdev), Windows (Core Audio, hooks, own SMTC session) and macOS (event tap, own Now Playing session) backends; `.deb`, `.rpm`, `.pkg.tar.zst`, `.AppImage`, `.exe`, `.msi` and `.dmg` packaging.
+- MIT license, contributing guide, security policy and architecture/platform documentation.
+- Tag-driven release workflow and `scripts/bump-version.sh`.
 
-### Changed
-- Documentation restructured: `docs/ARCHITECTURE.md`, `docs/PLATFORMS.md`, rewritten development guide; the RFCOMM protocol notes are marked as archived research.
-
-### Removed
-- Unused `config/profiles.json` (the live config is stored in the OS app-config directory).
-
-## [1.0.0]
-
-- Radial HUD with context-aware profiles, scroll mode, volume/brightness gauges, custom actions and macros.
-- Linux, Windows and macOS backends; Android app started (work in progress, not released).
-- Normal earbud behaviour by default; double press opens the wheel.
+### Not included
+- The Android app (`android/`) is a work in progress and is not part of this release.

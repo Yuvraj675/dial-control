@@ -59,4 +59,4 @@ The earbuds speak plain AVRCP: turns are volume changes, a click is play/pause, 
 
 ## Release pipeline
 
-All CI workflows are manual (`workflow_dispatch`): `build-windows.yml` (NSIS + MSI), `build-macos.yml` (DMG + app), `build-android.yml` (tests + APK). Linux packages come from `scripts/build-packages.sh`.
+`release.yml` runs on `v*` tags: verify versions, build Linux/Windows/macOS installers in parallel, then draft a GitHub Release with the changelog as notes (see the [development guide](DEVELOPMENT_GUIDE.md#8-creating-a-release-automated)). `build-windows.yml`, `build-macos.yml` and `build-android.yml` stay manual (`workflow_dispatch`) for one-off builds. Linux packages can also be built locally with `scripts/build-packages.sh`.

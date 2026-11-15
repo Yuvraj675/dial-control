@@ -4,6 +4,10 @@ set -e
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$DIR"
 
+# Single source of truth for the version: package.json (kept equal to Cargo.toml / tauri.conf.json).
+VERSION="$(node -p "require('./package.json').version")"
+echo "==> Packaging Dial Control v${VERSION}"
+
 echo "==> [1/5] Compiling release frontend and binary..."
 npx @tauri-apps/cli build --no-bundle
 
@@ -30,9 +34,9 @@ export PKG_CONFIG_PATH="$DIR/temp/pkgconfig:$PKG_CONFIG_PATH"
 echo "==> [2/5] Generating AppImage bundle via Tauri..."
 npx @tauri-apps/cli build --bundles appimage || true
 
-if [ -f "src-tauri/target/release/bundle/appimage/Dial Control_1.0.0_amd64.AppImage" ]; then
-    cp "src-tauri/target/release/bundle/appimage/Dial Control_1.0.0_amd64.AppImage" dist-packages/Dial-Control-1.0.0-amd64.AppImage
-    chmod +x dist-packages/Dial-Control-1.0.0-amd64.AppImage
+if [ -f "src-tauri/target/release/bundle/appimage/Dial Control_${VERSION}_amd64.AppImage" ]; then
+    cp "src-tauri/target/release/bundle/appimage/Dial Control_${VERSION}_amd64.AppImage" dist-packages/Dial-Control-${VERSION}-amd64.AppImage
+    chmod +x dist-packages/Dial-Control-${VERSION}-amd64.AppImage
 fi
 
 echo "==> [3/5] Assembling Debian (.deb) package..."
@@ -74,7 +78,7 @@ EOF
 
 cat << 'EOF' > temp/deb-build/DEBIAN/control
 Package: dial-control
-Version: 1.0.0
+Version: @VERSION@
 Section: utils
 Priority: optional
 Architecture: amd64
@@ -85,6 +89,7 @@ Description: Context-Aware Radial Dial Controller for CMF Buds Pro 2
  Dial Control provides an intuitive, Nothing OS-styled radial HUD and
  context-aware profiles for desktop controls, audio, media, and applications.
 EOF
+sed -i "s/@VERSION@/${VERSION}/g" temp/deb-build/DEBIAN/control
 
 cat << 'EOF' > temp/deb-build/DEBIAN/postinst
 #!/bin/sh
@@ -110,7 +115,7 @@ cd temp/deb-build
 echo "2.0" > debian-binary
 tar --numeric-owner --owner=0 --group=0 -czvf control.tar.gz -C DEBIAN control postinst
 tar --numeric-owner --owner=0 --group=0 -czvf data.tar.gz usr
-ar rcs "$DIR/dist-packages/dial-control_1.0.0_amd64.deb" debian-binary control.tar.gz data.tar.gz
+ar rcs "$DIR/dist-packages/dial-control_${VERSION}_amd64.deb" debian-binary control.tar.gz data.tar.gz
 cd "$DIR"
 
 echo "==> [4/5] Assembling Red Hat / Fedora (.rpm) package via rpmbuild..."
@@ -119,7 +124,7 @@ cp -r temp/deb-build/usr temp/rpm-build/SOURCES/
 
 cat << 'EOF' > temp/rpm-build/SPECS/dial-control.spec
 Name: dial-control
-Version: 1.0.0
+Version: @VERSION@
 Release: 1
 Summary: Context-Aware Radial Dial Controller for CMF Buds Pro 2
 License: MIT
@@ -156,12 +161,13 @@ if command -v gnome-extensions >/dev/null 2>&1; then
 fi
 
 %changelog
-* $(date +"%a %b %d %Y") Yuvraj Gupta <yuviyg675@gmail.com> - 1.0.0-1
+* $(date +"%a %b %d %Y") Yuvraj Gupta <yuviyg675@gmail.com> - @VERSION@-1
 - Production release with context awareness and udev permissions
 EOF
+sed -i "s/@VERSION@/${VERSION}/g" temp/rpm-build/SPECS/dial-control.spec
 
 rpmbuild --define "_topdir $DIR/temp/rpm-build" --define "_tmppath /tmp" -bb temp/rpm-build/SPECS/dial-control.spec
-cp -f temp/rpm-build/RPMS/x86_64/dial-control-1.0.0-1.x86_64.rpm dist-packages/dial-control-1.0.0-1.x86_64.rpm
+cp -f temp/rpm-build/RPMS/x86_64/dial-control-${VERSION}-1.x86_64.rpm dist-packages/dial-control-${VERSION}-1.x86_64.rpm
 
 echo "==> [5/5] Assembling Arch Linux package..."
 mkdir -p temp/arch-build/usr
@@ -169,7 +175,7 @@ cp -r temp/deb-build/usr/* temp/arch-build/usr/
 
 cat << 'EOF' > temp/arch-build/.PKGINFO
 pkgname = dial-control
-pkgver = 1.0.0-1
+pkgver = @VERSION@-1
 pkgdesc = Context-Aware Radial Dial Controller for CMF Buds Pro 2
 url = https://github.com/Yuvraj675/dial-control
 builddate = 1792600000
@@ -182,6 +188,7 @@ depend = gtk3
 depend = libayatana-appindicator
 install = .INSTALL
 EOF
+sed -i "s/@VERSION@/${VERSION}/g" temp/arch-build/.PKGINFO
 
 cat << 'EOF' > temp/arch-build/.INSTALL
 post_install() {
@@ -205,7 +212,7 @@ post_upgrade() {
 EOF
 
 cd temp/arch-build
-tar --numeric-owner --owner=0 --group=0 -cf - .PKGINFO .INSTALL usr | zstd -19 -T0 -f -o "$DIR/dist-packages/dial-control-1.0.0-1-x86_64.pkg.tar.zst"
+tar --numeric-owner --owner=0 --group=0 -cf - .PKGINFO .INSTALL usr | zstd -19 -T0 -f -o "$DIR/dist-packages/dial-control-${VERSION}-1-x86_64.pkg.tar.zst"
 cd "$DIR"
 
 rm -rf temp/deb-build temp/arch-build temp/rpm-build temp/pkgconfig

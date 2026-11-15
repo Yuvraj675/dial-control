@@ -1,0 +1,140 @@
+name: Release
+
+# Pushing a tag like v1.0.0 builds every installer and creates a DRAFT GitHub Release
+# (review it, then press "Publish"). Running it by hand (Actions -> Run workflow) builds
+# everything and uploads the files as workflow artifacts only; no release is created.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    name: Verify version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag must match package.json, Cargo.toml and tauri.conf.json
+        run: |
+          pkg=$(node -p "require('./package.json').version")
+          cargo=$(grep -m1 '^version' src-tauri/Cargo.toml | cut -d'"' -f2)
+          tauri=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          echo "package.json=$pkg Cargo.toml=$cargo tauri.conf.json=$tauri"
+          [ "$pkg" = "$cargo" ] && [ "$pkg" = "$tauri" ] || { echo "::error::Version files disagree (run scripts/bump-version.sh)"; exit 1; }
+          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [ "${GITHUB_REF_NAME}" != "v$pkg" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match version v$pkg"; exit 1
+          fi
+
+  linux:
+    name: Linux (.deb .rpm .pkg.tar.zst .AppImage)
+    needs: verify
+    runs-on: ubuntu-latest
+    # Fedora 41 (glibc 2.40) matches the packages' documented glibc >= 2.39 requirement
+    # and the library paths build-packages.sh expects.
+    container: fedora:41
+    env:
+      APPIMAGE_EXTRACT_AND_RUN: "1"
+    steps:
+      - name: Install system packages
+        run: |
+          dnf install -y gcc gcc-c++ make git curl wget file xz tar zstd binutils dpkg rpm-build \
+            openssl-devel webkit2gtk4.1-devel libappindicator-gtk3-devel librsvg2-devel libxdo-devel
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install -g pnpm@9
+      - uses: dtolnay/rust-toolchain@stable
+      - run: pnpm install
+      - name: Build packages
+        run: ./scripts/build-packages.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dial-control-linux
+          path: |
+            dist-packages/*.deb
+            dist-packages/*.rpm
+            dist-packages/*.pkg.tar.zst
+            dist-packages/*.AppImage
+          if-no-files-found: error
+
+  windows:
+    name: Windows (.exe .msi)
+    needs: verify
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install -g pnpm@9
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - run: pnpm install
+      - run: npx @tauri-apps/cli build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dial-control-windows
+          path: |
+            src-tauri/target/release/bundle/**/*.exe
+            src-tauri/target/release/bundle/**/*.msi
+          if-no-files-found: error
+
+  macos:
+    name: macOS (.dmg)
+    needs: verify
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install -g pnpm@9
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+      - run: pnpm install
+      - run: npx @tauri-apps/cli build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dial-control-macos
+          path: src-tauri/target/**/bundle/dmg/*.dmg
+          if-no-files-found: error
+
+  release:
+    name: Draft GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [linux, windows, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-files
+      - name: Collect files and release notes
+        run: |
+          mkdir out
+          find release-files -type f \( -name '*.deb' -o -name '*.rpm' -o -name '*.zst' -o -name '*.AppImage' \
+            -o -name '*.exe' -o -name '*.msi' -o -name '*.dmg' \) -exec cp {} out/ \;
+          ver="${GITHUB_REF_NAME#v}"
+          # Notes = this version's CHANGELOG section; fall back to GitHub's generated notes.
+          awk -v v="$ver" '$0 ~ "^## \\[" v "\\]" {f=1; next} /^## \[/ {f=0} f' CHANGELOG.md > notes.md
+          if [ -s notes.md ]; then echo "notes from CHANGELOG"; else echo "(no changelog section for $ver)" > notes.md; fi
+          cat >> notes.md <<'NOTES'
+
+          ### Install
+          See the [README](https://github.com/${{ github.repository }}#install). macOS builds are ad-hoc signed: run
+          `xattr -dr com.apple.quarantine "/Applications/Dial Control.app"` once after installing.
+          NOTES
+          ls -l out
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          args=(--draft --notes-file notes.md --title "Dial Control ${GITHUB_REF_NAME}")
+          case "$GITHUB_REF_NAME" in *-*) args+=(--prerelease);; esac
+          gh release create "$GITHUB_REF_NAME" out/* "${args[@]}"

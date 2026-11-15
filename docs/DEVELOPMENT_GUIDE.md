@@ -62,25 +62,26 @@ A plain `cargo build --release` skips the frontend and produces a binary that po
 | Events fire twice | Emit each Tauri event once (`app.emit` already broadcasts to all webviews). |
 | `GLIBC_2.39 not found` | Build or run on a newer distribution. |
 
-## 8. Creating a release
+## 8. Creating a release (automated)
 
-CI workflows only build and upload *artifacts* (they are manual by design), so a GitHub Release is assembled by hand.
+Pushing a version tag builds every installer and creates a **draft** GitHub Release (`.github/workflows/release.yml`).
 
-1. **Bump the version** in `package.json`, `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json` (keep them equal), and the version strings in `scripts/build-packages.sh` / `dist-packages/PKGBUILD`.
-2. **Update `CHANGELOG.md`**: move *Unreleased* entries under the new version and date.
-3. **Run every check** from [CONTRIBUTING.md](../CONTRIBUTING.md#checks).
-4. **Commit and tag**:
-   ```bash
-   git commit --author="Yuvraj675 <yuviyg675@gmail.com>" -am "chore(release): v1.1.0"
-   git tag -a v1.1.0 -m "Dial Control v1.1.0"
-   git push origin main --tags
-   ```
-5. **Build the installers**:
-   - Linux: `npx @tauri-apps/cli build --no-bundle && ./scripts/build-packages.sh` (files land in `dist-packages/`).
-   - Windows / macOS: GitHub → **Actions** → *Build Windows Release* / *Build macOS Release* → **Run workflow**, then download the artifacts from the finished run.
-6. **Publish**: GitHub → **Releases → Draft a new release**, pick the tag, paste the changelog section, attach the `.deb`, `.rpm`, `.pkg.tar.zst`, `.AppImage`, `.exe`, `.msi` and `.dmg`, then publish. Or from the CLI:
-   ```bash
-   gh release create v1.1.0 dist-packages/*.{deb,rpm,zst,AppImage} <downloaded .exe/.msi/.dmg> \
-     --title "Dial Control v1.1.0" --notes-file release-notes.md
-   ```
-7. Tick *Set as a pre-release* until the macOS/Windows builds have been tried on real hardware. Android is not part of releases yet.
+```bash
+scripts/bump-version.sh 1.1.0     # package.json, Cargo.toml, tauri.conf.json, PKGBUILD
+$EDITOR CHANGELOG.md              # move Unreleased entries under "## [1.1.0] - YYYY-MM-DD"
+# run the checks from CONTRIBUTING.md, then:
+git commit --author="Yuvraj675 <yuviyg675@gmail.com>" -am "chore(release): v1.1.0"
+git tag -a v1.1.0 -m "Dial Control v1.1.0"
+git push origin main --tags       # the tag push starts the workflow
+```
+
+What the workflow does:
+
+1. **Verify**: the tag must equal the version in `package.json`, `Cargo.toml` and `tauri.conf.json`.
+2. **Build in parallel**: Linux (Fedora 41 container: `.deb`, `.rpm`, `.pkg.tar.zst`, `.AppImage` via `scripts/build-packages.sh`), Windows (`.exe`, `.msi`), macOS (`.dmg`, Apple Silicon).
+3. **Draft release**: attaches all files and uses the matching `CHANGELOG.md` section as release notes. Tags containing a `-` (e.g. `v1.1.0-rc.1`) are marked pre-release.
+4. **You review and press Publish** on the draft (Releases page).
+
+To dry-run the builds without tagging, use **Actions → Release → Run workflow**: it uploads the installers as workflow artifacts and creates no release. If a tag build fails, fix the problem, delete the tag (`git tag -d v1.1.0 && git push origin :refs/tags/v1.1.0`) and tag again.
+
+Android is not part of releases yet.

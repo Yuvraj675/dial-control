@@ -46,7 +46,7 @@ Windows and macOS decision logic is unit-tested on any host; the OS integrations
 
 ## Install
 
-Release binaries are built by the manually triggered GitHub Actions workflows (**Actions → Run workflow**) and attached to [Releases](https://github.com/Yuvraj675/dial-control/releases) when published.
+Download the installer for your OS from [Releases](https://github.com/Yuvraj675/dial-control/releases). They are built by GitHub Actions when a version tag is pushed (maintainers: see the [release guide](docs/DEVELOPMENT_GUIDE.md#8-creating-a-release-automated)).
 
 ### Earbuds setup (all platforms)
 
