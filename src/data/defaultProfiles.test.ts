@@ -124,3 +124,11 @@ test("sanitize adds macOS shortcuts to old configs and drops them for customized
   legacy.profiles.file_manager.actions.find((x) => x.id === "file_copy")!.keys_mac = ["KEY_LEFTMETA", "KEY_C"];
   assert.equal(sanitizeAndMigrateConfig(legacy).profiles.file_manager.actions.find((x) => x.id === "file_copy")!.keys_mac, undefined);
 });
+
+test("legacy theme ids are migrated", () => {
+  const migrate = (theme: string) =>
+    sanitizeAndMigrateConfig({ ...DEFAULT_CONFIG, settings: { ...DEFAULT_CONFIG.settings, theme: theme as never } }).settings.theme;
+  assert.equal(migrate("nothing_red"), "signal_red");
+  assert.equal(migrate("cmf_orange"), "amber");
+  assert.equal(migrate("stealth"), "stealth");
+});

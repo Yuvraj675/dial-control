@@ -12,6 +12,9 @@ export type ActionType =
   | "close"
   | "system"; // Android only: phone action in `action` (see ANDROID_SYSTEM_ACTIONS)
 
+/** Accent themes of the wheel. */
+export type ThemeId = "signal_red" | "amber" | "stealth";
+
 /** One step of a macro slice; executed in order by the backend (`actions::Step`). */
 export type MacroStep =
   | { kind: "hotkey"; keys: string[]; keys_mac?: string[] }
@@ -53,7 +56,7 @@ export interface DialProfile {
 }
 
 export interface AppSettings {
-  theme: "nothing_red" | "stealth" | "cmf_orange";
+  theme: ThemeId;
   dial_radius: number;
   donut_thickness: number;
   sensitivity: number;

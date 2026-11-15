@@ -1,8 +1,8 @@
-import type { ProfilesConfig, WheelAction } from "../types/profile.ts";
+import type { ProfilesConfig, WheelAction, ThemeId } from "../types/profile.ts";
 
 export const DEFAULT_CONFIG: ProfilesConfig = {
   settings: {
-    theme: "nothing_red",
+    theme: "signal_red",
     dial_radius: 185,
     donut_thickness: 64,
     sensitivity: 1.0,
@@ -341,8 +341,17 @@ export function sanitizeAndMigrateConfig(cfg: ProfilesConfig): ProfilesConfig {
     }
   }
 
+  // Themes renamed in 1.0.0; keep saved configs working.
+  const legacyThemes: Record<string, ThemeId> = { nothing_red: "signal_red", cmf_orange: "amber" };
+  const savedTheme = cfg.settings?.theme as string | undefined;
+  const settings =
+    savedTheme && savedTheme in legacyThemes
+      ? { ...cfg.settings, theme: legacyThemes[savedTheme] }
+      : cfg.settings;
+
   return {
     ...cfg,
+    settings,
     profiles: updatedProfiles,
   };
 }

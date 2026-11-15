@@ -25,7 +25,7 @@ import com.yuvraj.dialcontrol.media.MediaListener
 
 /**
  * Setup screen, styled like the desktop Settings window (#07080A background, #0C0E14 cards,
- * Ndot uppercase labels, Nothing red). Permission checklist, listener control, a button into the
+ * Ndot uppercase labels, signal red). Permission checklist, listener control, a button into the
  * desktop Settings UI, and a live log of every dial signal.
  */
 class MainActivity : Activity() {

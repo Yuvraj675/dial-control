@@ -1,7 +1,7 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { calculateDonutSlice } from "../../utils/donutGeometry";
-import { DialProfile, WheelAction } from "../../types/profile";
+import { DialProfile, WheelAction, ThemeId } from "../../types/profile";
 import { getActionIcon } from "../../utils/iconMap";
 
 interface DonutRadialHUDProps {
@@ -10,7 +10,7 @@ interface DonutRadialHUDProps {
   isOpen: boolean;
   currentMode: "menu" | "volume" | "brightness" | "scroll";
   gaugeValue?: number; // 0-100
-  theme?: "nothing_red" | "stealth" | "cmf_orange";
+  theme?: ThemeId;
   dialRadius?: number;
   donutThickness?: number;
   isStaticPreview?: boolean;
@@ -24,7 +24,7 @@ export const DonutRadialHUD: React.FC<DonutRadialHUDProps> = ({
   isOpen,
   currentMode,
   gaugeValue = 50,
-  theme = "nothing_red",
+  theme = "signal_red",
   dialRadius = 188,
   donutThickness = 68,
   isStaticPreview = false,
@@ -41,16 +41,16 @@ export const DonutRadialHUD: React.FC<DonutRadialHUDProps> = ({
   const actions = profile.actions || [];
   const activeAction = actions[selectedIndex] || actions[0];
 
-  // Authentic Nothing Signature Palette (Matching NThing-UI & Nothing Phone)
+  // Accent palettes
   const accentColor =
-    theme === "nothing_red"
+    theme === "signal_red"
       ? "#E2201F"
       : theme === "stealth"
       ? "#FFFFFF"
       : "#FF5500";
 
   const glowColor =
-    theme === "nothing_red"
+    theme === "signal_red"
       ? "rgba(226, 32, 31, 0.35)"
       : theme === "stealth"
       ? "rgba(255, 255, 255, 0.2)"
@@ -101,7 +101,7 @@ export const DonutRadialHUD: React.FC<DonutRadialHUDProps> = ({
               className="absolute inset-0 overflow-visible"
             >
               <defs>
-                <filter id="nothing-glow" x="-20%" y="-20%" width="140%" height="140%">
+                <filter id="hud-glow" x="-20%" y="-20%" width="140%" height="140%">
                   <feGaussianBlur stdDeviation="5" result="blur" />
                   <feComposite in="SourceGraphic" in2="blur" operator="over" />
                 </filter>
@@ -160,7 +160,7 @@ export const DonutRadialHUD: React.FC<DonutRadialHUDProps> = ({
                           fill={isSelected ? accentColor : "#15161A"}
                           stroke={isSelected ? "#FFFFFF" : "rgba(255, 255, 255, 0.08)"}
                           strokeWidth={isSelected ? 1.5 : 1}
-                          filter={isSelected ? "url(#nothing-glow)" : undefined}
+                          filter={isSelected ? "url(#hud-glow)" : undefined}
                           className="transition-colors duration-150"
                         />
 
@@ -205,7 +205,7 @@ export const DonutRadialHUD: React.FC<DonutRadialHUDProps> = ({
                     stroke={accentColor}
                     strokeWidth={3}
                     strokeDasharray="12 12"
-                    filter="url(#nothing-glow)"
+                    filter="url(#hud-glow)"
                     opacity={0.85}
                   />
                 </g>
@@ -242,7 +242,7 @@ export const DonutRadialHUD: React.FC<DonutRadialHUDProps> = ({
                         animate={{ strokeDashoffset }}
                         transition={{ type: "spring", stiffness: 350, damping: 28 }}
                         transform={`rotate(-90 ${cx} ${cy})`}
-                        filter="url(#nothing-glow)"
+                        filter="url(#hud-glow)"
                       />
                     );
                   })()}

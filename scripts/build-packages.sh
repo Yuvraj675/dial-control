@@ -86,7 +86,7 @@ Maintainer: Yuvraj Gupta <yuviyg675@gmail.com>
 Installed-Size: 18000
 Depends: libwebkit2gtk-4.1-0 | libwebkit2gtk-4.0-37, libgtk-3-0, libayatana-appindicator3-1 | libappindicator3-1
 Description: Context-Aware Radial Dial Controller for CMF Buds Pro 2
- Dial Control provides an intuitive, Nothing OS-styled radial HUD and
+ Dial Control provides an intuitive, dot-matrix styled radial HUD and
  context-aware profiles for desktop controls, audio, media, and applications.
 EOF
 sed -i "s/@VERSION@/${VERSION}/g" temp/deb-build/DEBIAN/control

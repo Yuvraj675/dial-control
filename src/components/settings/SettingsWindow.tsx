@@ -871,7 +871,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
             <div>
               <div className="font-ndot text-sm text-white tracking-widest whitespace-nowrap">DIAL CONTROL</div>
               <div className="text-[10px] font-ndot text-neutral-400 uppercase tracking-wider">
-                NOTHING OS // 50
+                RADIAL CONTROLLER
               </div>
             </div>
           </div>
@@ -921,6 +921,9 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
 
         {/* Bottom Save Action - Permanently pinned */}
         <div className="pt-4 border-t border-white/[0.08] mt-auto">
+          <p className="mb-3 px-1 text-[9px] leading-snug text-neutral-500 font-ndot uppercase tracking-wider">
+            Independent project. Not affiliated with, endorsed by or connected to Nothing Technology Limited.
+          </p>
           <button
             type="button"
             onClick={handleSave}
@@ -1664,8 +1667,8 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
             </div>
             <div className="grid grid-cols-3 gap-3.5">
               {[
-                { id: "nothing_red", name: "Nothing Red", color: "#E2201F" },
-                { id: "cmf_orange", name: "CMF Orange", color: "#FF5500" },
+                { id: "signal_red", name: "Signal Red", color: "#E2201F" },
+                { id: "amber", name: "Amber", color: "#FF5500" },
                 { id: "stealth", name: "Pure Titanium", color: "#FFFFFF" },
               ].map((th) => (
                 <button
