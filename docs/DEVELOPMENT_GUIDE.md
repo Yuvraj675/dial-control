@@ -62,7 +62,11 @@ A plain `cargo build --release` skips the frontend and produces a binary that po
 | Events fire twice | Emit each Tauri event once (`app.emit` already broadcasts to all webviews). |
 | `GLIBC_2.39 not found` | Build or run on a newer distribution. |
 
-## 8. Creating a release (automated)
+## 8. The website
+
+The project site lives in `website/` (Astro + React islands) and embeds the app's own wheel component, so a change to `src/components/hud/` or the default profiles changes the site too. See [website/README.md](../website/README.md) for development, deployment, custom-domain setup and the SEO checklist. Run `cd website && npm ci && npm run build` before committing changes there.
+
+## 9. Creating a release (automated)
 
 Pushing a version tag builds every installer and creates a **draft** GitHub Release (`.github/workflows/release.yml`).
 

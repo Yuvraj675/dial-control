@@ -4,6 +4,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 
 ## [Unreleased]
 
+### Added
+- Project website (`website/`, Astro): a live, interactive wheel built from the app's own component, an OS-aware download section, the keyboard-only guide and structured data for search. Deployed to GitHub Pages by `.github/workflows/pages.yml`.
+- `DonutRadialHUD` accepts an `inline` prop so the same component can render in normal flow outside the app.
+
 ## [1.0.0] - 2026-11-16
 
 First release.

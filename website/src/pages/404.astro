@@ -1,0 +1,23 @@
+---
+import '../styles/global.css';
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Page not found | Dial Control</title>
+    <meta name="robots" content="noindex" />
+    <meta name="color-scheme" content="dark" />
+    <style is:global>html, body { overflow-x: clip; }</style>
+  </head>
+  <body>
+    <main class="container" style="min-height: 100svh; display: grid; align-content: center; gap: var(--space-lg); justify-items: start;">
+      <h1>That page is not here</h1>
+      <p class="lede">The link may be old. The wheel is still on the home page.</p>
+      <a class="btn btn--primary" href={`${base}/`}>Back to Dial Control</a>
+    </main>
+  </body>
+</html>

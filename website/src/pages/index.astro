@@ -1,0 +1,415 @@
+---
+import '../styles/global.css';
+import HeroWheel from '../components/HeroWheel';
+import ProfileSwitcher from '../components/ProfileSwitcher';
+
+const REPO = 'https://github.com/Yuvraj675/dial-control';
+const RELEASES = `${REPO}/releases/latest`;
+const site = Astro.site!.toString().replace(/\/$/, '');
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const asset = (p: string) => `${base}/${p}`;
+const canonical = `${site}${base}/`;
+
+const title = 'Dial Control: radial shortcut menu for the CMF Buds Pro 2';
+const description =
+  'Turn the CMF Buds Pro 2 dial, or a keyboard shortcut, into a radial menu that launches apps, runs macros and sets volume on Windows, macOS and Linux.';
+
+const faq = [
+  { q: 'Does it work on Windows, macOS and Linux?', a: 'Yes. Dial Control turns the dial’s standard Bluetooth commands into a radial menu on all three.' },
+  { q: 'Do I need the earbuds?', a: 'No. The shortcut, arrow keys and Enter do everything the dial does.' },
+  { q: 'Why does my system show a warning?', a: 'The installers are not code-signed yet. On Windows choose More info, then Run anyway.' },
+  { q: 'Does it send data?', a: 'No. It makes no network requests, it is free and open source, and it is not affiliated with Nothing.' },
+];
+
+const jsonLd = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'Dial Control',
+    alternateName: 'Dial Control for CMF Buds Pro 2',
+    description,
+    url: canonical,
+    applicationCategory: 'UtilitiesApplication',
+    operatingSystem: 'Windows 10, Windows 11, macOS 14, Linux',
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+    license: 'https://opensource.org/licenses/MIT',
+    downloadUrl: RELEASES,
+    softwareHelp: `${REPO}#readme`,
+    image: `${site}${base}/images/og.png`,
+    author: { '@type': 'Person', name: 'Yuvraj Gupta', url: 'https://github.com/Yuvraj675' },
+    sameAs: [REPO],
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: faq.map((f) => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a } })),
+  },
+  { '@context': 'https://schema.org', '@type': 'WebSite', name: 'Dial Control', url: canonical },
+];
+
+const profiles = [
+  ['Turn', 'Changes volume as usual', 'Moves the highlight'],
+  ['Click', 'Plays or pauses', 'Runs the highlighted slice'],
+  ['Double press', 'Opens the wheel', 'Closes it'],
+  ['Triple press', 'Previous track', 'Closes it'],
+];
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="theme-color" content="#0b0c10" />
+    <meta name="color-scheme" content="dark" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Dial Control" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={`${site}${base}/images/og.png`} />
+    <meta property="og:image:width" content="1280" />
+    <meta property="og:image:height" content="640" />
+    <meta property="og:image:alt" content="The Dial Control radial wheel with its slices around a play and pause button" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={`${site}${base}/images/og.png`} />
+
+    <style is:global>html, body { overflow-x: clip; }</style>
+    <link rel="sitemap" href={asset('sitemap-index.xml')} />
+    <meta name="author" content="Yuvraj Gupta" />
+    <link rel="icon" type="image/png" sizes="32x32" href={asset('favicon-32.png')} />
+    <link rel="apple-touch-icon" href={asset('apple-touch-icon.png')} />
+    <link rel="preload" href={asset('fonts/doto.woff2')} as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href={asset('fonts/hanken-grotesk.woff2')} as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href={asset('images/wheel.webp')} as="image" type="image/webp" fetchpriority="high" />
+
+    {jsonLd.map((d) => <script type="application/ld+json" set:html={JSON.stringify(d)} />)}
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to the content</a>
+
+    <header class="nav">
+      <div class="container nav__row">
+        <a class="brand" href={asset('')} aria-label="Dial Control, home">
+          <img src={asset('images/app-icon.webp')} alt="" width="36" height="36" />
+          Dial Control
+        </a>
+        <a class="btn btn--quiet" href="#download">Download</a>
+      </div>
+    </header>
+
+    <main id="main">
+      <!-- hero -->
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="container hero__grid">
+          <div class="hero__copy">
+            <h1 id="hero-title">A shortcut wheel for your earbuds</h1>
+            <p class="lede">Double-press the CMF Buds Pro 2 dial, turn, then click.</p>
+            <div class="hero__actions">
+              <a class="btn btn--primary" id="hero-download" href="#download" data-primary>Download Dial Control</a>
+              <a class="link" href="#keyboard">Use your keyboard instead</a>
+            </div>
+          </div>
+
+          <figure class="stage" data-stage>
+            <div class="stage__box">
+              <img class="stage__still" src={asset('images/wheel.webp')} width="800" height="800" alt="The Dial Control wheel: nine slices around a play and pause button, one slice highlighted in red" fetchpriority="high" decoding="async" />
+              <div class="stage__live"><HeroWheel client:only="react" /></div>
+              <p class="static-caption">The wheel is the app itself. Turn it with the arrow keys once it loads.</p>
+            </div>
+          </figure>
+        </div>
+      </section>
+
+      <!-- gestures -->
+      <section class="section rule-top" id="gestures" aria-labelledby="gestures-title">
+        <div class="container">
+          <div class="section__head">
+            <h2 id="gestures-title">Turn, click, double-press</h2>
+            <p>Nothing changes until you double-press.</p>
+          </div>
+          <table class="gestures">
+            <thead>
+              <tr><th scope="col">Dial</th><th scope="col">Wheel closed</th><th scope="col">Wheel open</th></tr>
+            </thead>
+            <tbody>
+              {profiles.map(([g, closed, opened]) => (
+                <tr><th scope="row">{g}</th><td data-label="Wheel closed">{closed}</td><td data-label="Wheel open">{opened}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- follows your app -->
+      <section class="section rule-top" id="apps" aria-labelledby="apps-title">
+        <div class="container">
+          <div class="section__head">
+            <h2 id="apps-title">The wheel follows your app</h2>
+            <p>Open VS Code and it becomes Code. Open your file manager and it becomes Files.</p>
+          </div>
+          <ProfileSwitcher client:visible />
+        </div>
+      </section>
+
+      <!-- slices -->
+      <section class="section rule-top" id="slices" aria-labelledby="slices-title">
+        <div class="container">
+          <div class="section__head">
+            <h2 id="slices-title">Build your own slices</h2>
+            <p>Press a hotkey, open an app or link, run a command, type a snippet, or chain steps into a macro.</p>
+          </div>
+          <figure class="shot">
+            <div class="shot__frame" data-kind="product">
+              <img
+                src={asset('images/settings-1000.webp')}
+                srcset={`${asset('images/settings-1000.webp')} 1000w, ${asset('images/settings.webp')} 2000w`}
+                sizes="(min-width: 1424px) 1296px, calc(100vw - 2 * var(--gutter))"
+                width="2000" height="1250"
+                alt="The Dial Control settings window: a list of dials, the slices of the System dial in the middle and the slice inspector on the right"
+                loading="lazy" decoding="async"
+              />
+            </div>
+            <figcaption>The Settings window: dials on the left, slices in the middle, the inspector on the right.</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- modes -->
+      <section class="section rule-top" id="modes" aria-labelledby="modes-title">
+        <div class="container">
+          <div class="section__head">
+            <h2 id="modes-title">Scroll, volume, brightness</h2>
+          </div>
+          <ul class="modes">
+            <li><strong>Scroll</strong><span>The dial becomes a mouse wheel. The tray icon turns red while it is on.</span></li>
+            <li><strong>Volume</strong><span>A live gauge. Your listening volume is restored when the wheel closes.</span></li>
+            <li><strong>Brightness</strong><span>Reads and steps your display, on laptop panels and external monitors.</span></li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- keyboard -->
+      <section class="section rule-top" id="keyboard" aria-labelledby="keyboard-title">
+        <div class="container">
+          <div class="section__head">
+            <h2 id="keyboard-title">No earbuds? Use the keyboard</h2>
+            <p>Every gesture has a key. Rebind the shortcut in Settings.</p>
+          </div>
+          <div class="keys">
+            <div>
+              <div class="keycaps" aria-label="Super, Shift and D">
+                <span class="key" data-mod>Super</span><span class="plus" aria-hidden="true">+</span><span class="key">Shift</span><span class="plus" aria-hidden="true">+</span><span class="key">D</span>
+              </div>
+              <p>Opens and closes the wheel from anywhere.</p>
+            </div>
+            <div>
+              <div class="keycaps"><span class="key" aria-label="Left arrow">&larr;</span><span class="key" aria-label="Right arrow">&rarr;</span></div>
+              <p>Turn to the previous or next slice.</p>
+            </div>
+            <div>
+              <div class="keycaps"><span class="key">Enter</span></div>
+              <p>Runs the highlighted slice.</p>
+            </div>
+            <div>
+              <div class="keycaps"><span class="key">Esc</span></div>
+              <p>Closes the wheel, or leaves a gauge.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- faq -->
+      <section class="section rule-top" id="faq" aria-labelledby="faq-title">
+        <div class="container">
+          <div class="section__head"><h2 id="faq-title">Before you install</h2></div>
+          <dl class="faq">
+            {faq.map((f) => (
+              <div class="faq__row">
+                <dt>{f.q}</dt>
+                <dd>{f.a}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </section>
+
+      <!-- download -->
+      <section class="section rule-top" id="download" aria-labelledby="download-title">
+        <div class="container">
+          <div class="section__head">
+            <h2 id="download-title">Install in a minute</h2>
+            <p>Free and open source. No account needed.</p>
+          </div>
+
+          <div class="dl">
+            <div class="dl__row" data-os="windows">
+              <div><h3>Windows</h3></div>
+              <p>Windows 10 and 11, 64-bit.</p>
+              <div>
+                <a class="btn btn--line" href={RELEASES} data-dl="windows-exe">Download .exe</a>
+                <div class="dl__alts"><a class="link" href={RELEASES} data-dl="windows-msi">.msi installer</a></div>
+              </div>
+            </div>
+            <div class="dl__row" data-os="macos">
+              <div><h3>macOS</h3></div>
+              <p>macOS 14 or newer, Apple Silicon.</p>
+              <div>
+                <a class="btn btn--line" href={RELEASES} data-dl="macos-dmg">Download .dmg</a>
+              </div>
+            </div>
+            <div class="dl__row" data-os="linux">
+              <div><h3>Linux</h3></div>
+              <p>Any distribution with glibc 2.39 or newer.</p>
+              <div>
+                <a class="btn btn--line" href={RELEASES} data-dl="linux-appimage">Download .AppImage</a>
+                <div class="dl__alts">
+                  <a class="link" href={RELEASES} data-dl="linux-deb">.deb</a>
+                  <a class="link" href={RELEASES} data-dl="linux-rpm">.rpm</a>
+                  <a class="link" href={RELEASES} data-dl="linux-arch">.pkg.tar.zst</a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="install">
+            <div>
+              <h3>Or paste one line</h3>
+              <p class="muted">It finds your system, verifies the checksum and installs.</p>
+            </div>
+            <div class="cmd-stack" style="display: grid; gap: var(--space-lg);">
+              <div class="cmd" data-cmd="unix">
+                <div class="cmd__bar"><span>Linux and macOS</span><button type="button" class="btn btn--quiet" data-copy="#cmd-unix">Copy</button></div>
+                <pre><code id="cmd-unix">curl -fsSL https://github.com/Yuvraj675/dial-control/releases/latest/download/install.sh | bash</code></pre>
+              </div>
+              <div class="cmd" data-cmd="windows">
+                <div class="cmd__bar"><span>Windows PowerShell</span><button type="button" class="btn btn--quiet" data-copy="#cmd-win">Copy</button></div>
+                <pre><code id="cmd-win">irm https://github.com/Yuvraj675/dial-control/releases/latest/download/install.ps1 | iex</code></pre>
+              </div>
+            </div>
+          </div>
+
+          <ol class="steps">
+            <li><strong>Install it.</strong> Use a button or a line above.</li>
+            <li><strong>Set your earbuds.</strong> Double press is Next track, triple press is Previous.</li>
+            <li><strong>Double-press the dial.</strong> No earbuds? Press <span data-mod>Super</span>+Shift+D.</li>
+          </ol>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="container">
+        <div class="footer__top">
+          <a class="brand" href={asset('')}>
+            <img src={asset('images/app-icon.webp')} alt="" width="36" height="36" />
+            Dial Control
+          </a>
+          <ul class="footer__links">
+            <li><a class="link" href={REPO}>GitHub</a></li>
+            <li><a class="link" href={`${REPO}/releases`}>Releases</a></li>
+            <li><a class="link" href={`${REPO}#readme`}>Documentation</a></li>
+            <li><a class="link" href={`${REPO}/issues/new`}>Report an issue</a></li>
+            <li><a class="link" href={`${REPO}/blob/main/LICENSE`}>MIT license</a></li>
+          </ul>
+        </div>
+        <div class="footer__notice">
+          <p>An independent project, not affiliated with or endorsed by Nothing Technology Limited. CMF and Nothing are trademarks of their owners.</p>
+          <p>Typefaces: Doto and Hanken Grotesk (SIL OFL).</p>
+        </div>
+      </div>
+    </footer>
+
+    <script>
+      const REPO = 'Yuvraj675/dial-control';
+      type OS = 'windows' | 'macos' | 'linux' | 'mobile' | 'other';
+
+      function detect(): OS {
+        const ua = navigator.userAgent;
+        if (/Android|iPhone|iPad|iPod/i.test(ua)) return 'mobile';
+        const nav = navigator as Navigator & { userAgentData?: { platform?: string } };
+        const p = `${nav.userAgentData?.platform ?? navigator.platform ?? ''} ${ua}`;
+        if (/Win/i.test(p)) return 'windows';
+        if (/Mac/i.test(p)) return 'macos';
+        if (/Linux|X11|CrOS/i.test(p)) return 'linux';
+        return 'other';
+      }
+
+      const os = detect();
+      document.documentElement.dataset.os = os;
+
+      // Modifier key name for this system.
+      const mod = os === 'macos' ? 'Cmd' : os === 'windows' ? 'Win' : 'Super';
+      document.querySelectorAll('[data-mod]').forEach((el) => (el.textContent = mod));
+
+      // Mark the row that matches the visitor's system.
+      document.querySelectorAll<HTMLElement>('.dl__row').forEach((row) => {
+        if (row.dataset.os === os) row.dataset.match = 'true';
+      });
+
+      // Hero button: the right installer once the latest release is known.
+      const hero = document.getElementById('hero-download') as HTMLAnchorElement | null;
+      const names: Record<OS, string> = { windows: 'Windows', macos: 'macOS', linux: 'Linux', mobile: '', other: '' };
+      if (hero && names[os]) hero.textContent = `Download for ${names[os]}`;
+      if (hero && os === 'mobile') hero.textContent = 'Get it for your computer';
+
+      const patterns: Record<string, RegExp> = {
+        'windows-exe': /_x64-setup\.exe$/,
+        'windows-msi': /_x64_en-US\.msi$/,
+        'macos-dmg': /_aarch64\.dmg$/,
+        'linux-appimage': /\.AppImage$/,
+        'linux-deb': /\.deb$/,
+        'linux-rpm': /\.rpm$/,
+        'linux-arch': /\.pkg\.tar\.zst$/,
+      };
+      const primary: Partial<Record<OS, string>> = { windows: 'windows-exe', macos: 'macos-dmg' };
+
+      fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: 'application/vnd.github+json' } })
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+        .then((rel: { assets?: { name: string; browser_download_url: string }[] }) => {
+          const assets = rel.assets ?? [];
+          const urls: Record<string, string> = {};
+          for (const [key, re] of Object.entries(patterns)) {
+            const hit = assets.find((a) => re.test(a.name));
+            if (hit) urls[key] = hit.browser_download_url;
+          }
+          document.querySelectorAll<HTMLAnchorElement>('[data-dl]').forEach((a) => {
+            const url = urls[a.dataset.dl ?? ''];
+            if (url) a.href = url;
+          });
+          const key = primary[os];
+          if (hero && key && urls[key]) hero.href = urls[key];
+        })
+        .catch(() => {
+          /* No release yet or the API is unreachable: the buttons keep pointing at the releases page. */
+        });
+
+      // Copy buttons.
+      document.querySelectorAll<HTMLButtonElement>('[data-copy]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const target = document.querySelector(btn.dataset.copy ?? '');
+          if (!target) return;
+          try {
+            await navigator.clipboard.writeText(target.textContent ?? '');
+            btn.textContent = 'Copied';
+          } catch {
+            const range = document.createRange();
+            range.selectNodeContents(target);
+            const sel = window.getSelection();
+            sel?.removeAllRanges();
+            sel?.addRange(range);
+            btn.textContent = 'Press Ctrl+C';
+          }
+          window.setTimeout(() => (btn.textContent = 'Copy'), 1800);
+        });
+      });
+    </script>
+  </body>
+</html>

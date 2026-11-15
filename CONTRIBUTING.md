@@ -21,6 +21,7 @@ cargo check --manifest-path src-tauri/Cargo.toml
 cargo check --target x86_64-pc-windows-msvc --manifest-path src-tauri/Cargo.toml
 CC_aarch64_apple_darwin=clang cargo check --target aarch64-apple-darwin --manifest-path src-tauri/Cargo.toml
 cd android && ./gradlew testDebugUnitTest assembleDebug   # if android/ changed
+cd website && npm ci && npm run build                      # if website/ or src/components/hud/ changed
 ```
 
 ## Commits and pull requests
