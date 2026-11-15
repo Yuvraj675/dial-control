@@ -104,7 +104,10 @@ const profiles = [
           <img src={asset('images/app-icon.webp')} alt="" width="36" height="36" />
           Dial Control
         </a>
-        <a class="btn btn--quiet" href="#download">Download</a>
+        <span class="attn" data-attn>
+          <a class="btn btn--quiet btn--attn" href="#download">Download</a>
+          <span class="attn__lines" aria-hidden="true"></span>
+        </span>
       </div>
     </header>
 
@@ -414,81 +417,72 @@ const profiles = [
         });
       });
 
-      // ── Download buttons: a few wiggles to invite the click, confetti on it ──
+      // ── Navbar Download button: a periodic, subtle invitation ──
+      // Every 8 to 12 seconds one of three effects plays (or two or all three together): a wiggle,
+      // anime-style action lines around the button, or a light sweep across it. Skipped while the
+      // button is hovered or focused, while the tab is hidden, and under reduced motion.
+      const attn = document.querySelector<HTMLElement>('[data-attn]');
+      const attnBtn = attn?.querySelector<HTMLElement>('.btn--attn') ?? null;
+      const attnLines = attn?.querySelector<HTMLElement>('.attn__lines') ?? null;
       const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      const celebrants = Array.from(document.querySelectorAll<HTMLAnchorElement>('#hero-download, .dl__row .btn--line'));
 
-      function wiggle(el: HTMLElement) {
-        if (calm) return;
-        el.classList.remove('is-wiggling');
-        void el.offsetWidth;
-        el.classList.add('is-wiggling');
-        el.addEventListener('animationend', () => el.classList.remove('is-wiggling'), { once: true });
-      }
+      if (attn && attnBtn && attnLines && !calm) {
+        let engaged = false;
+        for (const type of ['pointerenter', 'focusin'] as const) attn.addEventListener(type, () => (engaged = true));
+        for (const type of ['pointerleave', 'focusout'] as const) attn.addEventListener(type, () => (engaged = false));
 
-      function confetti(x: number, y: number) {
-        if (calm) return;
-        const root = document.createElement('div');
-        root.className = 'confetti';
-        root.setAttribute('aria-hidden', 'true');
-        root.style.left = `${x}px`;
-        root.style.top = `${y}px`;
-        const css = getComputedStyle(document.documentElement);
-        const colors = ['--color-accent', '--color-ink', '--color-focus', '--color-muted'].map((v) => css.getPropertyValue(v).trim());
-        for (let i = 0; i < 28; i++) {
-          const piece = document.createElement('i');
-          piece.style.setProperty('--c', colors[i % colors.length]);
-          root.appendChild(piece);
-          const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.15;
-          const speed = 120 + Math.random() * 190;
-          const dx = Math.cos(angle) * speed;
-          const dy = Math.sin(angle) * speed;
-          piece.animate(
-            [
-              { transform: 'translate(0, 0) rotate(0deg)', opacity: 1 },
-              { transform: `translate(${dx}px, ${dy}px) rotate(${(Math.random() - 0.5) * 540}deg)`, opacity: 1, offset: 0.55 },
-              { transform: `translate(${dx * 1.15}px, ${dy + 170}px) rotate(${(Math.random() - 0.5) * 900}deg)`, opacity: 0 },
-            ],
-            { duration: 800 + Math.random() * 500, easing: 'cubic-bezier(0.16, 1, 0.3, 1)', fill: 'forwards' },
-          );
-        }
-        document.body.appendChild(root);
-        window.setTimeout(() => root.remove(), 1600);
-      }
+        const wiggle = () => {
+          attnBtn.classList.remove('is-wiggling');
+          void attnBtn.offsetWidth;
+          attnBtn.classList.add('is-wiggling');
+          attnBtn.addEventListener('animationend', () => attnBtn.classList.remove('is-wiggling'), { once: true });
+        };
 
-      celebrants.forEach((a) => {
-        let cooling = false;
-        a.addEventListener('pointerenter', () => {
-          if (cooling) return;
-          cooling = true;
-          wiggle(a);
-          window.setTimeout(() => (cooling = false), 1600);
-        });
-        a.addEventListener('click', (e) => {
-          const r = a.getBoundingClientRect();
-          confetti(r.left + r.width / 2, r.top + r.height / 2);
-          // A direct download or an in-page jump needs no delay. A page that replaces this one waits for the burst.
-          const href = a.getAttribute('href') ?? '';
-          const leaves = !calm && !href.startsWith('#') && !/\/releases\/download\//.test(a.href) && !e.metaKey && !e.ctrlKey && !e.shiftKey;
-          if (leaves) {
-            e.preventDefault();
-            window.setTimeout(() => (window.location.href = a.href), 520);
+        const sweep = () => {
+          attnBtn.classList.remove('is-sweeping');
+          void attnBtn.offsetWidth;
+          attnBtn.classList.add('is-sweeping');
+          window.setTimeout(() => attnBtn.classList.remove('is-sweeping'), 1100);
+        };
+
+        const lines = () => {
+          const w = attnBtn.offsetWidth / 2;
+          const h = attnBtn.offsetHeight / 2;
+          attnLines.replaceChildren();
+          const count = 10;
+          for (let i = 0; i < count; i++) {
+            // Spread around the button, skipping a few at random so it never looks stamped.
+            if (Math.random() < 0.18) continue;
+            const deg = (360 / count) * i + (Math.random() - 0.5) * 18;
+            const rad = (deg * Math.PI) / 180;
+            // Distance from the centre to the pill's edge along this angle, plus a small gap.
+            const edge = Math.min(w / Math.max(Math.abs(Math.cos(rad)), 0.001), h / Math.max(Math.abs(Math.sin(rad)), 0.001)) + 7;
+            const line = document.createElement('i');
+            line.style.transform = `rotate(${deg}deg) translateX(${edge}px) scaleX(0)`;
+            attnLines.appendChild(line);
+            line.animate(
+              [
+                { transform: `rotate(${deg}deg) translateX(${edge}px) scaleX(0.2)`, opacity: 0 },
+                { transform: `rotate(${deg}deg) translateX(${edge + 5}px) scaleX(1)`, opacity: 1, offset: 0.35 },
+                { transform: `rotate(${deg}deg) translateX(${edge + 15}px) scaleX(0.5)`, opacity: 0 },
+              ],
+              { duration: 620 + Math.random() * 160, easing: 'cubic-bezier(0.16, 1, 0.3, 1)', fill: 'forwards' },
+            );
           }
-        });
-      });
+          window.setTimeout(() => attnLines.replaceChildren(), 1000);
+        };
 
-      // Three nudges on the hero button, then it stays still unless hovered.
-      const heroBtn = document.getElementById('hero-download');
-      if (heroBtn && !calm) {
-        [3800, 11000, 22000].forEach((ms) => window.setTimeout(() => { if (document.visibilityState === 'visible') wiggle(heroBtn); }, ms));
-      }
-      // One nudge when the visitor's own platform row scrolls into view.
-      const mine = document.querySelector<HTMLElement>('.dl__row[data-match="true"] .btn--line');
-      if (mine && !calm && 'IntersectionObserver' in window) {
-        const io = new IntersectionObserver((entries) => {
-          if (entries.some((en) => en.isIntersecting)) { window.setTimeout(() => wiggle(mine), 350); io.disconnect(); }
-        }, { threshold: 0.9 });
-        io.observe(mine);
+        const effects = [wiggle, sweep, lines];
+        const play = () => {
+          if (engaged || document.visibilityState !== 'visible') return;
+          const roll = Math.random();
+          // A quarter of the time all three together, a quarter two of them, otherwise one on its own.
+          const picked = roll < 0.25 ? effects : roll < 0.5 ? [...effects].sort(() => Math.random() - 0.5).slice(0, 2) : [effects[Math.floor(Math.random() * effects.length)]];
+          picked.forEach((fx, i) => window.setTimeout(fx, i * 140));
+        };
+
+        const schedule = (ms: number) => window.setTimeout(() => { play(); schedule(8000 + Math.random() * 4000); }, ms);
+        schedule(3000);
       }
     </script>
   </body>
