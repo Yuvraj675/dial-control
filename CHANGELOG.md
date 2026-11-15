@@ -31,6 +31,7 @@ First release.
 - Release workflows use least-privilege tokens; Dependabot enabled.
 
 ### Changed
+- The app now bundles the open-licensed Doto typeface (SIL OFL) instead of third-party fonts; the CSS class is `font-dot`. The Settings slice list header reads "Slices".
 - Removed third-party branding from the app UI: themes are now *Signal Red* / *Amber* / *Pure Titanium* (saved configs are migrated); added an "independent project, no affiliation" notice.
 
 ### Not included

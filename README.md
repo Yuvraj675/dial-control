@@ -307,7 +307,7 @@ Issues and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) fi
 
 - [KnifeLemon/Filee](https://github.com/KnifeLemon/Filee), the radial-menu inspiration
 - [Tauri](https://v2.tauri.app/), [React](https://react.dev/), [Framer Motion](https://motion.dev/), [Tailwind CSS](https://tailwindcss.com/)
-- The dot-matrix typefaces in [public/fonts](public/fonts) are third-party; see their own terms
+- [Doto](https://fonts.google.com/specimen/Doto), the dot-matrix typeface bundled in [public/fonts](public/fonts), by The Doto Project Authors, under the SIL Open Font License
 
 ## License
 

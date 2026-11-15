@@ -2,7 +2,7 @@
  * paper: oklch(14.5% 0.012 265) · accent: oklch(57% 0.215 27) · display: Doto · body: Hanken Grotesk · hero: Stage, the app's own wheel on the right opens from a simulated double press and can be turned · nav: edge-aligned wordmark and one action, no links · footer: a ruled row of links over the notice · imagery: the product, live (the app's own wheel component) and captured (the settings window) · signature: the real wheel, running in the hero, opening from a double press and answering the arrow keys
  * axes: dark/mono-dot/chromatic-red · posture: restrained, the signal red marks the primary action, the selected slice and the focus ring · contrast: pass · fold: pass · v2.0.0 */
 /* Hallmark · pre-emit critique: P4 H5 E4 S5 R4 V4 · weakest: P, the argument was soft; made the claim that the page is the product, so the wheel is live rather than pictured */
-/* Hallmark · waive 75 · div.font-ndot at 10px · the small label is the app's own wheel component, drawn at 450px and scaled by transform to the stage width */
+/* Hallmark · waive 75 · div.font-dot at 10px · the small label is the app's own wheel component, drawn at 450px and scaled by transform to the stage width */
 /* Hallmark · waive 80 · div.relative 560x560 with 30 shapes · it is the app's real wheel rendered live in a labelled product group, not a drawing */
 /* Hallmark · answered F4 · the download section repeats the hero's one action for the visitor's own system, so the second filled button is the same call to action */
 /* Hallmark · dismissed 58 · the lower window holds two install commands, their copy buttons, three short steps and the footer, where most words are URLs and key names */

@@ -71,7 +71,7 @@ dial-control/
 ├── dist-packages/          # Packaged installers (.deb, .rpm, .pkg.tar.zst, .AppImage)
 ├── website/                # Marketing site (Astro + React islands); embeds the app's own DonutRadialHUD, deployed to GitHub Pages
 ├── docs/                   # ARCHITECTURE, PLATFORMS, DEVELOPMENT_GUIDE, archived PROTOCOL_SPEC
-├── public/                 # Fonts (NType82, Ndot57) & web assets
+├── public/                 # Doto font (SIL OFL) & web assets
 ├── resources/              # GNOME Shell extension & bundled platform resources
 │   └── gnome-extension/   # focused-window-dbus@flexagoon.com
 ├── scripts/                # Packaging & udev install scripts
