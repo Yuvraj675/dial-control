@@ -8,11 +8,13 @@
   "scripts": {
     "dev": "astro dev --port 4321",
     "build": "astro build",
-    "preview": "astro preview --port 4321"
+    "preview": "astro preview --port 4321",
+    "test": "node --experimental-strip-types --no-warnings --test \"src/**/*.test.ts\""
   },
   "dependencies": {
     "@astrojs/react": "^4.2.0",
     "@astrojs/sitemap": "^3.2.1",
+    "animejs": "^4.5.0",
     "astro": "^5.2.0",
     "framer-motion": "^12.4.7",
     "lucide-react": "^0.475.0",

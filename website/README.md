@@ -15,15 +15,28 @@ npm run preview
 | Path | What it is |
 |---|---|
 | `src/pages/index.astro` | The whole page, the SEO head (title, description, Open Graph, JSON-LD) and the OS-aware download script |
-| `src/components/HeroWheel.tsx` | Hero island: simulated double press, then the live wheel (arrow keys, Enter, Escape, buttons, clicks) |
-| `src/components/ProfileSwitcher.tsx` | The six built-in wheels, switchable |
+| `src/components/FlyingDial.tsx` | The one live wheel. It sits in the hero, flies out in 3D on scroll, pins in front of "How the dial works" and performs each step |
+| `src/components/diagramData.ts` | The walkthrough: each label, where its line attaches, and `dialAt(q)`, which says what the dial shows at any scroll progress (tested) |
+| `src/scripts/diagram.ts` | anime.js: lays out the labels around the pinned dial and draws their leader lines, synced to scroll |
+| `src/scripts/annotate.ts` | anime.js: the Settings window tilts in 3D to flat, then its labelled lines draw |
+| `src/scripts/keys.ts` | anime.js: the keyboard section's keys fall flat in 3D |
+| `src/components/ProfileSwitcher.tsx` | The six built-in wheels; the dial leans toward the pointer |
 | `src/styles/tokens.css`, `base.css`, `global.css` | Design tokens, base rules and the page styles (OKLCH tokens, Doto and Hanken Grotesk) |
 | `src/styles/wheel.css` | Tailwind utilities for the app component only (no preflight) |
 | `public/images`, `src/assets/fonts` | Captured product images and icons, and the self-hosted OFL fonts (imported from CSS so URLs include the site base; licences are in `public/fonts`) |
 
+The app component gets a small `inline` prop so it renders in normal flow instead of as a full-screen overlay. Keep that prop working when you change the component.
+
 React and Motion are shared with the app's component through `resolve.dedupe` in `astro.config.mjs`. Do not replace that with an `alias` to `node_modules/react`: it builds, but the dev server then fails with `module is not defined`.
 
-The app component gets a small `inline` prop so it renders in normal flow instead of as a full-screen overlay. Keep that prop working when you change the component.
+## The 3D scroll effects
+
+3D and 2D are meant to work together: a real 3D-tilted object (the dial, the Settings window, the keys) with crisp 2D labels and lines drawn to it.
+
+- **The dial's flight.** The dial is positioned in three modes that hand over at exact matches, so there is never a jump: absolute in the page while it flies (it scrolls natively, and the script only adds the tilt, push and scale on a bell curve), `position: fixed` while the diagram is pinned (no script movement at all), and absolute again at the spot where it was pinned once the diagram lets go. `FlyingDial.tsx` measures the hero placeholder and the diagram placeholder, so nothing is hard-coded.
+- **The walkthrough.** `CALLOUTS` in `diagramData.ts` is the single source for the labels in the HTML, the line anchors and the timing. `dialAt(q)` is a pure function of scroll progress; change it and its test together.
+- **Where it runs.** Only at 72rem and wider with motion allowed (the `js-3d` class, set by a tiny inline script in the head and kept in sync by `FlyingDial`). Phones, narrow windows, reduced motion and no-JavaScript get the finished page: the dial stays in the hero and the steps are a plain list. Never hide content at rest behind `js-3d` without a script path that removes the class on failure.
+- **Tests.** `npm test` covers the choreography and the line anchors.
 
 ## Downloads
 

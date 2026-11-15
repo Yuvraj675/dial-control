@@ -39,6 +39,7 @@ jobs:
           cache: npm
           cache-dependency-path: website/package-lock.json
       - run: npm ci
+      - run: npm test
       - run: npm run build
         env:
           # Defaults serve https://<owner>.github.io/dial-control/. For a custom domain set these

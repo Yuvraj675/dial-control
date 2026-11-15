@@ -1,6 +1,6 @@
 import '../styles/wheel.css';
 import { useEffect, useRef, useState } from 'react';
-import { useReducedMotion } from 'framer-motion';
+import { motion, useReducedMotion, useSpring } from 'framer-motion';
 import { Pause, Play } from 'lucide-react';
 import { DonutRadialHUD } from '../../../src/components/hud/DonutRadialHUD';
 import { DEFAULT_CONFIG } from '../../../src/data/defaultProfiles';
@@ -20,6 +20,16 @@ export default function ProfileSwitcher() {
   const [focus, setFocus] = useState(false);
   const [paused, setPaused] = useState(false);
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  // The dial leans toward the pointer: a little depth next to the flat controls.
+  const rx = useSpring(0, { stiffness: 120, damping: 18 });
+  const ry = useSpring(0, { stiffness: 120, damping: 18 });
+  const lean = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (reduce) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    rx.set(-((e.clientY - r.top) / r.height - 0.5) * 16);
+    ry.set(((e.clientX - r.left) / r.width - 0.5) * 22);
+  };
+  const level = () => { rx.set(0); ry.set(0); };
   // The wheel's tick marks are trigonometry, which Node and the browser may round differently in the last
   // digit, so it is drawn only in the browser. The slice list stays in the server HTML.
   const [mounted, setMounted] = useState(false);
@@ -82,7 +92,7 @@ export default function ProfileSwitcher() {
           </button>
         </p>
       </div>
-      <div className="switch__stage" data-kind="product" role="img" aria-label={`The ${profile.name} wheel with its slices: ${profile.actions.map((a) => label(a.label)).join(', ')}`}>
+      <motion.div className="switch__stage" data-kind="product" style={{ rotateX: rx, rotateY: ry, transformPerspective: 1100 }} onPointerMove={lean} onPointerLeave={level} role="img" aria-label={`The ${profile.name} wheel with its slices: ${profile.actions.map((a) => label(a.label)).join(', ')}`}>
         <div ref={fitRef} style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
           <div className="wheel__inner" style={{ transform: `translate(-50%, -50%) scale(${scale})` }}>
             <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
@@ -90,7 +100,7 @@ export default function ProfileSwitcher() {
             </div>
           </div>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

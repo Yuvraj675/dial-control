@@ -1,11 +1,12 @@
 /* Hallmark · shape: Instrument panel · genre: modern-minimal · theme: custom · job: try · idea: "the page is a quiet instrument panel, and the real wheel sits on it, alive, so every section is the product doing one job" · vibe: "dark instrument, dot-matrix voice, one signal"
- * paper: oklch(14.5% 0.012 265) · accent: oklch(57% 0.215 27) · display: Doto · body: Hanken Grotesk · hero: Stage, the app's own wheel on the right opens from a simulated double press and can be turned · nav: edge-aligned wordmark and one action, no links · footer: a ruled row of links over the notice · imagery: the product, live (the app's own wheel component) and captured (the settings window) · signature: the real wheel, running in the hero, opening from a double press and answering the arrow keys
+ * paper: oklch(14.5% 0.012 265) · accent: oklch(57% 0.215 27) · display: Doto · body: Hanken Grotesk · hero: Stage, the app's own wheel on the right opens from a simulated double press, can be turned, and on scroll flies out of the hero in 3D to the centre of a pinned parts diagram · nav: edge-aligned wordmark and one action, no links · footer: a ruled row of links over the notice · imagery: the product, live (the app's own wheel component) and captured (the settings window) · signature: the real wheel, opening from a double press, answering the arrow keys, then flying to the centre where its parts are labelled with leader lines as you scroll
  * axes: dark/mono-dot/chromatic-red · posture: restrained, the signal red marks the primary action, the selected slice and the focus ring · contrast: pass · fold: pass · v2.0.0 */
 /* Hallmark · pre-emit critique: P4 H5 E4 S5 R4 V4 · weakest: P, the argument was soft; made the claim that the page is the product, so the wheel is live rather than pictured */
 /* Hallmark · waive 75 · div.font-dot at 10px · the small label is the app's own wheel component, drawn at 450px and scaled by transform to the stage width */
 /* Hallmark · waive 80 · div.relative 560x560 with 30 shapes · it is the app's real wheel rendered live in a labelled product group, not a drawing */
 /* Hallmark · answered F4 · the download section repeats the hero's one action for the visitor's own system, so the second filled button is the same call to action */
 /* Hallmark · dismissed 58 · the lower window holds two install commands, their copy buttons, three short steps and the footer, where most words are URLs and key names */
+/* Hallmark · dismissed 59 · the tenth section is the pinned anatomy diagram the owner asked for, and the sections that were already on the page stay as they were */
 /* Hallmark · waive 47c · the wheel is the app's own component rendered live inside a product slot · the product itself is what the page sells */
 @import url("./tokens.css");
 @import url("./base.css");
@@ -235,3 +236,65 @@ h3 { font-size: var(--text-title); max-width: 40ch; }
 .is-wiggling { animation: wiggle 640ms var(--ease-out) both; }
 .attn__lines { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; }
 .attn__lines i { position: absolute; left: 0; top: 0; display: block; width: calc(var(--space-md) + var(--space-xs) / 2); height: 2px; margin-top: -1px; border-radius: var(--space-3xs); background: var(--color-accent); transform-origin: 0 50%; will-change: transform, opacity; }
+
+/* ── the flying dial: one real wheel that leaves the hero in 3D and pins in front of the diagram ── */
+.fly { width: 450px; height: 450px; z-index: var(--z-raised); pointer-events: none; transform-origin: 50% 50%; border-radius: 50%; outline-offset: var(--space-xs);
+  transform: perspective(1500px) translateZ(var(--z, 0px)) rotateX(calc(var(--fx, 0deg) + var(--tx, 0deg))) rotateY(calc(var(--fy, 0deg) + var(--ty, 0deg))) scale(var(--k, 1)); }
+.fly[data-phase="hero"] { pointer-events: auto; }
+.fly__dial { position: relative; width: 450px; height: 450px; display: grid; place-items: center; }
+/* the dial's buttons and caption stay with the hero (the dial leaves them behind) */
+.stage__ui { position: absolute; left: 0; right: 0; top: calc(100% + var(--space-md)); }
+.stage__ui .wheel__ui { position: static; transition: opacity var(--dur-short) var(--ease-out); }
+.stage__ui .wheel__ui[data-away="true"] { opacity: 0; pointer-events: none; }
+
+/* ── the anatomy diagram ───────────────────────────────────────── */
+/* Default (a phone, a narrow window, reduced motion, no script): the dial's picture and the parts as a list. */
+.diagram { --dial-s: min(100%, 360px); padding-block: var(--section-gap-s); }
+.diagram__stage { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; gap: var(--space-xl); }
+.diagram__head { display: grid; gap: var(--space-md); width: 100%; }
+.diagram__head p { color: var(--color-ink-2); font-size: var(--text-lead); max-width: 46ch; }
+.diagram__dial { position: relative; width: var(--dial-s); aspect-ratio: 1; }
+.diagram__still { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.diagram__lines { display: none; }
+.callouts { list-style: none; margin: 0 auto; padding: 0 var(--gutter); width: 100%; max-width: var(--container); box-sizing: border-box; display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: var(--space-xl) var(--gap-columns); }
+.callout { display: grid; gap: var(--space-xs); padding-top: var(--space-md); border-top: var(--rule-hair) solid var(--color-rule); align-content: start; }
+.callout h3 { font-size: var(--text-xl); transition: color var(--dur-short) var(--ease-out); }
+.callout p { color: var(--color-ink-2); }
+.diagram__lines line { stroke: var(--color-accent); stroke-width: 1.5; stroke-linecap: round; fill: none; }
+.diagram__lines circle { fill: var(--color-accent); stroke: var(--color-paper); stroke-width: 1.5; }
+
+/* Enhanced (wide screen, motion allowed): the section is a long track, its stage pins, and the labels and
+   leader lines are laid out around the dial by script. The finished diagram is the end of the track. */
+.js-3d .diagram { --dial-s: min(52svh, 500px); padding-block: 0; min-height: 560svh; }
+/* A sticky stage is its own stacking layer: lifting it above the flying dial puts the leader lines over the dial's parts. */
+.js-3d .diagram__stage { position: sticky; top: var(--banner-height); height: calc(100svh - var(--banner-height)); display: block; z-index: calc(var(--z-raised) + 1); pointer-events: none; }
+.js-3d .diagram__head { position: absolute; left: 0; right: 0; top: var(--space-md); margin-inline: auto; }
+.js-3d .diagram__dial { position: absolute; left: 50%; top: 57%; transform: translate(-50%, -50%); }
+.js-3d .diagram__still { visibility: hidden; }
+.js-3d .diagram__lines { display: block; position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: calc(var(--z-raised) + 1); }
+.js-3d .callouts { position: absolute; inset: 0; display: block; padding: 0; max-width: none; margin: 0; pointer-events: none; z-index: calc(var(--z-raised) + 1); }
+.js-3d .callout { position: absolute; width: 17rem; opacity: 0; padding-top: 0; border-top: 0; }
+.js-3d .callout[data-side="l"] { text-align: right; }
+.js-3d .callout.is-current h3 { color: var(--color-focus); }
+.js-3d .callout:not(.is-current) p { color: var(--color-muted); }
+.callout p { transition: color var(--dur-short) var(--ease-out); }
+
+/* ── the settings window: a 3D window that levels out, with 2D labels drawn to it ── */
+.shot { position: relative; }
+.shot__stage { position: relative; }
+.shot__lines { display: none; }
+.shot__notes { list-style: none; margin: var(--space-lg) 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-xl) var(--gap-columns); }
+.note { display: grid; gap: var(--space-xs); align-content: start; padding-top: var(--space-md); border-top: var(--rule-hair) solid var(--color-rule); }
+.note h3 { font-size: var(--text-xl); }
+.note p { color: var(--color-ink-2); }
+.shot__lines line { stroke: var(--color-accent); stroke-width: 1.5; stroke-linecap: round; fill: none; }
+.shot__lines circle { fill: var(--color-accent); stroke: var(--color-paper); stroke-width: 1.5; }
+.js-3d .shot__stage { perspective: 1600px; }
+.js-3d .shot__frame { transform-origin: 50% 60%; }
+.js-3d .shot__lines { display: block; position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: var(--z-raised); }
+.js-3d .shot__notes { margin-top: var(--space-2xl); }
+.js-3d .note { border-top: 0; padding-top: var(--space-xs); }
+@media (max-width: 60rem) { .shot__notes { grid-template-columns: minmax(0, 1fr); } }
+
+/* the keyboard: keys that fall flat into place */
+.js-3d .keys { perspective: 900px; }

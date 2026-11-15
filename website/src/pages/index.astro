@@ -1,6 +1,7 @@
 ---
 import '../styles/global.css';
-import HeroWheel from '../components/HeroWheel';
+import FlyingDial from '../components/FlyingDial';
+import { CALLOUTS } from '../components/diagramData';
 import ProfileSwitcher from '../components/ProfileSwitcher';
 // Imported with ?url so the preload hrefs include the site base in dev and in the build.
 import dotoUrl from '../assets/fonts/doto.woff2?url';
@@ -67,6 +68,7 @@ const profiles = [
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
     <meta name="robots" content="index, follow, max-image-preview:large" />
+    <script is:inline>if (matchMedia("(min-width: 72rem) and (prefers-reduced-motion: no-preference)").matches) document.documentElement.classList.add("js-3d");</script>
     <meta name="theme-color" content="#0b0c10" />
     <meta name="color-scheme" content="dark" />
 
@@ -125,12 +127,34 @@ const profiles = [
           </div>
 
           <figure class="stage" data-stage>
-            <div class="stage__box">
+            <div class="stage__box" data-dial-hero>
               <img class="stage__still" src={asset('images/wheel.webp')} width="800" height="800" alt="The Dial Control wheel: nine slices around a play and pause button, one slice highlighted in red" fetchpriority="high" decoding="async" />
-              <div class="stage__live"><HeroWheel client:only="react" /></div>
-              <p class="static-caption">The wheel is the app itself. Turn it with the arrow keys once it loads.</p>
+                            <p class="static-caption">The wheel is the app itself. Turn it with the arrow keys once it loads.</p>
+              <div class="stage__ui" data-dial-ui></div>
             </div>
           </figure>
+        </div>
+      </section>
+
+      <!-- how it works: the dial flies in front and centre, then performs each move as you scroll while its label draws in -->
+      <section class="diagram" id="how" data-diagram aria-labelledby="how-title">
+        <div class="diagram__stage">
+          <div class="diagram__head container">
+            <h2 id="how-title">How the dial works</h2>
+            <p>Turn to choose, click to run. Watch it, one step at a time.</p>
+          </div>
+          <div class="diagram__dial" data-dial-diagram>
+            <img class="diagram__still" src={asset('images/wheel.webp')} width="800" height="800" alt="The Dial Control wheel with nine options around a play and pause button" loading="lazy" decoding="async" />
+          </div>
+          <svg class="diagram__lines" aria-hidden="true" focusable="false"></svg>
+          <ul class="callouts">
+            {CALLOUTS.map((c) => (
+              <li class="callout" data-id={c.id} data-side={c.side}>
+                <h3>{c.title}</h3>
+                <p>{c.text}</p>
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
 
@@ -172,18 +196,26 @@ const profiles = [
             <h2 id="slices-title">Build your own slices</h2>
             <p>Press a hotkey, open an app or link, run a command, type a snippet, or chain steps into a macro.</p>
           </div>
-          <figure class="shot">
-            <div class="shot__frame" data-kind="product">
-              <img
-                src={asset('images/settings-1000.webp')}
-                srcset={`${asset('images/settings-1000.webp')} 1000w, ${asset('images/settings.webp')} 2000w`}
-                sizes="(min-width: 1424px) 1296px, calc(100vw - 2 * var(--gutter))"
-                width="2000" height="1250"
-                alt="The Dial Control settings window: a list of dials, the slices of the System dial in the middle and the slice inspector on the right"
-                loading="lazy" decoding="async"
-              />
+          <figure class="shot" data-annotate>
+            <div class="shot__stage">
+              <div class="shot__frame" data-kind="product">
+                <img
+                  src={asset('images/settings-1000.webp')}
+                  srcset={`${asset('images/settings-1000.webp')} 1000w, ${asset('images/settings.webp')} 2000w`}
+                  sizes="(min-width: 1424px) 1296px, calc(100vw - 2 * var(--gutter))"
+                  width="2000" height="1250"
+                  alt="The Dial Control settings window: a list of dials, the slices of the System dial in the middle and the slice inspector on the right"
+                  loading="lazy" decoding="async"
+                />
+              </div>
             </div>
-            <figcaption>The Settings window: dials on the left, slices in the middle, the inspector on the right.</figcaption>
+            <svg class="shot__lines" aria-hidden="true" focusable="false"></svg>
+            <ul class="shot__notes">
+              <li class="note" data-x="29" data-y="55"><h3>Dials</h3><p>One wheel for each app, or your own.</p></li>
+              <li class="note" data-x="47" data-y="72"><h3>Slices</h3><p>Reorder, rename, add or remove.</p></li>
+              <li class="note" data-x="73" data-y="79"><h3>What a slice does</h3><p>A hotkey, an app, a command, a snippet or a macro.</p></li>
+            </ul>
+            <figcaption>The Settings window.</figcaption>
           </figure>
         </div>
       </section>
@@ -332,6 +364,14 @@ const profiles = [
         </div>
       </div>
     </footer>
+
+    <FlyingDial client:only="react" />
+
+    <script>
+      import '../scripts/diagram.ts';
+      import '../scripts/annotate.ts';
+      import '../scripts/keys.ts';
+    </script>
 
     <script>
       const REPO = 'Yuvraj675/dial-control';
