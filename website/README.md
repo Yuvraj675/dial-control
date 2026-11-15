@@ -36,7 +36,19 @@ React and Motion are shared with the app's component through `resolve.dedupe` in
 - **The dial's flight.** The dial is positioned in three modes that hand over at exact matches, so there is never a jump: absolute in the page while it flies (it scrolls natively, and the script only adds the tilt, push and scale on a bell curve), `position: fixed` while the diagram is pinned (no script movement at all), and absolute again at the spot where it was pinned once the diagram lets go. `FlyingDial.tsx` measures the hero placeholder and the diagram placeholder, so nothing is hard-coded.
 - **The walkthrough.** `CALLOUTS` in `diagramData.ts` is the single source for the labels in the HTML, the line anchors and the timing. `dialAt(q)` is a pure function of scroll progress; change it and its test together.
 - **Where it runs.** Only at 72rem and wider with motion allowed (the `js-3d` class, set by a tiny inline script in the head and kept in sync by `FlyingDial`). Phones, narrow windows, reduced motion and no-JavaScript get the finished page: the dial stays in the hero and the steps are a plain list. Never hide content at rest behind `js-3d` without a script path that removes the class on failure.
-- **Tests.** `npm test` covers the choreography and the line anchors.
+- **Clean leader lines.** Following the usual rules for annotated diagrams (leaders never cross, are horizontal or one fixed angle, are parallel where possible and thinner than the subject), `layoutLeaders()` gives every line a 45 degree run out of its anchor and a level run into its label, anchors sit just inside the outer rim of their option, and labels are ordered like their anchors. Finished lines rest in grey and the current step is red. Tests check, for six dial sizes, that no two lines cross, that every segment is level or at 45 degrees, that no line runs through another anchor and that labels do not overlap; change the label slots in `CALLOUTS` and the tests will say if a layout turns messy.
+- **Tests.** `npm test` covers the choreography and the line layout.
+
+## Small interactions
+
+`src/scripts/interact.ts` holds the pointer and keyboard touches. They switch themselves off on touch screens and under reduced motion, and none of them changes layout:
+
+- **Magnetic Download buttons.** Within reach of the button it leans toward the pointer by 30% of the offset (8px at most), using the individual `translate` property so it never fights other transforms.
+- **Tilt.** Any element with `data-tilt="<degrees>"` leans toward the pointer (the Settings window; the app switcher and the dial do the same through Framer Motion).
+- **Live keys.** The keys in the keyboard section light up while you hold the real ones (`data-key` holds the `KeyboardEvent.key` value).
+- **A progress spine** at the left edge and **accent rules that draw across** the FAQ and download rows on hover are pure CSS.
+
+To test pointer effects in headless Chrome, launch it with `--blink-settings=primaryPointerType=4,primaryHoverType=2,availablePointerTypes=4,availableHoverTypes=2` (headless reports no pointer), and scroll with `behavior: 'instant'` because the page uses smooth scrolling.
 
 ## Downloads
 

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CALLOUTS, DIAL, anchorPoint, currentCallout, dialAt } from './diagramData.ts';
+import { CALLOUTS, DIAL, anchorPoint, currentCallout, dialAt, layoutLeaders } from './diagramData.ts';
 
 test('steps come in increasing order with room to draw before the next one', () => {
   for (let i = 1; i < CALLOUTS.length; i++) assert.ok(CALLOUTS[i].at - CALLOUTS[i - 1].at >= 0.09, CALLOUTS[i].id);
@@ -8,26 +8,26 @@ test('steps come in increasing order with room to draw before the next one', () 
   assert.equal(new Set(CALLOUTS.map((c) => c.id)).size, CALLOUTS.length);
 });
 
-test('slice anchors sit on the slice ring, and slice 0 is straight up', () => {
-  const top = anchorPoint({ kind: 'slice', i: 0 }, 300, 300, DIAL.natural);
+test('edge anchors sit inside the outer rim of their slice, and slice 0 is straight up', () => {
+  const top = anchorPoint({ kind: 'edge', i: 0 }, 300, 300, DIAL.natural);
   assert.ok(Math.abs(top.x - 300) < 1e-9);
-  assert.ok(Math.abs(top.y - (300 - (DIAL.rInner + DIAL.rOuter) / 2)) < 1e-9);
+  assert.ok(Math.abs(top.y - (300 - (DIAL.rOuter - 16))) < 1e-9);
   for (let i = 0; i < DIAL.slices; i++) {
-    const p = anchorPoint({ kind: 'slice', i }, 0, 0, DIAL.natural);
-    assert.ok(Math.abs(Math.hypot(p.x, p.y) - (DIAL.rInner + DIAL.rOuter) / 2) < 1e-9);
+    const p = anchorPoint({ kind: 'edge', i }, 0, 0, DIAL.natural);
+    assert.ok(Math.abs(Math.hypot(p.x, p.y) - (DIAL.rOuter - 16)) < 1e-9);
   }
 });
 
 test('anchors scale with the dial and the centre anchor is the centre', () => {
-  const a = anchorPoint({ kind: 'slice', i: 2 }, 0, 0, DIAL.natural);
-  const b = anchorPoint({ kind: 'slice', i: 2 }, 0, 0, DIAL.natural * 2);
+  const a = anchorPoint({ kind: 'edge', i: 2 }, 0, 0, DIAL.natural);
+  const b = anchorPoint({ kind: 'edge', i: 2 }, 0, 0, DIAL.natural * 2);
   assert.ok(Math.abs(b.x - a.x * 2) < 1e-9 && Math.abs(b.y - a.y * 2) < 1e-9);
   assert.deepEqual(anchorPoint({ kind: 'center' }, 12, 34, 999), { x: 12, y: 34 });
 });
 
 test('a label sits on the same side as the thing it points at', () => {
   for (const c of CALLOUTS) {
-    if (c.anchor.kind === 'center') continue;
+    if (c.anchor.kind !== 'edge' && c.anchor.kind !== 'ring') continue;
     const p = anchorPoint(c.anchor, 0, 0, DIAL.natural);
     assert.equal(p.x < 0 ? 'l' : 'r', c.side, c.id);
   }
@@ -72,3 +72,56 @@ test('every state stays in range for its dial at any progress', () => {
     assert.ok(d.gauge >= 0 && d.gauge <= 100);
   }
 });
+
+// ── the leader lines must be clean: never crossing, only horizontal or 45 degrees, labels not overlapping ──
+type Pt = { x: number; y: number };
+const cross = (a: Pt, b: Pt, c: Pt, d: Pt) => {
+  const o = (p: Pt, q: Pt, r: Pt) => Math.sign((q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x));
+  return o(a, b, c) !== o(a, b, d) && o(c, d, a) !== o(c, d, b);
+};
+const distToSegment = (p: Pt, a: Pt, b: Pt) => {
+  const l2 = (b.x - a.x) ** 2 + (b.y - a.y) ** 2;
+  const t = l2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / l2));
+  return Math.hypot(p.x - (a.x + t * (b.x - a.x)), p.y - (a.y + t * (b.y - a.y)));
+};
+
+for (const size of [300, 360, 420, 468, 500, 560]) {
+  test(`no two leader lines cross, at a dial of ${size}px`, () => {
+    const leaders = layoutLeaders(700, 450, size);
+    for (let i = 0; i < leaders.length; i++) for (let j = i + 1; j < leaders.length; j++) {
+      const A = leaders[i].points, B = leaders[j].points;
+      for (let a = 0; a < A.length - 1; a++) for (let b = 0; b < B.length - 1; b++) {
+        assert.equal(cross(A[a], A[a + 1], B[b], B[b + 1]), false, `${leaders[i].id} crosses ${leaders[j].id}`);
+      }
+    }
+  });
+
+  test(`every line is horizontal or at 45 degrees, and keeps clear of other anchors, at ${size}px`, () => {
+    const leaders = layoutLeaders(700, 450, size);
+    for (const l of leaders) {
+      for (let k = 0; k < l.points.length - 1; k++) {
+        const dx = Math.abs(l.points[k + 1].x - l.points[k].x), dy = Math.abs(l.points[k + 1].y - l.points[k].y);
+        assert.ok(dy < 0.5 || Math.abs(dx - dy) < 0.5, `${l.id} has an odd angle`);
+      }
+      for (const other of leaders) {
+        if (other === l) continue;
+        for (let k = 0; k < l.points.length - 1; k++) {
+          assert.ok(distToSegment(other.points[0], l.points[k], l.points[k + 1]) > size * 0.03, `${l.id} runs through the anchor of ${other.id}`);
+        }
+      }
+    }
+  });
+
+  test(`labels in a column are in the same order as their anchors and do not overlap, at ${size}px`, () => {
+    const leaders = layoutLeaders(700, 450, size);
+    for (const side of ['l', 'r'] as const) {
+      const col = CALLOUTS.map((c, i) => ({ c, l: leaders[i] })).filter((x) => x.c.side === side).sort((a, b) => a.l.labelY - b.l.labelY);
+      for (let i = 1; i < col.length; i++) {
+        assert.ok(col[i].l.labelY - col[i - 1].l.labelY >= size * 0.17, `${col[i - 1].c.id} and ${col[i].c.id} are too close`);
+        const ay = (x: (typeof col)[number]) => x.l.points[0].y;
+        const spatial = (x: (typeof col)[number]) => x.c.anchor.kind === 'edge' || x.c.anchor.kind === 'ring';
+        if (spatial(col[i]) && spatial(col[i - 1])) assert.ok(ay(col[i]) >= ay(col[i - 1]), `${col[i].c.id} is out of order`);
+      }
+    }
+  });
+}

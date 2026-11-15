@@ -98,6 +98,7 @@ const profiles = [
     {jsonLd.map((d) => <script type="application/ld+json" set:html={JSON.stringify(d)} />)}
   </head>
   <body>
+    <div class="spine" aria-hidden="true"></div>
     <a class="skip" href="#main">Skip to the content</a>
 
     <header class="nav">
@@ -121,7 +122,7 @@ const profiles = [
             <h1 id="hero-title">A shortcut wheel for your earbuds</h1>
             <p class="lede">Double-press the CMF Buds Pro 2 dial, turn, then click.</p>
             <div class="hero__actions">
-              <a class="btn btn--primary" id="hero-download" href="#download" data-primary>Download Dial Control</a>
+              <a class="btn btn--primary" id="hero-download" href="#download" data-primary data-magnet>Download Dial Control</a>
               <a class="link" href="#keyboard">Use your keyboard instead</a>
             </div>
           </div>
@@ -198,6 +199,7 @@ const profiles = [
           </div>
           <figure class="shot" data-annotate>
             <div class="shot__stage">
+              <div class="shot__tilt" data-tilt="4">
               <div class="shot__frame" data-kind="product">
                 <img
                   src={asset('images/settings-1000.webp')}
@@ -207,6 +209,7 @@ const profiles = [
                   alt="The Dial Control settings window: a list of dials, the slices of the System dial in the middle and the slice inspector on the right"
                   loading="lazy" decoding="async"
                 />
+              </div>
               </div>
             </div>
             <svg class="shot__lines" aria-hidden="true" focusable="false"></svg>
@@ -239,25 +242,25 @@ const profiles = [
         <div class="container">
           <div class="section__head">
             <h2 id="keyboard-title">No earbuds? Use the keyboard</h2>
-            <p>Every gesture has a key. Rebind the shortcut in Settings.</p>
+            <p>Every gesture has a key. Try them: they light up here.</p>
           </div>
           <div class="keys">
             <div>
               <div class="keycaps" aria-label="Super, Shift and D">
-                <span class="key" data-mod>Super</span><span class="plus" aria-hidden="true">+</span><span class="key">Shift</span><span class="plus" aria-hidden="true">+</span><span class="key">D</span>
+                <span class="key" data-mod data-key="Meta">Super</span><span class="plus" aria-hidden="true">+</span><span class="key" data-key="Shift">Shift</span><span class="plus" aria-hidden="true">+</span><span class="key" data-key="d">D</span>
               </div>
               <p>Opens and closes the wheel from anywhere.</p>
             </div>
             <div>
-              <div class="keycaps"><span class="key" aria-label="Left arrow">&larr;</span><span class="key" aria-label="Right arrow">&rarr;</span></div>
+              <div class="keycaps"><span class="key" data-key="ArrowLeft" aria-label="Left arrow">&larr;</span><span class="key" data-key="ArrowRight" aria-label="Right arrow">&rarr;</span></div>
               <p>Turn to the previous or next slice.</p>
             </div>
             <div>
-              <div class="keycaps"><span class="key">Enter</span></div>
+              <div class="keycaps"><span class="key" data-key="Enter">Enter</span></div>
               <p>Runs the highlighted slice.</p>
             </div>
             <div>
-              <div class="keycaps"><span class="key">Esc</span></div>
+              <div class="keycaps"><span class="key" data-key="Escape">Esc</span></div>
               <p>Closes the wheel, or leaves a gauge.</p>
             </div>
           </div>
@@ -292,7 +295,7 @@ const profiles = [
               <div><h3>Windows</h3></div>
               <p>Windows 10 and 11, 64-bit.</p>
               <div>
-                <a class="btn btn--line" href={RELEASES} data-dl="windows-exe">Download .exe</a>
+                <a class="btn btn--line" href={RELEASES} data-dl="windows-exe" data-magnet>Download .exe</a>
                 <div class="dl__alts"><a class="link" href={RELEASES} data-dl="windows-msi">.msi installer</a></div>
               </div>
             </div>
@@ -300,14 +303,14 @@ const profiles = [
               <div><h3>macOS</h3></div>
               <p>macOS 14 or newer, Apple Silicon.</p>
               <div>
-                <a class="btn btn--line" href={RELEASES} data-dl="macos-dmg">Download .dmg</a>
+                <a class="btn btn--line" href={RELEASES} data-dl="macos-dmg" data-magnet>Download .dmg</a>
               </div>
             </div>
             <div class="dl__row" data-os="linux">
               <div><h3>Linux</h3></div>
               <p>Any distribution with glibc 2.39 or newer.</p>
               <div>
-                <a class="btn btn--line" href={RELEASES} data-dl="linux-appimage">Download .AppImage</a>
+                <a class="btn btn--line" href={RELEASES} data-dl="linux-appimage" data-magnet>Download .AppImage</a>
                 <div class="dl__alts">
                   <a class="link" href={RELEASES} data-dl="linux-deb">.deb</a>
                   <a class="link" href={RELEASES} data-dl="linux-rpm">.rpm</a>
@@ -371,6 +374,7 @@ const profiles = [
       import '../scripts/diagram.ts';
       import '../scripts/annotate.ts';
       import '../scripts/keys.ts';
+      import '../scripts/interact.ts';
     </script>
 
     <script>

@@ -5,7 +5,7 @@
 import { createTimeline } from 'animejs/timeline';
 import { onScroll } from 'animejs/events';
 import { createDrawable } from 'animejs/svg';
-import { CALLOUTS, anchorPoint } from '../components/diagramData';
+import { CALLOUTS, layoutLeaders } from '../components/diagramData';
 
 const section = document.querySelector<HTMLElement>('[data-diagram]');
 const stage = section?.querySelector<HTMLElement>('.diagram__stage') ?? null;
@@ -36,24 +36,23 @@ function build() {
   const cy = d.top - s.top + d.height / 2;
   svg.setAttribute('viewBox', `0 0 ${s.width} ${s.height}`);
 
-  const parts = CALLOUTS.map((c) => {
+  // The tested layout: every line leaves its anchor at 45 degrees, then runs level into its label, and no two cross.
+  const leaders = layoutLeaders(cx, cy, size);
+  const parts = CALLOUTS.map((c, i) => {
     const li = labels.find((el) => el.dataset.id === c.id);
     if (!li) return null;
-    const gap = size * 0.14;
+    const L = leaders[i];
     const w = li.offsetWidth;
     const h = li.offsetHeight;
-    const ly = cy + c.y * size;
-    const lx = c.side === 'l' ? cx - size / 2 - gap - w : cx + size / 2 + gap;
-    li.style.left = `${lx}px`;
-    li.style.top = `${ly - h / 2}px`;
+    li.style.left = `${c.side === 'l' ? L.labelEdgeX - w : L.labelEdgeX}px`;
+    li.style.top = `${L.labelY - h / 2}px`;
 
-    const from = anchorPoint(c.anchor, cx, cy, size);
-    const to = { x: c.side === 'l' ? lx + w + 12 : lx - 12, y: ly };
-    const line = document.createElementNS(SVG_NS, 'line');
-    line.setAttribute('x1', String(from.x)); line.setAttribute('y1', String(from.y));
-    line.setAttribute('x2', String(to.x)); line.setAttribute('y2', String(to.y));
+    const line = document.createElementNS(SVG_NS, 'polyline');
+    line.setAttribute('points', L.points.map((p) => `${p.x},${p.y}`).join(' '));
+    line.dataset.id = c.id;
     const dot = document.createElementNS(SVG_NS, 'circle');
-    dot.setAttribute('cx', String(from.x)); dot.setAttribute('cy', String(from.y)); dot.setAttribute('r', '0');
+    dot.setAttribute('cx', String(L.points[0].x)); dot.setAttribute('cy', String(L.points[0].y)); dot.setAttribute('r', '0');
+    dot.dataset.id = c.id;
     svg.append(line, dot);
     return { c, li, line, dot };
   }).filter((p): p is NonNullable<typeof p> => p !== null);
@@ -80,6 +79,7 @@ function build() {
 window.addEventListener('diagram:current', (e) => {
   const id = (e as CustomEvent<{ id: string }>).detail?.id;
   labels.forEach((li) => li.classList.toggle('is-current', li.dataset.id === id));
+  svg?.querySelectorAll<SVGElement>('[data-id]').forEach((el) => el.classList.toggle('is-current', el.dataset.id === id));
 });
 
 let pending = 0;

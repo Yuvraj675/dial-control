@@ -5,7 +5,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 ## [Unreleased]
 
 ### Added
-- Project website (`website/`, Astro): the app's own wheel flies out of the hero in 3D, pins in front of a step-by-step walkthrough (it turns, clicks into the volume gauge, changes it, and so on) with leader lines drawn as you scroll, and the Settings window and keyboard get the same 3D-meets-2D treatment; an OS-aware download section, the keyboard-only guide and structured data for search. Deployed to GitHub Pages by `.github/workflows/pages.yml`.
+- Project website (`website/`, Astro): the app's own wheel flies out of the hero in 3D, pins in front of a step-by-step walkthrough (it turns, clicks into the volume gauge, changes it, and so on) with leader lines drawn as you scroll, and the Settings window and keyboard get the same 3D-meets-2D treatment, the leader lines follow the clean-diagram rules (45 degree runs, never crossing, tested), and small interactions (magnetic Download buttons, a leaning Settings window, keys that light as you press them, a progress spine) answer the pointer; an OS-aware download section, the keyboard-only guide and structured data for search. Deployed to GitHub Pages by `.github/workflows/pages.yml`.
 - `DonutRadialHUD` accepts an `inline` prop so the same component can render in normal flow outside the app.
 
 ## [1.0.0] - 2026-11-16

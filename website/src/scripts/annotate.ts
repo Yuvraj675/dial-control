@@ -40,7 +40,7 @@ function build() {
     const n = note.getBoundingClientRect();
     const line = document.createElementNS(SVG_NS, 'line');
     line.setAttribute('x1', String(ax)); line.setAttribute('y1', String(ay));
-    line.setAttribute('x2', String(n.left - f.left + n.width * 0.18)); line.setAttribute('y2', String(n.top - f.top - 6));
+    line.setAttribute('x2', String(ax)); line.setAttribute('y2', String(n.top - f.top - 8)); // straight down: parallel, never crossing
     const dot = document.createElementNS(SVG_NS, 'circle');
     dot.setAttribute('cx', String(ax)); dot.setAttribute('cy', String(ay)); dot.setAttribute('r', '0');
     svg.append(line, dot);

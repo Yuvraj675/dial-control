@@ -4,7 +4,7 @@
 /** Dimensions of the app's wheel, in its own 450px units (DonutRadialHUD defaults). */
 export const DIAL = { natural: 450, rOuter: 188, rInner: 120, rBezel: 204, slices: 9 } as const;
 
-export type Anchor = { kind: 'slice'; i: number } | { kind: 'ring'; deg: number } | { kind: 'center' };
+export type Anchor = { kind: 'edge'; i: number } | { kind: 'ring'; deg: number } | { kind: 'center' } | { kind: 'point'; dx: number; dy: number };
 
 export interface Callout {
   id: string;
@@ -22,13 +22,13 @@ export interface Callout {
 /** The walkthrough, in the order a person would learn the dial. The dial performs each step as you scroll
  *  (see `dialAt`); the label and its leader line say what it is doing. */
 export const CALLOUTS: Callout[] = [
-  { id: 'turn', title: 'Turn', text: 'Each notch moves the highlight.', side: 'l', y: -0.36, anchor: { kind: 'ring', deg: -150 }, at: 0.04 },
-  { id: 'click', title: 'Click', text: 'Runs the highlighted option. Volume opens a gauge.', side: 'r', y: -0.26, anchor: { kind: 'center' }, at: 0.17 },
-  { id: 'volume', title: 'Set the volume', text: 'Turn again to move the level. Yours returns after.', side: 'l', y: -0.12, anchor: { kind: 'ring', deg: 180 }, at: 0.26 },
-  { id: 'brightness', title: 'Brightness', text: 'The same two moves, for your screen.', side: 'r', y: 0, anchor: { kind: 'slice', i: 1 }, at: 0.43 },
-  { id: 'scroll', title: 'Scroll', text: 'The dial becomes a mouse wheel.', side: 'r', y: 0.26, anchor: { kind: 'slice', i: 3 }, at: 0.56 },
-  { id: 'home', title: 'Home', text: 'Pick another dial, like Code.', side: 'l', y: 0.12, anchor: { kind: 'slice', i: 7 }, at: 0.67 },
-  { id: 'double', title: 'Double press', text: 'Closes the wheel, and opens it again.', side: 'l', y: 0.36, anchor: { kind: 'center' }, at: 0.8 },
+  { id: 'turn', title: 'Turn', text: 'Each notch moves the highlight.', side: 'l', y: -0.34, anchor: { kind: 'ring', deg: -150 }, at: 0.04 },
+  { id: 'click', title: 'Click', text: 'Runs the highlighted option. Volume opens a gauge.', side: 'l', y: 0.3, anchor: { kind: 'point', dx: -20, dy: -12 }, at: 0.17 },
+  { id: 'volume', title: 'Set the volume', text: 'Turn again to move the level. Yours returns after.', side: 'r', y: -0.06, anchor: { kind: 'edge', i: 2 }, at: 0.26 },
+  { id: 'brightness', title: 'Brightness', text: 'The same two moves, for your screen.', side: 'r', y: -0.34, anchor: { kind: 'edge', i: 1 }, at: 0.43 },
+  { id: 'scroll', title: 'Scroll', text: 'The dial becomes a mouse wheel.', side: 'r', y: 0.19, anchor: { kind: 'edge', i: 3 }, at: 0.56 },
+  { id: 'home', title: 'Home', text: 'Pick another dial, like Code.', side: 'l', y: -0.06, anchor: { kind: 'edge', i: 7 }, at: 0.67 },
+  { id: 'double', title: 'Double press', text: 'Closes the wheel, and opens it again.', side: 'r', y: 0.4, anchor: { kind: 'point', dx: 20, dy: -12 }, at: 0.8 },
 ];
 
 export type DialMode = 'menu' | 'volume' | 'brightness' | 'scroll';
@@ -86,16 +86,47 @@ export function dialAt(progress: number): DialState {
   return base;
 }
 
-/** Where a callout's line attaches, for a dial of `size` px centred at (cx, cy). */
+/** Where a callout's line attaches, for a dial of `size` px centred at (cx, cy). An edge anchor sits just inside the
+ *  outer rim of its slice, so a line to it never has to cross the other slices. */
 export function anchorPoint(anchor: Anchor, cx: number, cy: number, size: number): { x: number; y: number } {
   const k = size / DIAL.natural;
   if (anchor.kind === 'center') return { x: cx, y: cy };
-  const theta =
-    anchor.kind === 'slice'
-      ? -Math.PI / 2 + (anchor.i * 2 * Math.PI) / DIAL.slices
-      : (anchor.deg * Math.PI) / 180;
-  const r = anchor.kind === 'slice' ? (DIAL.rInner + DIAL.rOuter) / 2 : DIAL.rBezel;
+  // A point is given in the wheel's own 450px units from its centre: the click lines start at the sides of the centre
+  // button, so they leave clear of the label under it.
+  if (anchor.kind === 'point') return { x: cx + anchor.dx * k, y: cy + anchor.dy * k };
+  const theta = anchor.kind === 'edge' ? -Math.PI / 2 + (anchor.i * 2 * Math.PI) / DIAL.slices : (anchor.deg * Math.PI) / 180;
+  const r = anchor.kind === 'edge' ? DIAL.rOuter - 16 : DIAL.rBezel;
   return { x: cx + r * k * Math.cos(theta), y: cy + r * k * Math.sin(theta) };
+}
+
+export interface Leader {
+  id: string;
+  /** The line: the anchor on the dial, an optional 45 degree bend, then a horizontal run to the label. */
+  points: { x: number; y: number }[];
+  /** Where the label's near edge sits and the height of its centre. */
+  labelEdgeX: number;
+  labelY: number;
+}
+
+/** Lay out every leader line for a dial of `size` px at (cx, cy). Each line leaves its anchor at 45 degrees away
+ *  from the dial, then runs horizontally into its label; labels in a column are ordered like their anchors, so the
+ *  lines are parallel diagonals and horizontals that never cross (tested). */
+export function layoutLeaders(cx: number, cy: number, size: number): Leader[] {
+  const gap = size * 0.18;
+  const shoulder = 10;
+  return CALLOUTS.map((c) => {
+    const a = anchorPoint(c.anchor, cx, cy, size);
+    const dir = c.side === 'l' ? -1 : 1;
+    const labelEdgeX = cx + dir * (size / 2 + gap);
+    // A label that is almost level with its anchor is snapped level, so the line is a clean horizontal.
+    const wanted = cy + c.y * size;
+    const labelY = Math.abs(wanted - a.y) < size * 0.03 ? a.y : wanted;
+    const end = { x: labelEdgeX - dir * shoulder, y: labelY };
+    const dy = Math.abs(labelY - a.y);
+    const knee = { x: a.x + dir * dy, y: labelY };
+    const bends = dy > 1.5 && (dir === 1 ? knee.x < end.x : knee.x > end.x);
+    return { id: c.id, points: bends ? [a, knee, end] : [a, end], labelEdgeX, labelY };
+  });
 }
 
 /** Index of the latest callout that has started, or -1 before the first. */

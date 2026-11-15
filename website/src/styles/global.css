@@ -7,6 +7,7 @@
 /* Hallmark · answered F4 · the download section repeats the hero's one action for the visitor's own system, so the second filled button is the same call to action */
 /* Hallmark · dismissed 58 · the lower window holds two install commands, their copy buttons, three short steps and the footer, where most words are URLs and key names */
 /* Hallmark · dismissed 59 · the tenth section is the pinned anatomy diagram the owner asked for, and the sections that were already on the page stay as they were */
+/* Hallmark · dismissed 23 · the spine is a 2px hairline, so its accent is a sliver of the screen and not a field of it */
 /* Hallmark · waive 47c · the wheel is the app's own component rendered live inside a product slot · the product itself is what the page sells */
 @import url("./tokens.css");
 @import url("./base.css");
@@ -40,7 +41,7 @@ h3 { font-size: var(--text-title); max-width: 40ch; }
 .skip:focus-visible { transform: none; }
 
 /* ── controls ─────────────────────────────────────────────────── */
-.btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-sm); min-height: 52px; padding-inline: var(--space-lg); border: 1px solid transparent; border-radius: var(--radius-pill); font-weight: 600; font-size: var(--text-md); line-height: 1; text-decoration: none; white-space: nowrap; cursor: pointer; transition: background-color var(--dur-micro) var(--ease-out), color var(--dur-micro) var(--ease-out), border-color var(--dur-micro) var(--ease-out), transform var(--dur-micro) var(--ease-out); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-sm); min-height: 52px; padding-inline: var(--space-lg); border: 1px solid transparent; border-radius: var(--radius-pill); font-weight: 600; font-size: var(--text-md); line-height: 1; text-decoration: none; white-space: nowrap; cursor: pointer; transition: background-color var(--dur-micro) var(--ease-out), color var(--dur-micro) var(--ease-out), border-color var(--dur-micro) var(--ease-out), transform var(--dur-micro) var(--ease-out), translate 160ms var(--ease-out); }
 .btn--primary { background: var(--color-accent); color: var(--color-accent-ink); }
 .btn--primary:hover { background: var(--color-focus); }
 .btn--primary:active { transform: translateY(1px); }
@@ -51,8 +52,8 @@ h3 { font-size: var(--text-title); max-width: 40ch; }
 .btn--line:hover { border-color: var(--color-muted); background: var(--color-paper-2); }
 .btn--line:active { transform: translateY(1px); }
 .btn:disabled, .btn[aria-disabled="true"] { opacity: 0.55; cursor: not-allowed; }
-.link { color: var(--color-ink); text-decoration-line: underline; text-decoration-color: var(--color-muted); transition: text-decoration-color var(--dur-micro) var(--ease-out); }
-.link:hover { text-decoration-color: var(--color-accent); }
+.link { color: var(--color-ink); text-decoration-line: underline; text-decoration-color: var(--color-muted); background: linear-gradient(var(--color-accent), var(--color-accent)) no-repeat 0 100% / 0 1px; transition: background-size var(--dur-short) var(--ease-out); }
+.link:hover { background-size: 100% 1px; }
 .link:active { color: var(--color-ink-2); }
 
 /* ── nav ──────────────────────────────────────────────────────── */
@@ -260,8 +261,11 @@ h3 { font-size: var(--text-title); max-width: 40ch; }
 .callout { display: grid; gap: var(--space-xs); padding-top: var(--space-md); border-top: var(--rule-hair) solid var(--color-rule); align-content: start; }
 .callout h3 { font-size: var(--text-xl); transition: color var(--dur-short) var(--ease-out); }
 .callout p { color: var(--color-ink-2); }
-.diagram__lines line { stroke: var(--color-accent); stroke-width: 1.5; stroke-linecap: round; fill: none; }
-.diagram__lines circle { fill: var(--color-accent); stroke: var(--color-paper); stroke-width: 1.5; }
+.diagram__lines polyline { stroke: var(--color-muted); stroke-width: 1.25; stroke-linecap: round; stroke-linejoin: round; fill: none; transition: stroke var(--dur-short) var(--ease-out); }
+.diagram__lines circle { fill: var(--color-muted); stroke: var(--color-paper); stroke-width: 1.5; transition: fill var(--dur-short) var(--ease-out); }
+/* finished lines rest in grey; the step being shown is red */
+.diagram__lines polyline.is-current { stroke: var(--color-accent); stroke-width: 1.75; }
+.diagram__lines circle.is-current { fill: var(--color-accent); }
 
 /* Enhanced (wide screen, motion allowed): the section is a long track, its stage pins, and the labels and
    leader lines are laid out around the dial by script. The finished diagram is the end of the track. */
@@ -287,7 +291,7 @@ h3 { font-size: var(--text-title); max-width: 40ch; }
 .note { display: grid; gap: var(--space-xs); align-content: start; padding-top: var(--space-md); border-top: var(--rule-hair) solid var(--color-rule); }
 .note h3 { font-size: var(--text-xl); }
 .note p { color: var(--color-ink-2); }
-.shot__lines line { stroke: var(--color-accent); stroke-width: 1.5; stroke-linecap: round; fill: none; }
+.shot__lines line { stroke: var(--color-muted); stroke-width: 1.25; stroke-linecap: round; fill: none; }
 .shot__lines circle { fill: var(--color-accent); stroke: var(--color-paper); stroke-width: 1.5; }
 .js-3d .shot__stage { perspective: 1600px; }
 .js-3d .shot__frame { transform-origin: 50% 60%; }
@@ -298,3 +302,22 @@ h3 { font-size: var(--text-title); max-width: 40ch; }
 
 /* the keyboard: keys that fall flat into place */
 .js-3d .keys { perspective: 900px; }
+
+/* ── small interactions ─────────────────────────────────────────── */
+.shot__tilt { position: relative; transform-origin: 50% 50%; }
+/* an on-page key lights up while you hold the real one (the individual translate property, so it never fights the 3D keys) */
+.key { transition: background-color var(--dur-micro) var(--ease-out), color var(--dur-micro) var(--ease-out), border-color var(--dur-micro) var(--ease-out), translate var(--dur-micro) var(--ease-out); }
+.key.is-down { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-accent-ink); translate: 0 var(--space-3xs); }
+/* a rule that draws across the top of a row you point at */
+.faq__row, .dl__row { position: relative; }
+.faq__row::before, .dl__row::before { content: ""; position: absolute; left: 0; top: calc(var(--rule-hair) * -1); width: 100%; height: var(--rule-hair); background: var(--color-accent); transform: scaleX(0); transform-origin: left; transition: transform var(--dur-long) var(--ease-out); pointer-events: none; }
+.faq__row:hover::before, .dl__row:hover::before { transform: scaleX(1); }
+/* a hairline spine at the edge that fills as you read (CSS scroll timeline; absent where unsupported) */
+.spine { display: none; }
+@supports (animation-timeline: scroll()) {
+  @media (prefers-reduced-motion: no-preference) and (min-width: 60rem) {
+    .spine { display: block; position: fixed; inset-block: var(--banner-height) 0; left: max(var(--space-md), 1.4vw); width: 2px; background: var(--color-rule); z-index: var(--z-raised); pointer-events: none; }
+    .spine::after { content: ""; position: absolute; inset: 0; background: var(--color-accent); transform-origin: top; transform: scaleY(0); animation: spine-grow linear both; animation-timeline: scroll(root); }
+    @keyframes spine-grow { to { transform: scaleY(1); } }
+  }
+}
