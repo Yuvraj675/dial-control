@@ -663,7 +663,8 @@ fn set_recording_shortcut(state: tauri::State<AppState>, recording: bool) {
 fn serve_ipc<S: std::io::Read + std::io::Write>(app: &AppHandle, mut stream: S) {
     use std::io::BufRead;
     let mut line = String::new();
-    if std::io::BufReader::new(&mut stream).read_line(&mut line).is_err() {
+    // A command is a few bytes; cap the read so a local peer cannot make us buffer without bound.
+    if std::io::BufReader::new(std::io::Read::take(&mut stream, 64)).read_line(&mut line).is_err() {
         return;
     }
     let known = match line.trim() {
@@ -681,6 +682,44 @@ fn serve_ipc<S: std::io::Read + std::io::Write>(app: &AppHandle, mut stream: S) 
     if known {
         let _ = stream.write_all(b"ok\n");
         let _ = stream.flush();
+    }
+}
+
+/// Where the single-instance / `--toggle` socket lives. `XDG_RUNTIME_DIR` is a per-user 0700
+/// directory, so no other user can pre-create or hijack the path; the temp dir (`$TMPDIR` on
+/// macOS, which is per-user too, `/tmp` elsewhere) is the fallback.
+#[cfg(unix)]
+pub fn ipc_socket_path() -> std::path::PathBuf {
+    socket_path_in(std::env::var_os("XDG_RUNTIME_DIR"), std::env::temp_dir())
+}
+
+#[cfg(unix)]
+fn socket_path_in(runtime_dir: Option<std::ffi::OsString>, fallback: std::path::PathBuf) -> std::path::PathBuf {
+    let dir = runtime_dir
+        .map(std::path::PathBuf::from)
+        .filter(|d| d.is_absolute() && d.is_dir())
+        .unwrap_or(fallback);
+    dir.join("dial-control.sock")
+}
+
+#[cfg(all(test, unix))]
+mod ipc_path_tests {
+    use super::socket_path_in;
+    use std::path::PathBuf;
+
+    #[test]
+    fn prefers_an_existing_absolute_runtime_dir() {
+        let tmp = std::env::temp_dir();
+        let got = socket_path_in(Some(tmp.clone().into_os_string()), PathBuf::from("/nowhere"));
+        assert_eq!(got, tmp.join("dial-control.sock"));
+    }
+
+    #[test]
+    fn falls_back_when_runtime_dir_is_unset_relative_or_missing() {
+        let fb = PathBuf::from("/tmp");
+        assert_eq!(socket_path_in(None, fb.clone()), fb.join("dial-control.sock"));
+        assert_eq!(socket_path_in(Some("relative/dir".into()), fb.clone()), fb.join("dial-control.sock"));
+        assert_eq!(socket_path_in(Some("/definitely/not/here".into()), fb.clone()), fb.join("dial-control.sock"));
     }
 }
 
@@ -784,16 +823,19 @@ pub fn run() {
             #[cfg(unix)]
             {
                 let app_handle = app.handle().clone();
-                let socket_path = "/tmp/dial-control.sock";
+                let socket_path = ipc_socket_path();
                 // A live instance would have answered in main(); anything left here is stale.
-                let _ = std::fs::remove_file(socket_path);
-                if let Ok(listener) = std::os::unix::net::UnixListener::bind(socket_path) {
+                let _ = std::fs::remove_file(&socket_path);
+                if let Ok(listener) = std::os::unix::net::UnixListener::bind(&socket_path) {
+                    // Owner-only: no other local user may talk to this instance.
+                    use std::os::unix::fs::PermissionsExt;
+                    let _ = std::fs::set_permissions(&socket_path, std::fs::Permissions::from_mode(0o600));
                     std::thread::spawn(move || {
                         for stream in listener.incoming().flatten() {
                             serve_ipc(&app_handle, stream);
                         }
                     });
-                    println!("[IPC] UNIX socket listener active on {}", socket_path);
+                    println!("[IPC] UNIX socket listener active on {}", socket_path.display());
                 }
             }
 

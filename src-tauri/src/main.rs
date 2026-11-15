@@ -19,7 +19,7 @@ fn send_to_running_instance(cmd: &str) -> bool {
     #[cfg(unix)]
     {
         use std::os::unix::net::UnixStream;
-        if let Ok(stream) = UnixStream::connect("/tmp/dial-control.sock") {
+        if let Ok(stream) = UnixStream::connect(dial_control_lib::ipc_socket_path()) {
             let _ = stream.set_read_timeout(Some(Duration::from_millis(800)));
             let _ = stream.set_write_timeout(Some(Duration::from_millis(800)));
             return exchange(stream, cmd);

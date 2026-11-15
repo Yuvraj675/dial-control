@@ -10,9 +10,10 @@ echo "[*] Installing CMF Buds Pro 2 udev rule to $RULE_FILE..."
 
 cat << 'EOF' | sudo tee "$RULE_FILE" > /dev/null
 # CMF Buds Pro 2 Smart Dial - Grant desktop user access without root
-KERNEL=="event*", ATTRS{name}=="*CMF Buds Pro 2*", MODE="0666", TAG+="uaccess"
-SUBSYSTEM=="input", ATTRS{name}=="*CMF Buds Pro 2*", MODE="0666", TAG+="uaccess"
-KERNEL=="uinput", SUBSYSTEM=="misc", MODE="0666", TAG+="uaccess"
+# MODE 0660 + uaccess: only the logged-in desktop user gets access (never world-writable, since
+# write access to /dev/uinput lets a process inject keystrokes into every application).
+KERNEL=="uinput", SUBSYSTEM=="misc", MODE="0660", TAG+="uaccess", OPTIONS+="static_node=uinput"
+SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="*CMF Buds Pro 2*", MODE="0660", TAG+="uaccess"
 EOF
 
 echo "[*] Reloading udev rules..."
@@ -23,14 +24,12 @@ sudo udevadm trigger --subsystem-match=input
 for dev in /dev/input/event*; do
     if udevadm info "$dev" 2>/dev/null | grep -iq "CMF Buds Pro 2"; then
         echo "[+] Setting permissions on active device $dev..."
-        sudo chmod 0666 "$dev" || true
         sudo setfacl -m u:"$USER":rw "$dev" 2>/dev/null || true
     fi
 done
 
 # Ensure /dev/uinput permissions
 if [ -e /dev/uinput ]; then
-    sudo chmod 0666 /dev/uinput || true
     sudo setfacl -m u:"$USER":rw /dev/uinput 2>/dev/null || true
 fi
 

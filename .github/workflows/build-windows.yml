@@ -4,6 +4,9 @@ name: Build Windows Release
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build-windows:
     runs-on: windows-latest
