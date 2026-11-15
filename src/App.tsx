@@ -61,7 +61,6 @@ export function App() {
             icon: prof.icon || "sliders",
             type: "profile" as const,
             action: id,
-            desc: `Switch to ${prof.name} dial`,
           };
         })
         .filter(Boolean) as WheelAction[];
@@ -71,7 +70,6 @@ export function App() {
         label: "CLOSE",
         icon: "close",
         type: "close" as const,
-        desc: "Dismiss HUD",
       });
       return {
         id: "home",

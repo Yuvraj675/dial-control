@@ -41,7 +41,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
   onSaveConfig,
 }) => {
   const onAndroid = isAndroidApp();
-  const [activeTab, setActiveTab] = useState<"profiles" | "appearance" | "hardware">("profiles");
+  const [activeTab, setActiveTab] = useState<"profiles" | "appearance" | "shortcut">("profiles");
   const [selectedProfileId, setSelectedProfileId] = useState<string>("default");
   const [selectedActionIndex, setSelectedActionIndex] = useState<number>(0);
   const [currentConfig, setCurrentConfig] = useState<ProfilesConfig>(config);
@@ -711,14 +711,13 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
 
   const handleAddAction = () => {
     const newAction: WheelAction = onAndroid
-      ? { id: `custom_${Date.now()}`, label: "BACK", icon: "back", type: "system", action: "back", desc: "CUSTOM ACTION" }
+      ? { id: `custom_${Date.now()}`, label: "BACK", icon: "back", type: "system", action: "back" }
       : {
           id: `custom_${Date.now()}`,
           label: "NEW SHORTCUT",
           icon: "disc",
           type: "hotkey",
           keys: ["KEY_LEFTCTRL", "KEY_S"],
-          desc: "CUSTOM ACTION",
         };
     const updatedActions = [...actions, newAction];
     const updatedProfile = { ...activeProfile, actions: updatedActions };
@@ -769,17 +768,17 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
     // Default template actions if none selected
     if (imported.length === 0) {
       imported.push(
-        { id: `vol_${Date.now()}`, label: "VOLUME", icon: "volume", type: "mode", action: "volume", desc: "Rotate to adjust volume" },
-        { id: `media_${Date.now()}`, label: "PLAY / PAUSE", icon: "playpause", type: "key", action: "playpause", desc: "Toggle media playback" }
+        { id: `vol_${Date.now()}`, label: "VOLUME", icon: "volume", type: "mode", action: "volume" },
+        { id: `media_${Date.now()}`, label: "PLAY / PAUSE", icon: "playpause", type: "key", action: "playpause" }
       );
     }
 
     // Ensure HOME and CLOSE are included
     if (!imported.some((a) => a.id === "home_dial" || a.type === "home")) {
-      imported.push({ id: "home_dial", label: "HOME", icon: "home", type: "home", desc: "Choose Dial Menu" });
+      imported.push({ id: "home_dial", label: "HOME", icon: "home", type: "home" });
     }
     if (!imported.some((a) => a.id === "close_hud" || a.type === "close")) {
-      imported.push({ id: "close_hud", label: "CLOSE", icon: "close", type: "close", desc: "Dismiss HUD" });
+      imported.push({ id: "close_hud", label: "CLOSE", icon: "close", type: "close" });
     }
 
     const newProfile: DialProfile = {
@@ -906,15 +905,15 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
 
             <button
               type="button"
-              onClick={() => setActiveTab("hardware")}
+              onClick={() => setActiveTab("shortcut")}
               className={`flex items-center gap-3.5 px-4 py-3 rounded-xl text-xs transition-all cursor-pointer select-none whitespace-nowrap ${
-                activeTab === "hardware"
+                activeTab === "shortcut"
                   ? "bg-white/[0.1] text-white border border-white/10 shadow-sm font-bold"
                   : "text-neutral-400 hover:text-white hover:bg-white/[0.04]"
               }`}
             >
               <Keyboard className="w-4 h-4 text-white shrink-0" />
-              <span className="font-dot tracking-wider text-[11px] uppercase">SHORTCUT & HARDWARE</span>
+              <span className="font-dot tracking-wider text-[11px] uppercase">SHORTCUT</span>
             </button>
           </div>
         </div>
@@ -955,7 +954,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                 ? "WHEEL CONFIGURATION"
                 : activeTab === "appearance"
                 ? "DIAL GEOMETRY"
-                : "ACTIVATION SHORTCUT & HARDWARE"}
+                : "ACTIVATION SHORTCUT"}
             </span>
           </div>
 
@@ -1280,7 +1279,6 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                             updates.action = "scroll";
                             updates.icon = "scroll";
                             updates.label = "SCROLL";
-                            updates.desc = "Rotate to scroll";
                           } else if (newType === "key") {
                             updates.action = "playpause";
                             updates.icon = "playpause";
@@ -1359,7 +1357,6 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                               action: val,
                               icon: val === "scroll" ? "scroll" : val === "brightness" ? "brightness" : "volume",
                               label: val === "scroll" ? "SCROLL" : val === "brightness" ? "BRIGHTNESS" : "VOLUME",
-                              desc: val === "scroll" ? "Rotate to scroll" : val === "brightness" ? "Rotate to adjust brightness" : "Rotate to adjust volume",
                             });
                           }}
                           className="w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white focus:outline-none focus:border-white font-dot uppercase tracking-wider"
@@ -1638,20 +1635,6 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                         <TestRunButton action={selectedAction} />
                       </div>
                     )}
-
-                    {/* Description */}
-                    <div>
-                      <label className="font-dot text-[11px] text-neutral-400 mb-1.5 block uppercase tracking-wider">
-                        Telemetry Hint
-                      </label>
-                      <input
-                        type="text"
-                        value={selectedAction.desc || ""}
-                        onChange={(e) => handleUpdateAction({ desc: e.target.value.toUpperCase() })}
-                        placeholder="e.g. CLIPBOARD COPY"
-                        className="w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white font-dot focus:outline-none focus:border-white uppercase tracking-wider"
-                      />
-                    </div>
                   </div>
                 )}
               </div>
@@ -1771,7 +1754,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
         </div>
 
         {/* Tab 3: Hardware & Activation Shortcut */}
-        <div className={`flex-1 overflow-y-auto p-8 max-w-2xl flex flex-col gap-8 ${activeTab === "hardware" ? "" : "hidden"}`}>
+        <div className={`flex-1 overflow-y-auto p-8 max-w-2xl flex flex-col gap-8 ${activeTab === "shortcut" ? "" : "hidden"}`}>
           {/* Global Shortcut Card */}
           <div className="p-7 rounded-2xl bg-[#0C0E14] border border-white/10 flex flex-col gap-6 shadow-sm">
             <div>
@@ -1953,56 +1936,6 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                 ))}
               </div>
             </div>
-          </div>
-
-          <div className="flex items-center justify-between p-6 rounded-2xl bg-[#0C0E14] border border-white/10 shadow-sm">
-            <div>
-              <div className="font-dot text-xs text-white uppercase tracking-wider">
-                EARBUD AUDIO FEEDBACK
-              </div>
-              <div className="text-[10px] font-dot text-neutral-400 mt-1 uppercase tracking-wider">
-                Emit hardware audio tone in earbuds on rotation steps
-              </div>
-            </div>
-            <input
-              type="checkbox"
-              checked={currentConfig.settings.haptic_beep}
-              onChange={(e) =>
-                setCurrentConfig({
-                  ...currentConfig,
-                  settings: {
-                    ...currentConfig.settings,
-                    haptic_beep: e.target.checked,
-                  },
-                })
-              }
-              className="accent-white w-5 h-5 cursor-pointer"
-            />
-          </div>
-
-          <div className="flex items-center justify-between p-6 rounded-2xl bg-[#0C0E14] border border-white/10 shadow-sm">
-            <div>
-              <div className="font-dot text-xs text-white uppercase tracking-wider">
-                START RESIDENT IN TRAY
-              </div>
-              <div className="text-[10px] font-dot text-neutral-400 mt-1 uppercase tracking-wider">
-                Stay resident in top bar / tray icon when settings window is closed
-              </div>
-            </div>
-            <input
-              type="checkbox"
-              checked={currentConfig.settings.start_in_tray}
-              onChange={(e) =>
-                setCurrentConfig({
-                  ...currentConfig,
-                  settings: {
-                    ...currentConfig.settings,
-                    start_in_tray: e.target.checked,
-                  },
-                })
-              }
-              className="accent-white w-5 h-5 cursor-pointer"
-            />
           </div>
         </div>
       </div>

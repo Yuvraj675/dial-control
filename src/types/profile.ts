@@ -44,7 +44,6 @@ export interface WheelAction {
   target?: string;       // For launch: app id / shortcut / .app, executable, file, folder or URL
   text?: string;         // For typed text
   steps?: MacroStep[];   // For macros
-  desc?: string;
 }
 
 export interface DialProfile {
@@ -59,10 +58,6 @@ export interface AppSettings {
   theme: ThemeId;
   dial_radius: number;
   donut_thickness: number;
-  sensitivity: number;
-  haptic_beep: boolean;
-  start_in_tray: boolean;
-  auto_close_seconds: number;
   activation_shortcut?: string;
 }
 

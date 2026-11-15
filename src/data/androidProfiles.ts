@@ -26,12 +26,12 @@ const sys = (action: string, label?: string): WheelAction => {
 const playPause: WheelAction = { id: "media_playpause", label: "PLAY / PAUSE", icon: "playpause", type: "key", action: "playpause" };
 const next: WheelAction = { id: "media_next", label: "NEXT TRACK", icon: "next", type: "key", action: "next" };
 const prev: WheelAction = { id: "media_prev", label: "PREV TRACK", icon: "prev", type: "key", action: "prev" };
-const scroll: WheelAction = { id: "scroll_mode", label: "SCROLL", icon: "scroll", type: "mode", action: "scroll", desc: "Rotate to scroll" };
+const scroll: WheelAction = { id: "scroll_mode", label: "SCROLL", icon: "scroll", type: "mode", action: "scroll" };
 const volume: WheelAction = { id: "volume_mode", label: "VOLUME", icon: "volume", type: "mode" };
 const brightness: WheelAction = { id: "brightness_mode", label: "BRIGHTNESS", icon: "brightness", type: "mode" };
 const mute: WheelAction = { id: "mute_toggle", label: "MUTE", icon: "mute", type: "mute" };
-const home: WheelAction = { id: "home_dial", label: "HOME", icon: "home", type: "home", desc: "Choose Dial Menu" };
-const close: WheelAction = { id: "close_hud", label: "CLOSE", icon: "close", type: "close", desc: "Dismiss HUD" };
+const home: WheelAction = { id: "home_dial", label: "HOME", icon: "home", type: "home" };
+const close: WheelAction = { id: "close_hud", label: "CLOSE", icon: "close", type: "close" };
 
 /**
  * Phone counterpart of DEFAULT_CONFIG: same settings and wheel, but slices that work on Android

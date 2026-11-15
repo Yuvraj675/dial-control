@@ -25,8 +25,6 @@ object Commands {
         }
         "set_mode" -> DialController.setMode(args.optString("mode")).toString()
         "hide_hud" -> { DialController.hideHud(); "null" }
-        "show_hud" -> { DialController.showHud(); "null" }
-        "toggle_hud" -> { DialController.toggleHud(); "null" }
         "close_hud_for_scroll" -> { DialController.closeHudForScroll(); "null" }
         "stop_scroll_mode" -> { DialController.stopScrollMode(); "null" }
         "execute_action" -> { DialController.executeAction(args.getJSONObject("action")); "null" }
@@ -36,7 +34,6 @@ object Commands {
             args.optInt("pct").toString()
         }
         "get_system_brightness" -> Actions.brightnessPct(context).toString()
-        "set_system_brightness" -> Actions.setBrightness(context, args.optInt("pct")).toString()
         "step_brightness" -> { Actions.stepBrightness(context, args.optInt("direction")); "null" }
         "adjust_gauge" -> {
             val delta = args.optInt("delta")
@@ -49,12 +46,6 @@ object Commands {
         }
         "list_installed_apps" -> installedApps(context).toString()
         "diag_log" -> { Diag.log("ui: ${args.optString("msg")}"); "null" }
-        "show_settings" -> {
-            context.startActivity(
-                Intent(context, com.yuvraj.dialcontrol.SettingsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-            )
-            "null"
-        }
         // Desktop global shortcuts have no Android equivalent.
         "register_activation_shortcut" -> JSONObject.quote("")
         "set_recording_shortcut" -> "null"

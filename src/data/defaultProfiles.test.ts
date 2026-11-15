@@ -132,3 +132,15 @@ test("legacy theme ids are migrated", () => {
   assert.equal(migrate("cmf_orange"), "amber");
   assert.equal(migrate("stealth"), "stealth");
 });
+
+test("fields no version ever read are dropped from saved configs", () => {
+  const legacy = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+  Object.assign(legacy.settings, { sensitivity: 1, haptic_beep: true, start_in_tray: true, auto_close_seconds: 6, animation_speed: "smooth" });
+  legacy.profiles.default.actions[0].desc = "OLD HINT";
+  const migrated = sanitizeAndMigrateConfig(legacy);
+  for (const key of ["sensitivity", "haptic_beep", "start_in_tray", "auto_close_seconds", "animation_speed"]) {
+    assert.equal(key in migrated.settings, false, key);
+  }
+  assert.equal("desc" in migrated.profiles.default.actions[0], false);
+  assert.equal(migrated.settings.dial_radius, DEFAULT_CONFIG.settings.dial_radius);
+});

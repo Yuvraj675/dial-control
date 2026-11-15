@@ -5,10 +5,6 @@ export const DEFAULT_CONFIG: ProfilesConfig = {
     theme: "signal_red",
     dial_radius: 185,
     donut_thickness: 64,
-    sensitivity: 1.0,
-    haptic_beep: true,
-    start_in_tray: true,
-    auto_close_seconds: 6,
     activation_shortcut: "Super+Shift+D",
   },
   profile_order: ["default", "media_video", "code_editor", "file_manager", "browser_nav", "creative_design"],
@@ -22,12 +18,12 @@ export const DEFAULT_CONFIG: ProfilesConfig = {
         { id: "media_playpause", label: "PLAY / PAUSE", icon: "playpause", type: "key", action: "playpause" },
         { id: "brightness_mode", label: "BRIGHTNESS", icon: "brightness", type: "mode" },
         { id: "volume_mode", label: "VOLUME", icon: "volume", type: "mode" },
-        { id: "scroll_mode", label: "SCROLL", icon: "scroll", type: "mode", action: "scroll", desc: "Rotate to scroll" },
+        { id: "scroll_mode", label: "SCROLL", icon: "scroll", type: "mode", action: "scroll" },
         { id: "media_next", label: "NEXT TRACK", icon: "next", type: "key", action: "next" },
         { id: "media_prev", label: "PREV TRACK", icon: "prev", type: "key", action: "prev" },
         { id: "mute_toggle", label: "MUTE", icon: "mute", type: "mute" },
-        { id: "home_dial", label: "HOME", icon: "home", type: "home", desc: "Choose Dial Menu" },
-        { id: "close_hud", label: "CLOSE", icon: "close", type: "close", desc: "Dismiss HUD" },
+        { id: "home_dial", label: "HOME", icon: "home", type: "home" },
+        { id: "close_hud", label: "CLOSE", icon: "close", type: "close" },
       ],
     },
     media_video: {
@@ -42,8 +38,8 @@ export const DEFAULT_CONFIG: ProfilesConfig = {
         { id: "fullscreen", label: "FULLSCREEN", icon: "monitor", type: "hotkey", keys: ["KEY_F"] },
         { id: "video_mute", label: "MUTE", icon: "mute", type: "hotkey", keys: ["KEY_M"] },
         { id: "volume_mode", label: "VOLUME", icon: "volume", type: "mode" },
-        { id: "home_dial", label: "HOME", icon: "home", type: "home", desc: "Choose Dial Menu" },
-        { id: "close_hud", label: "CLOSE", icon: "close", type: "close", desc: "Dismiss HUD" },
+        { id: "home_dial", label: "HOME", icon: "home", type: "home" },
+        { id: "close_hud", label: "CLOSE", icon: "close", type: "close" },
       ],
     },
     code_editor: {
@@ -52,15 +48,15 @@ export const DEFAULT_CONFIG: ProfilesConfig = {
       icon: "terminal",
       match_patterns: ["*code*", "*cursor*", "*zed*", "*sublime*", "*nvim*"],
       actions: [
-        { id: "scroll_mode", label: "SCROLL", icon: "scroll", type: "mode", action: "scroll", desc: "Rotate to scroll" },
+        { id: "scroll_mode", label: "SCROLL", icon: "scroll", type: "mode", action: "scroll" },
         { id: "code_save", label: "SAVE ALL", icon: "save", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_S"], keys_mac: ["KEY_LEFTMETA", "KEY_S"] },
         { id: "code_format", label: "FORMAT", icon: "format", type: "hotkey", keys: ["KEY_LEFTSHIFT", "KEY_LEFTALT", "KEY_F"], keys_mac: ["KEY_LEFTSHIFT", "KEY_LEFTALT", "KEY_F"] },
         { id: "code_find", label: "FIND IN FILES", icon: "find", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_F"], keys_mac: ["KEY_LEFTMETA", "KEY_LEFTSHIFT", "KEY_F"] },
         { id: "code_comment", label: "COMMENT", icon: "comment", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_SLASH"], keys_mac: ["KEY_LEFTMETA", "KEY_SLASH"] },
         { id: "code_terminal", label: "TERMINAL", icon: "terminal", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_GRAVE"], keys_mac: ["KEY_LEFTCTRL", "KEY_GRAVE"] },
         { id: "code_git", label: "GIT DIFF", icon: "git", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_G"], keys_mac: ["KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_G"] },
-        { id: "home_dial", label: "HOME", icon: "home", type: "home", desc: "Choose Dial Menu" },
-        { id: "close_hud", label: "CLOSE", icon: "close", type: "close", desc: "Dismiss HUD" },
+        { id: "home_dial", label: "HOME", icon: "home", type: "home" },
+        { id: "close_hud", label: "CLOSE", icon: "close", type: "close" },
       ],
     },
     file_manager: {
@@ -69,15 +65,15 @@ export const DEFAULT_CONFIG: ProfilesConfig = {
       icon: "folder",
       match_patterns: ["*nautilus*", "*dolphin*", "*thunar*", "*pcmanfm*", "*filee*", "*explorer*"],
       actions: [
-        { id: "scroll_mode", label: "SCROLL", icon: "scroll", type: "mode", action: "scroll", desc: "Rotate to scroll" },
+        { id: "scroll_mode", label: "SCROLL", icon: "scroll", type: "mode", action: "scroll" },
         { id: "file_copy", label: "COPY", icon: "copy", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_C"], keys_mac: ["KEY_LEFTMETA", "KEY_C"] },
         { id: "file_paste", label: "PASTE", icon: "paste", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_V"], keys_mac: ["KEY_LEFTMETA", "KEY_V"] },
         { id: "file_trash", label: "DELETE", icon: "trash", type: "hotkey", keys: ["KEY_DELETE"], keys_mac: ["KEY_LEFTMETA", "KEY_BACKSPACE"] },
         { id: "file_new_folder", label: "NEW FOLDER", icon: "new_folder", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_N"], keys_mac: ["KEY_LEFTMETA", "KEY_LEFTSHIFT", "KEY_N"] },
         { id: "file_rename", label: "RENAME", icon: "rename", type: "hotkey", keys: ["KEY_F2"], keys_mac: ["KEY_ENTER"] },
         { id: "file_terminal", label: "TERMINAL", icon: "terminal", type: "command", cmd: "x-terminal-emulator || ptyxis || gnome-terminal || kgx || konsole || alacritty || kitty || xterm" },
-        { id: "home_dial", label: "HOME", icon: "home", type: "home", desc: "Choose Dial Menu" },
-        { id: "close_hud", label: "CLOSE", icon: "close", type: "close", desc: "Dismiss HUD" },
+        { id: "home_dial", label: "HOME", icon: "home", type: "home" },
+        { id: "close_hud", label: "CLOSE", icon: "close", type: "close" },
       ],
     },
     browser_nav: {
@@ -86,15 +82,15 @@ export const DEFAULT_CONFIG: ProfilesConfig = {
       icon: "globe",
       match_patterns: ["*firefox*", "*chrome*", "*zen*", "*brave*", "*edge*"],
       actions: [
-        { id: "scroll_mode", label: "SCROLL", icon: "scroll", type: "mode", action: "scroll", desc: "Rotate to scroll" },
+        { id: "scroll_mode", label: "SCROLL", icon: "scroll", type: "mode", action: "scroll" },
         { id: "nav_back", label: "BACK", icon: "back", type: "hotkey", keys: ["KEY_LEFTALT", "KEY_LEFT"], keys_mac: ["KEY_LEFTMETA", "KEY_LEFTBRACE"] },
         { id: "nav_fwd", label: "FORWARD", icon: "forward", type: "hotkey", keys: ["KEY_LEFTALT", "KEY_RIGHT"], keys_mac: ["KEY_LEFTMETA", "KEY_RIGHTBRACE"] },
         { id: "nav_reload", label: "RELOAD", icon: "reload", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_R"], keys_mac: ["KEY_LEFTMETA", "KEY_R"] },
         { id: "nav_new_tab", label: "NEW TAB", icon: "new_tab", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_T"], keys_mac: ["KEY_LEFTMETA", "KEY_T"] },
         { id: "nav_close_tab", label: "CLOSE TAB", icon: "close_tab", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_W"], keys_mac: ["KEY_LEFTMETA", "KEY_W"] },
         { id: "nav_reopen_tab", label: "RESTORE TAB", icon: "reopen_tab", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_T"], keys_mac: ["KEY_LEFTMETA", "KEY_LEFTSHIFT", "KEY_T"] },
-        { id: "home_dial", label: "HOME", icon: "home", type: "home", desc: "Choose Dial Menu" },
-        { id: "close_hud", label: "CLOSE", icon: "close", type: "close", desc: "Dismiss HUD" },
+        { id: "home_dial", label: "HOME", icon: "home", type: "home" },
+        { id: "close_hud", label: "CLOSE", icon: "close", type: "close" },
       ],
     },
     creative_design: {
@@ -109,8 +105,8 @@ export const DEFAULT_CONFIG: ProfilesConfig = {
         { id: "draw_zoom_out", label: "ZOOM OUT", icon: "zoom_out", type: "hotkey", keys: ["KEY_LEFTCTRL", "KEY_MINUS"], keys_mac: ["KEY_LEFTMETA", "KEY_MINUS"] },
         { id: "draw_hand", label: "PAN", icon: "pan", type: "hotkey", keys: ["KEY_H"] },
         { id: "draw_select", label: "SELECT", icon: "select", type: "hotkey", keys: ["KEY_V"] },
-        { id: "home_dial", label: "HOME", icon: "home", type: "home", desc: "Choose Dial Menu" },
-        { id: "close_hud", label: "CLOSE", icon: "close", type: "close", desc: "Dismiss HUD" },
+        { id: "home_dial", label: "HOME", icon: "home", type: "home" },
+        { id: "close_hud", label: "CLOSE", icon: "close", type: "close" },
       ],
     },
   },
@@ -124,7 +120,6 @@ export const SYSTEM_ACTION_TEMPLATES: { action: WheelAction; sourceName: string 
       icon: "scroll",
       type: "mode",
       action: "scroll",
-      desc: "Rotate to scroll up or down",
     },
     sourceName: "System Template",
   },
@@ -135,7 +130,6 @@ export const SYSTEM_ACTION_TEMPLATES: { action: WheelAction; sourceName: string 
       icon: "volume",
       type: "mode",
       action: "volume",
-      desc: "Rotate to adjust system volume",
     },
     sourceName: "System Template",
   },
@@ -146,7 +140,6 @@ export const SYSTEM_ACTION_TEMPLATES: { action: WheelAction; sourceName: string 
       icon: "brightness",
       type: "mode",
       action: "brightness",
-      desc: "Rotate to adjust display brightness",
     },
     sourceName: "System Template",
   },
@@ -157,7 +150,6 @@ export const SYSTEM_ACTION_TEMPLATES: { action: WheelAction; sourceName: string 
       icon: "playpause",
       type: "key",
       action: "playpause",
-      desc: "Toggle audio/video playback",
     },
     sourceName: "System Template",
   },
@@ -168,7 +160,6 @@ export const SYSTEM_ACTION_TEMPLATES: { action: WheelAction; sourceName: string 
       icon: "next",
       type: "key",
       action: "next",
-      desc: "Skip to next track",
     },
     sourceName: "System Template",
   },
@@ -179,7 +170,6 @@ export const SYSTEM_ACTION_TEMPLATES: { action: WheelAction; sourceName: string 
       icon: "prev",
       type: "key",
       action: "prev",
-      desc: "Return to previous track",
     },
     sourceName: "System Template",
   },
@@ -189,7 +179,6 @@ export const SYSTEM_ACTION_TEMPLATES: { action: WheelAction; sourceName: string 
       label: "MUTE",
       icon: "mute",
       type: "mute",
-      desc: "Toggle audio mute",
     },
     sourceName: "System Template",
   },
@@ -217,7 +206,6 @@ export function sanitizeAndMigrateConfig(cfg: ProfilesConfig): ProfilesConfig {
         icon: "scroll",
         type: "mode",
         action: "scroll",
-        desc: "Rotate to scroll",
       };
       const volIdx = prof.actions.findIndex(
         (a) => a.id === "volume_mode" || a.action === "volume"
@@ -247,7 +235,6 @@ export function sanitizeAndMigrateConfig(cfg: ProfilesConfig): ProfilesConfig {
         icon: "scroll",
         type: "mode",
         action: "scroll",
-        desc: "Rotate to scroll",
       };
       prof.actions = [scrollAction, ...prof.actions];
       updatedProfiles.browser_nav = prof;
@@ -271,7 +258,6 @@ export function sanitizeAndMigrateConfig(cfg: ProfilesConfig): ProfilesConfig {
         icon: "scroll",
         type: "mode",
         action: "scroll",
-        desc: "Rotate to scroll",
       };
       prof.actions = [scrollAction, ...prof.actions];
       updatedProfiles.code_editor = prof;
@@ -295,7 +281,6 @@ export function sanitizeAndMigrateConfig(cfg: ProfilesConfig): ProfilesConfig {
         icon: "scroll",
         type: "mode",
         action: "scroll",
-        desc: "Rotate to scroll",
       };
       prof.actions = [scrollAction, ...prof.actions];
       updatedProfiles.file_manager = prof;
@@ -327,7 +312,6 @@ export function sanitizeAndMigrateConfig(cfg: ProfilesConfig): ProfilesConfig {
         label: "HOME",
         icon: "home",
         type: "home",
-        desc: "Choose Dial Menu",
       });
     }
     if (!prof.actions.some((a) => a.id === "close_hud" || a.type === "close")) {
@@ -336,7 +320,6 @@ export function sanitizeAndMigrateConfig(cfg: ProfilesConfig): ProfilesConfig {
         label: "CLOSE",
         icon: "close",
         type: "close",
-        desc: "Dismiss HUD",
       });
     }
   }
@@ -344,14 +327,24 @@ export function sanitizeAndMigrateConfig(cfg: ProfilesConfig): ProfilesConfig {
   // Themes renamed in 1.0.0; keep saved configs working.
   const legacyThemes: Record<string, ThemeId> = { nothing_red: "signal_red", cmf_orange: "amber" };
   const savedTheme = cfg.settings?.theme as string | undefined;
-  const settings =
-    savedTheme && savedTheme in legacyThemes
-      ? { ...cfg.settings, theme: legacyThemes[savedTheme] }
-      : cfg.settings;
+  const settings: Record<string, unknown> = { ...cfg.settings };
+  if (savedTheme && savedTheme in legacyThemes) settings.theme = legacyThemes[savedTheme];
+  // Settings and slice fields that older versions saved but nothing ever read.
+  for (const key of ["sensitivity", "haptic_beep", "start_in_tray", "auto_close_seconds", "animation_speed"]) delete settings[key];
+  for (const id of Object.keys(updatedProfiles)) {
+    const prof = updatedProfiles[id];
+    updatedProfiles[id] = {
+      ...prof,
+      actions: prof.actions.map((a) => {
+        const { desc: _legacyHint, ...rest } = a as WheelAction & { desc?: string };
+        return rest;
+      }),
+    };
+  }
 
   return {
     ...cfg,
-    settings,
+    settings: settings as unknown as ProfilesConfig["settings"],
     profiles: updatedProfiles,
   };
 }

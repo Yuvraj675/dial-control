@@ -63,11 +63,6 @@ fn get_system_brightness(state: tauri::State<AppState>) -> i32 {
 }
 
 #[tauri::command(async)]
-fn set_system_brightness(state: tauri::State<AppState>, pct: i32) -> i32 {
-    state.platform.brightness().set_brightness(pct)
-}
-
-#[tauri::command(async)]
 fn step_brightness(state: tauri::State<AppState>, direction: i32) {
     state.platform.brightness().step_brightness(direction);
 }
@@ -285,11 +280,6 @@ pub(crate) fn do_show_hud(app: &AppHandle, state: &AppState) {
     );
 }
 
-#[tauri::command]
-fn show_hud(app: AppHandle, state: tauri::State<AppState>) {
-    do_show_hud(&app, &state);
-}
-
 /// Installed applications for the Settings app picker (launch slices and macro steps).
 #[tauri::command(async)]
 fn list_installed_apps() -> Vec<actions::InstalledApp> {
@@ -330,7 +320,6 @@ fn hide_hud(app: AppHandle, state: tauri::State<AppState>) {
     do_hide_hud(&app, &state);
 }
 
-#[tauri::command]
 fn toggle_hud(app: AppHandle, state: tauri::State<AppState>) {
     if state.is_scroll_mode.load(Ordering::SeqCst) {
         do_stop_scroll_mode(&app, &state);
@@ -344,7 +333,6 @@ fn toggle_hud(app: AppHandle, state: tauri::State<AppState>) {
     }
 }
 
-#[tauri::command]
 fn show_settings(app: AppHandle) {
     if let Some(window) = app.get_webview_window("settings") {
         let _ = window.show();
@@ -901,14 +889,10 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            toggle_hud,
-            show_hud,
             hide_hud,
-            show_settings,
             execute_action,
             adjust_gauge,
             get_system_brightness,
-            set_system_brightness,
             step_brightness,
             get_system_volume,
             set_system_volume,

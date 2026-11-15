@@ -119,14 +119,6 @@ object DialController {
         return DialLogic.matchProfile(order, patterns, pkg)
     }
 
-    fun toggleHud() {
-        when {
-            isScrollMode -> stopScrollMode()
-            isHudOpen -> hideHud()
-            else -> showHud()
-        }
-    }
-
     /** `do_show_hud`: lock the volume, show the overlay, then tell the UI. */
     fun showHud() {
         val service = a11y
