@@ -24,7 +24,9 @@
   <br /><sub>Turning the dial moves the highlight; a click runs the slice.</sub>
 </div>
 
-Dial Control behaves like normal earbuds until you ask for more. **Double-press the dial** (or hit a shortcut) and an animated donut-shaped wheel appears with actions chosen for the app you are using. Turn the dial to move the highlight, click to run it. Inspired by [KnifeLemon/Filee](https://github.com/KnifeLemon/Filee) and the Nothing OS dot-matrix look.
+Dial Control behaves like normal earbuds until you ask for more. **Double-press the dial** (or hit a shortcut) and an animated donut-shaped wheel appears with actions chosen for the app you are using. Turn the dial to move the highlight, click to run it. Inspired by [KnifeLemon/Filee](https://github.com/KnifeLemon/Filee).
+
+> **Independent project.** Dial Control is not affiliated with, endorsed by or connected to Nothing Technology Limited. "CMF", "Nothing" and "Nothing X" are trademarks of their respective owners and are used only to describe compatible hardware and software.
 
 ## Features
 
@@ -35,8 +37,28 @@ Dial Control behaves like normal earbuds until you ask for more. **Double-press 
 - **Stateful volume locking**: your listening volume stays untouched while you navigate the wheel and is restored when it closes.
 - **Custom slices and macros**: a slice can press a hotkey, open an app/file/URL, run a command, type text, or chain these with waits into a macro. A *Test run* button tries it after a 3 s countdown.
 - **Custom profiles**: build your own wheels with icons, title/class matching rules and slices imported from other profiles.
-- **Keyboard-only mode**: a global shortcut (default `Super+Shift+D`, rebindable) works without any earbuds.
+- **Works without earbuds**: a global shortcut, arrow keys and the mouse wheel drive the whole wheel from a keyboard. See [Keyboard controls](#keyboard-controls).
 - **Lightweight tray daemon**: Rust + Tauri, single instance, hot-reloaded settings.
+
+## Keyboard controls
+
+You do **not** need the CMF Buds Pro 2. Everything the dial does is also available from the keyboard and mouse, so Dial Control works as a radial app launcher and shortcut palette for anyone:
+
+| Input | Action |
+|---|---|
+| **`Super+Shift+D`** (Windows: `Win+Shift+D`, macOS: `Cmd+Shift+D`) | Open / close the wheel anywhere. Rebind it in *Settings → Shortcut & Hardware* |
+| `→` `↓` or mouse wheel down | Next slice |
+| `←` `↑` or mouse wheel up | Previous slice |
+| `Enter` or `Space` | Run the highlighted slice |
+| `Esc` | Close the wheel, or leave the current gauge mode |
+
+What you get without earbuds:
+- **Context-aware wheels**: a different set of slices for your editor, browser, file manager and more.
+- **Your own slices**: hotkeys, app and URL launchers, shell commands, text snippets and multi-step macros, all one keypress away.
+- **Volume and brightness gauges**: open the wheel, pick *Volume* or *Brightness*, then use the arrow keys or mouse wheel.
+- **Any input device**: anything that can send the shortcut and arrow keys, such as a macro pad, drives the wheel the same way.
+
+On Linux/Wayland the shortcut is registered through GNOME's compositor keybindings and reaches the app through a local socket in under 2 ms; on other desktops it is a normal global shortcut. You can also trigger the wheel from a script or keybinding with `dial-control --toggle`.
 
 ## Screenshots
 
@@ -54,18 +76,55 @@ The wheel changes with the app in front of you. Profiles, slices, icons and shor
 |---|---|---|---|---|---|
 | **Linux** (X11 / Wayland) | BlueZ D-Bus + `evdev` exclusive grab | WirePlumber / PulseAudio | Mutter D-Bus, `/sys/class/backlight` | GNOME Shell extension, Hyprland, Sway, KDE, X11 | Functional |
 | **Windows** 10 / 11 | Core Audio callback, `WH_KEYBOARD_LL`, Raw Input, own SMTC session | WASAPI | DDC/CI (`dxva2`) + WMI | Win32 foreground window | Functional |
-| **macOS** 14+ (Apple Silicon & Intel) | CoreGraphics event tap, CoreAudio listener, own Now Playing session | CoreAudio | DisplayServices | `NSWorkspace` + AppleScript | Functional |
+| **macOS** 14+ (Apple Silicon) | CoreGraphics event tap, CoreAudio listener, own Now Playing session | CoreAudio | DisplayServices | `NSWorkspace` + AppleScript | Functional |
 | **Android** 8.0+ | Own `MediaSession` + `STREAM_MUSIC` watcher | `AudioManager` | `Settings.System` | Accessibility service | **Coming soon** (work in progress, no release yet) |
 
 Windows and macOS decision logic is unit-tested on any host; the OS integrations themselves are verified by compilation in CI-style checks, so field reports are welcome (see [Troubleshooting](#troubleshooting)).
 
 ## Install
 
-Download the installer for your OS from [Releases](https://github.com/Yuvraj675/dial-control/releases). They are built by GitHub Actions when a version tag is pushed (maintainers: see the [release guide](docs/DEVELOPMENT_GUIDE.md#8-creating-a-release-automated)).
+### One-line install
 
-### Earbuds setup (all platforms)
+**Linux and macOS**
 
-The CMF Buds Pro 2 dial uses standard Bluetooth **AVRCP**, not a proprietary protocol. In the **Nothing X** app (*Controls → Dial*) set:
+```bash
+curl -fsSL https://github.com/Yuvraj675/dial-control/releases/latest/download/install.sh | bash
+```
+
+**Windows** (PowerShell)
+
+```powershell
+irm https://github.com/Yuvraj675/dial-control/releases/latest/download/install.ps1 | iex
+```
+
+The script finds your OS, architecture and Linux distribution, downloads the matching package from the latest [release](https://github.com/Yuvraj675/dial-control/releases), **verifies its SHA-256 checksum** and installs it (`.deb` via apt, `.rpm` via dnf/zypper, `.pkg.tar.zst` via pacman, otherwise the portable AppImage; `.dmg` into Applications on macOS; the per-user setup on Windows). It never installs anything if the checksum does not match.
+
+<details>
+<summary>Options and reviewing the script first</summary>
+
+```bash
+# read it before running it
+curl -fsSL https://github.com/Yuvraj675/dial-control/releases/latest/download/install.sh -o install.sh
+less install.sh && bash install.sh
+
+# specific version / force the AppImage / download and verify only
+curl -fsSL https://github.com/Yuvraj675/dial-control/releases/latest/download/install.sh | bash -s -- --version 1.0.0
+bash install.sh --appimage
+bash install.sh --dry-run
+```
+```powershell
+$env:DIAL_CONTROL_VERSION = "1.0.0"; irm https://github.com/Yuvraj675/dial-control/releases/latest/download/install.ps1 | iex
+```
+Needs `curl` (or `wget`) and `sudo` on Linux. The scripts live in [`scripts/`](scripts/install.sh) and are attached to every release.
+</details>
+
+### Manual download
+
+Prefer to do it yourself? Download the package for your OS from [Releases](https://github.com/Yuvraj675/dial-control/releases) (built by GitHub Actions on every version tag; maintainers: see the [release guide](docs/DEVELOPMENT_GUIDE.md#8-creating-a-release-automated)) and follow the steps below.
+
+### Earbuds setup (all platforms, optional)
+
+The CMF Buds Pro 2 dial uses standard Bluetooth **AVRCP**, not a proprietary protocol. In your earbuds' companion app (for the CMF Buds Pro 2 that is the **Nothing X** app, under *Controls → Dial*) set:
 
 | Gesture | Setting |
 |---|---|
@@ -97,7 +156,7 @@ Download `Dial Control_1.0.0_x64-setup.exe` (per-user NSIS installer, no admin r
 
 ### macOS
 
-Download the `.dmg` and drag **Dial Control** to *Applications*. The app is ad-hoc signed, not notarized, so remove the quarantine flag once:
+The release `.dmg` is built for **Apple Silicon**; Intel Macs can build from source. Download the `.dmg` and drag **Dial Control** to *Applications*. The app is ad-hoc signed, not notarized, so remove the quarantine flag once:
 
 ```bash
 xattr -dr com.apple.quarantine "/Applications/Dial Control.app"
@@ -208,7 +267,6 @@ for_window [app_id="dial-control" title="Dial Control HUD"] floating enable, bor
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): design, abstractions, repository layout
 - [docs/PLATFORMS.md](docs/PLATFORMS.md): per-OS implementation notes
 - [docs/DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md): workflow, tests, adding slices and platform code
-- [docs/PROTOCOL_SPEC.md](docs/PROTOCOL_SPEC.md): archived Nothing X RFCOMM research (not used at runtime)
 - [CLAUDE.md](CLAUDE.md): detailed contributor and AI-agent guide, including rejected approaches
 
 ## Contributing
@@ -219,9 +277,10 @@ Issues and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) fi
 
 - [KnifeLemon/Filee](https://github.com/KnifeLemon/Filee), the radial-menu inspiration
 - [Tauri](https://v2.tauri.app/), [React](https://react.dev/), [Framer Motion](https://motion.dev/), [Tailwind CSS](https://tailwindcss.com/)
-- Nothing's Ndot57 / NType82 typography style (see [public/fonts](public/fonts) for the bundled font files and their terms)
-- Community Nothing X protocol research: [SoftARV/cmfctl](https://github.com/SoftARV/cmfctl), [SoaOaoS/something-x](https://github.com/SoaOaoS/something-x), [maniacx/BudsLink](https://github.com/maniacx/BudsLink)
+- The dot-matrix typefaces in [public/fonts](public/fonts) are third-party; see their own terms
 
 ## License
 
-[MIT](LICENSE) © 2026 Yuvraj Gupta. Not affiliated with or endorsed by Nothing Technology Limited; "CMF", "Nothing" and "Nothing X" are trademarks of their owners.
+[MIT](LICENSE) © 2026 Yuvraj Gupta.
+
+Dial Control is an independent open-source project with **no connection to Nothing Technology Limited**. "CMF", "Nothing" and "Nothing X" are trademarks of their respective owners, used only to identify compatible products.

@@ -38,6 +38,7 @@ The goal of this project is to build and ship a **standalone desktop application
 - **Reference & Prototype Storage (`temp/`)**:
   - Any exploratory Python scripts, historical PyQt5 prototypes, Bluetooth sniffers, or backup binaries must live in `temp/`.
   - The `temp/` folder is strictly `.gitignore`d and must **never** be checked into git.
+- **No third-party branding in the app**: the app UI and docs must not use Nothing branding (no "Nothing OS" taglines or theme names) and must keep the "not affiliated with Nothing Technology Limited" notice (README, Settings sidebar). Factual compatibility mentions (CMF Buds Pro 2, the Nothing X companion app) are fine. Reverse-engineering dumps stay in `temp/`.
 - **Open-source files**: `LICENSE` (MIT), `CONTRIBUTING.md`, `SECURITY.md` and `CHANGELOG.md` live at the root; update `CHANGELOG.md` for user-visible changes.
 - **Continuous Documentation**:
   - Keep `README.md` and `CLAUDE.md` updated after every major task or feature change. They must always reflect the current build instructions, tech stack, and cross-platform status.
@@ -433,7 +434,7 @@ install -m 755 src-tauri/target/release/dial-control bin/dial-control
 3. **Keep Tool Summary Consistent**: When retrying commands with `BypassSandbox: true`, keep `toolSummary` identical.
 
 ### 🔒 Single Instance
-- `main.rs` first sends `show` (or `toggle` for `--toggle`) over the IPC socket (`/tmp/dial-control.sock` on Linux/macOS, `127.0.0.1:41829` on Windows). A running instance answers `ok` (`serve_ipc` in `lib.rs`), the new process prints a notice and exits, and the existing instance shows its settings window. Only an `ok` reply counts, so a stranger on the port never blocks startup, and a stale socket file is ignored and replaced by the new instance.
+- `main.rs` first sends `show` (or `toggle` for `--toggle`) over the IPC socket (`$XDG_RUNTIME_DIR/dial-control.sock` (fallback: the temp dir, mode 0600) on Linux/macOS, `127.0.0.1:41829` on Windows). A running instance answers `ok` (`serve_ipc` in `lib.rs`), the new process prints a notice and exits, and the existing instance shows its settings window. Only an `ok` reply counts, so a stranger on the port never blocks startup, and a stale socket file is ignored and replaced by the new instance.
 
 ### 🧪 Tests
 - **Rust** (`cargo test --manifest-path src-tauri/Cargo.toml --lib`): every OS backend routes its decisions through pure functions in `platform/dial_logic.rs`, `platform/keymap.rs` and `platform/common.rs`, so Windows and macOS behaviour is unit-tested on any host. When fixing a backend bug, extract the decision into one of these modules and add a regression test.

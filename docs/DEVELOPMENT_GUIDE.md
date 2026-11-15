@@ -79,7 +79,7 @@ What the workflow does:
 
 1. **Verify**: the tag must equal the version in `package.json`, `Cargo.toml` and `tauri.conf.json`.
 2. **Build in parallel**: Linux (Fedora 41 container: `.deb`, `.rpm`, `.pkg.tar.zst`, `.AppImage` via `scripts/build-packages.sh`), Windows (`.exe`, `.msi`), macOS (`.dmg`, Apple Silicon).
-3. **Draft release**: attaches all files and uses the matching `CHANGELOG.md` section as release notes. Tags containing a `-` (e.g. `v1.1.0-rc.1`) are marked pre-release.
+3. **Draft release**: renames assets to predictable space-free names, adds `SHA256SUMS` plus `install.sh` / `install.ps1` (the installers download assets by those names, so do not rename them), attaches everything and uses the matching `CHANGELOG.md` section as release notes. Tags containing a `-` (e.g. `v1.1.0-rc.1`) are marked pre-release.
 4. **You review and press Publish** on the draft (Releases page).
 
 To dry-run the builds without tagging, use **Actions → Release → Run workflow**: it uploads the installers as workflow artifacts and creates no release. If a tag build fails, fix the problem, delete the tag (`git tag -d v1.1.0 && git push origin :refs/tags/v1.1.0`) and tag again.

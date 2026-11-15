@@ -12,7 +12,7 @@ pub const EXIT_MENU_ID: &str = "exit_scroll";
 pub const TOOLTIP_IDLE: &str = "Dial Control — Active";
 const TOOLTIP_SCROLL: &str = "Dial Control — Scroll mode (click the dial to exit)";
 
-/// Nothing red, used for the scroll-mode tray icon.
+/// Signal red, used for the scroll-mode tray icon.
 const SCROLL_TINT: [u8; 3] = [215, 25, 33];
 
 static ACTIVE: AtomicBool = AtomicBool::new(false);
