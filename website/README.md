@@ -19,7 +19,7 @@ npm run preview
 | `src/components/ProfileSwitcher.tsx` | The six built-in wheels, switchable |
 | `src/styles/tokens.css`, `base.css`, `global.css` | Design tokens, base rules and the page styles (OKLCH tokens, Doto and Hanken Grotesk) |
 | `src/styles/wheel.css` | Tailwind utilities for the app component only (no preflight) |
-| `public/images`, `public/fonts` | Captured product images, icons and the self-hosted OFL fonts |
+| `public/images`, `src/assets/fonts` | Captured product images and icons, and the self-hosted OFL fonts (imported from CSS so URLs include the site base; licences are in `public/fonts`) |
 
 React and Motion are shared with the app's component through `resolve.dedupe` in `astro.config.mjs`. Do not replace that with an `alias` to `node_modules/react`: it builds, but the dev server then fails with `module is not defined`.
 

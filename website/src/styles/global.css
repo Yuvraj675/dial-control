@@ -12,14 +12,14 @@
 
 @font-face {
   font-family: "Doto";
-  src: url("/fonts/doto.woff2") format("woff2");
+  src: url("../assets/fonts/doto.woff2") format("woff2");
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: "Hanken Grotesk";
-  src: url("/fonts/hanken-grotesk.woff2") format("woff2");
+  src: url("../assets/fonts/hanken-grotesk.woff2") format("woff2");
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;

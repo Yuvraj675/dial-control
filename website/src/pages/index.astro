@@ -2,6 +2,9 @@
 import '../styles/global.css';
 import HeroWheel from '../components/HeroWheel';
 import ProfileSwitcher from '../components/ProfileSwitcher';
+// Imported with ?url so the preload hrefs include the site base in dev and in the build.
+import dotoUrl from '../assets/fonts/doto.woff2?url';
+import hankenUrl from '../assets/fonts/hanken-grotesk.woff2?url';
 
 const REPO = 'https://github.com/Yuvraj675/dial-control';
 const RELEASES = `${REPO}/releases/latest`;
@@ -86,8 +89,8 @@ const profiles = [
     <meta name="author" content="Yuvraj Gupta" />
     <link rel="icon" type="image/png" sizes="32x32" href={asset('favicon-32.png')} />
     <link rel="apple-touch-icon" href={asset('apple-touch-icon.png')} />
-    <link rel="preload" href={asset('fonts/doto.woff2')} as="font" type="font/woff2" crossorigin />
-    <link rel="preload" href={asset('fonts/hanken-grotesk.woff2')} as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href={dotoUrl} as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href={hankenUrl} as="font" type="font/woff2" crossorigin />
     <link rel="preload" href={asset('images/wheel.webp')} as="image" type="image/webp" fetchpriority="high" />
 
     {jsonLd.map((d) => <script type="application/ld+json" set:html={JSON.stringify(d)} />)}
