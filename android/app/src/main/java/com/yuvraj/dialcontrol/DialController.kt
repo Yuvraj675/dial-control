@@ -3,7 +3,6 @@ package com.yuvraj.dialcontrol
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
-import android.provider.Settings
 import android.widget.Toast
 import com.yuvraj.dialcontrol.a11y.DialA11yService
 import com.yuvraj.dialcontrol.actions.Actions
@@ -15,47 +14,33 @@ import com.yuvraj.dialcontrol.dial.DialLogic.RemoteCommand
 import com.yuvraj.dialcontrol.dial.VolumeWatcher
 import com.yuvraj.dialcontrol.media.OwnSession
 import com.yuvraj.dialcontrol.media.PlayerForwarder
-import com.yuvraj.dialcontrol.profile.Profile
-import com.yuvraj.dialcontrol.profile.Profiles
-import com.yuvraj.dialcontrol.profile.Slice
-import com.yuvraj.dialcontrol.profile.SliceType
+import com.yuvraj.dialcontrol.web.WebUi
+import org.json.JSONObject
 
 /**
- * Gesture model shared with the desktop app (CLAUDE.md §5.1). Every caller (media session
- * callbacks, volume broadcasts, accessibility events) runs on the main thread, so the state
- * here needs no locking.
+ * Android stand-in for the desktop backend state in `lib.rs`: owns the HUD / scroll state and
+ * emits the same Tauri events (`dial:rotate`, `dial:click`, `hud:visibility`, ...) to the React UI,
+ * which keeps the wheel logic exactly as on desktop. Gesture model: CLAUDE.md §5.1. Everything
+ * runs on the main thread.
  */
 object DialController {
-    enum class Mode { MENU, VOLUME, BRIGHTNESS }
-
-    private const val AUTO_CLOSE_MS = 6000L
-    private const val HIDE_SETTLE_MS = 150L
-
     private val main = Handler(Looper.getMainLooper())
 
     var a11y: DialA11yService? = null
     var session: OwnSession? = null
     var volume: VolumeWatcher? = null
 
-    var foregroundPackage: String? = null
-    val profiles: List<Profile> = Profiles.defaults
+    /** Latest config saved by the React UI (`save_config`); used for context matching. */
+    var config: JSONObject? = null
+    private var foregroundPackage: String? = null
 
     var isHudOpen = false
         private set
     var isScrollMode = false
         private set
-    var mode = Mode.MENU
-        private set
-    var selected = 0
-        private set
-    var gaugePct = 0
-        private set
-    var profile: Profile = Profiles.match(profiles, null)
-        private set
 
     private var lastClickMs = 0L
     private var lastGestureMs = 0L
-    private val autoClose = Runnable { if (isHudOpen) hideHud() }
 
     fun onRemoteCommand(cmd: RemoteCommand) {
         when (cmd) {
@@ -72,9 +57,9 @@ object DialController {
         Diag.log("click -> $action")
         when (action) {
             ClickAction.DEBOUNCED -> {}
-            ClickAction.EXIT_SCROLL -> exitScroll()
+            ClickAction.EXIT_SCROLL -> stopScrollMode()
             ClickAction.PLAY_PAUSE -> forward(PlayerForwarder.Command.PLAY_PAUSE)
-            ClickAction.CONFIRM -> if (mode == Mode.MENU) runSelected() else hideHud()
+            ClickAction.CONFIRM -> WebUi.emit("dial:click")
         }
     }
 
@@ -87,34 +72,62 @@ object DialController {
             GestureAction.DEBOUNCED -> {}
             GestureAction.OPEN_HUD -> showHud()
             GestureAction.DISMISS -> hideHud()
-            GestureAction.EXIT_SCROLL -> exitScroll()
+            GestureAction.EXIT_SCROLL -> stopScrollMode()
             GestureAction.PREVIOUS_TRACK -> forward(PlayerForwarder.Command.PREVIOUS)
         }
     }
 
     fun onRotate(direction: Int) {
-        if (isScrollMode) {
+        if (isScrollMode && !isHudOpen) {
             a11y?.swipe(up = DialLogic.swipeUpFor(direction), fraction = 0.22f, durationMs = 180)
             return
         }
         if (!isHudOpen) return
-        when (mode) {
-            Mode.MENU -> selected = DialLogic.wrapIndex(selected, direction, profile.slices.size)
-            Mode.BRIGHTNESS -> gaugePct = Actions.stepBrightness(appContext() ?: return, direction)
-            Mode.VOLUME -> {}
-        }
-        a11y?.refreshWheel(tick = true)
-        rescheduleAutoClose()
+        a11y?.tick()
+        WebUi.emit(
+            "dial:rotate",
+            JSONObject().put("direction", direction).put("delta", direction).put("volume_pct", volume?.volumePct ?: 0),
+        )
     }
 
+    /** Volume mode: the lock is released and the change is real; mirror it on the gauge. */
     fun onNaturalVolume(pct: Int) {
-        gaugePct = pct
-        a11y?.refreshWheel(tick = true)
-        rescheduleAutoClose()
+        if (!isHudOpen) return
+        a11y?.tick()
+        WebUi.emit("dial:rotate", JSONObject().put("direction", 0).put("delta", 0).put("volume_pct", pct))
     }
 
-    fun toggleHud() = if (isHudOpen) hideHud() else showHud()
+    fun onForegroundApp(pkg: String) {
+        foregroundPackage = pkg
+        emitContext()
+    }
 
+    private fun emitContext() {
+        val id = matchProfile(foregroundPackage)
+        WebUi.emit("context:change", JSONObject().put("profile_id", id).put("app", foregroundPackage ?: ""))
+    }
+
+    private fun matchProfile(pkg: String?): String {
+        val cfg = config ?: return "default"
+        val profiles = cfg.optJSONObject("profiles") ?: return "default"
+        val order = cfg.optJSONArray("profile_order")?.let { a -> List(a.length()) { a.getString(it) } }
+            ?: profiles.keys().asSequence().toList()
+        val patterns = profiles.keys().asSequence().associateWith { id ->
+            val arr = profiles.getJSONObject(id).optJSONArray("match_patterns")
+            if (arr == null) emptyList() else List(arr.length()) { arr.getString(it) }
+        }
+        return DialLogic.matchProfile(order, patterns, pkg)
+    }
+
+    fun toggleHud() {
+        when {
+            isScrollMode -> stopScrollMode()
+            isHudOpen -> hideHud()
+            else -> showHud()
+        }
+    }
+
+    /** `do_show_hud`: lock the volume, show the overlay, then tell the UI. */
     fun showHud() {
         val service = a11y
         if (service == null) {
@@ -122,95 +135,96 @@ object DialController {
             toast("Enable Dial Control in Accessibility settings")
             return
         }
-        profile = Profiles.match(profiles, foregroundPackage)
-        selected = 0
-        mode = Mode.MENU
+        if (isHudOpen) return
         isHudOpen = true
-        volume?.lock()
-        service.showWheel()
+        val userVol = volume?.lock() ?: 0
+        emitContext()
+        service.showHud()
+        WebUi.emit("hud:visibility", true)
+        WebUi.emit("sync:state", JSONObject().put("volume", userVol))
         session?.takeBack("HUD opened")
-        rescheduleAutoClose()
-        Diag.log("HUD shown, profile ${profile.name} (${foregroundPackage ?: "unknown app"})")
+        Diag.log("HUD shown (${foregroundPackage ?: "unknown app"})")
     }
 
-    /** Close the HUD, then run [after] once the overlay is gone. */
-    fun hideHud(after: (() -> Unit)? = null) {
-        main.removeCallbacks(autoClose)
-        if (isHudOpen) {
-            isHudOpen = false
-            a11y?.hideWheel()
-            if (!isScrollMode) volume?.unlock()
-        }
-        after?.let { main.postDelayed(it, HIDE_SETTLE_MS) }
-    }
-
-    /** Touch on the overlay: pick a slice directly. */
-    fun selectAndRun(index: Int) {
-        if (!isHudOpen || index !in profile.slices.indices) return
-        selected = index
-        runSelected()
-    }
-
-    private fun runSelected() {
-        val slice = profile.slices.getOrNull(selected) ?: return hideHud()
-        Diag.log("run slice ${slice.id}")
-        when (slice.type) {
-            SliceType.CLOSE -> hideHud()
-            SliceType.MODE -> enterMode(slice)
-            else -> {
-                val service = a11y
-                hideHud { if (service != null) Actions.run(service, slice) }
-            }
+    /** `do_hide_hud`: also ends scroll mode and restores the user's volume. */
+    fun hideHud() {
+        val wasActive = isHudOpen || isScrollMode
+        isHudOpen = false
+        isScrollMode = false
+        volume?.unlock()
+        a11y?.hideHud()
+        DialService.instance?.updateNotification(null)
+        if (wasActive) {
+            WebUi.emit("hud:visibility", false)
+            WebUi.emit("scroll_mode:exit")
+            Diag.log("HUD hidden")
         }
     }
 
-    private fun enterMode(slice: Slice) {
-        val ctx = appContext() ?: return
-        when (slice.action) {
-            "scroll" -> enterScroll()
+    /** `set_mode`: returns the user's real volume in %. */
+    fun setMode(mode: String): Int {
+        val v = volume ?: return 0
+        return when (mode) {
             "volume" -> {
-                mode = Mode.VOLUME
-                volume?.release()
-                gaugePct = volume?.volumePct ?: 0
+                isScrollMode = false
+                v.release()
             }
-            "brightness" -> {
-                if (!Settings.System.canWrite(ctx)) {
-                    toast("Allow Dial Control to modify system settings")
-                    return hideHud()
-                }
-                mode = Mode.BRIGHTNESS
-                gaugePct = Actions.brightnessPct(ctx)
+            "scroll" -> {
+                val user = v.lock()
+                isScrollMode = true
+                isHudOpen = true
+                user
+            }
+            else -> {
+                isScrollMode = false
+                v.lock()
             }
         }
-        a11y?.refreshWheel(tick = false)
-        rescheduleAutoClose()
     }
 
-    private fun enterScroll() {
+    fun closeHudForScroll() {
+        isHudOpen = false
         isScrollMode = true
-        hideHud()
+        a11y?.hideHud()
+        WebUi.emit("hud:visibility", false)
         DialService.instance?.updateNotification("Scroll mode: turn to scroll, click to exit")
-        toast("Scroll mode: click the dial to exit")
+        toast("Scroll mode: turn to scroll, click the dial to exit")
         Diag.log("scroll mode on")
     }
 
-    fun exitScroll() {
+    fun stopScrollMode() {
         if (!isScrollMode) return
-        isScrollMode = false
-        volume?.unlock()
-        DialService.instance?.updateNotification(null)
-        toast("Scroll mode off")
         Diag.log("scroll mode off")
+        toast("Scroll mode off")
+        hideHud()
+    }
+
+    /** `execute_action` for the slice types that reach the backend (modes run in the UI). */
+    fun executeAction(action: JSONObject) {
+        val id = action.optString("id")
+        val type = action.optString("type")
+        val key = action.optString("action")
+        Diag.log("execute_action $id ($type)")
+        hideHud()
+        val service = a11y
+        // Let the overlay disappear first so gestures and global actions hit the app behind it.
+        main.postDelayed({
+            when {
+                type == "close" -> {}
+                type == "mute" || id == "mute_toggle" -> Actions.toggleMute(appContext() ?: return@postDelayed)
+                key == "playpause" -> forward(PlayerForwarder.Command.PLAY_PAUSE)
+                key == "next" -> forward(PlayerForwarder.Command.NEXT)
+                key == "prev" -> forward(PlayerForwarder.Command.PREVIOUS)
+                type == "launch" -> service?.let { Actions.launch(it, action.optString("target")) }
+                type == "system" -> service?.let { Actions.runSystem(it, key) }
+                else -> toast("This slice type needs the desktop app")
+            }
+        }, 150)
     }
 
     private fun forward(cmd: PlayerForwarder.Command) {
         val ctx = appContext() ?: return
         if (!PlayerForwarder.forward(ctx, cmd)) toast("Grant notification access to control your player")
-    }
-
-    private fun rescheduleAutoClose() {
-        main.removeCallbacks(autoClose)
-        if (isHudOpen) main.postDelayed(autoClose, AUTO_CLOSE_MS)
     }
 
     private fun appContext() = (a11y ?: DialService.instance)?.applicationContext

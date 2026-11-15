@@ -6,12 +6,14 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.media.AudioManager
 import android.os.Build
+import android.os.SystemClock
 import com.yuvraj.dialcontrol.Diag
 
 /**
  * Detects dial turns. With AVRCP Absolute Volume the earbuds set the phone's music volume
  * directly, so a turn shows up as a STREAM_MUSIC index change. While the HUD (or scroll mode)
- * is active the index is locked: each change away from it is one detent and is snapped back.
+ * is active the index is locked: each change away from it is one detent and is snapped back,
+ * and the earbuds' answer to that snap-back is filtered as an echo (`DialLogic.classifyIndexChange`).
  */
 class VolumeWatcher(
     context: Context,
@@ -23,10 +25,13 @@ class VolumeWatcher(
     private val app = context.applicationContext
     private val audio = app.getSystemService(AudioManager::class.java)
 
-    @Volatile private var lockedIndex = -1
+    private var lockedIndex = -1
+    private var lastIndex = -1
+    private var restoreAt = 0L
+    private var echoPending = false
 
     /** The user's listening volume, restored when the lock ends; -1 when nothing to restore. */
-    @Volatile private var userIndex = -1
+    private var userIndex = -1
 
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, intent: Intent) {
@@ -54,34 +59,63 @@ class VolumeWatcher(
     private val maxIndex get() = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
     private val currentIndex get() = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
 
-    val volumePct: Int get() = if (maxIndex > 0) currentIndex * 100 / maxIndex else 0
+    private fun pct(index: Int) = if (maxIndex > 0) index * 100 / maxIndex else 0
+
+    /** The user's real volume (not the headroom position while locked). */
+    val volumePct: Int get() = pct(if (userIndex >= 0) userIndex else currentIndex)
 
     private fun handle(index: Int) {
-        when (val a = DialLogic.classifyIndexChange(index, lockedIndex, maxIndex, isHudOpen(), isScrollMode())) {
-            is DialLogic.VolumeAction.Ignore -> {}
-            is DialLogic.VolumeAction.Turn -> {
-                Diag.log("dial turn ${if (a.direction > 0) "CW" else "CCW"} (index $index, locked $lockedIndex)")
-                setIndex(lockedIndex)
-                onTurn(a.direction)
+        val since = SystemClock.elapsedRealtime() - restoreAt
+        val action = DialLogic.classifyIndexChange(
+            index, lastIndex, lockedIndex, maxIndex, since, echoPending, isHudOpen(), isScrollMode(),
+        )
+        when (action) {
+            is DialLogic.VolumeAction.Ignore ->
+                if (!isHudOpen() && !isScrollMode()) Diag.log("volume $index/$maxIndex (passes through)")
+            is DialLogic.VolumeAction.Echo -> {
+                echoPending = false
+                lastIndex = index
+                Diag.log("volume echo $index (locked $lockedIndex, ${since}ms after restore) ignored")
             }
-            is DialLogic.VolumeAction.NaturalChange -> onNaturalChange(a.pct)
+            is DialLogic.VolumeAction.Turn -> {
+                Diag.log("dial turn ${if (action.direction > 0) "CW" else "CCW"} (index $index, last $lastIndex, locked $lockedIndex)")
+                restoreLocked()
+                onTurn(action.direction)
+            }
+            is DialLogic.VolumeAction.NaturalChange -> {
+                lastIndex = index
+                onNaturalChange(action.pct)
+            }
         }
-        if (!isHudOpen() && !isScrollMode()) Diag.log("volume $index/$maxIndex (passes through)")
     }
 
-    /** Freeze the volume (with headroom) so turns become navigation instead of volume changes. */
-    fun lock() {
-        if (lockedIndex >= 0) return
-        val cur = currentIndex
-        if (userIndex < 0) userIndex = cur
-        lockedIndex = DialLogic.headroomIndex(cur, maxIndex)
-        if (lockedIndex != cur) setIndex(lockedIndex)
+    private fun restoreLocked() {
+        lastIndex = lockedIndex
+        restoreAt = SystemClock.elapsedRealtime()
+        echoPending = true
+        setIndex(lockedIndex)
     }
 
-    /** Volume mode: let turns change the volume for real and keep the result on exit. */
-    fun release() {
+    /** Freeze the volume (with headroom) so turns become navigation. Returns the user's volume %. */
+    fun lock(): Int {
+        if (lockedIndex < 0) {
+            val cur = currentIndex
+            if (userIndex < 0) userIndex = cur
+            lockedIndex = DialLogic.headroomIndex(cur, maxIndex)
+            lastIndex = cur
+            if (lockedIndex != cur) restoreLocked()
+        }
+        return pct(userIndex)
+    }
+
+    /** Volume mode: turns change the volume for real; restores the user's level first. Returns it in %. */
+    fun release(): Int {
+        val user = if (userIndex >= 0) userIndex else currentIndex
         lockedIndex = -1
         userIndex = -1
+        lastIndex = user
+        if (user != currentIndex) setIndex(user)
+        return pct(user)
     }
 
     /** End the lock and put back the user's listening volume. */
@@ -89,11 +123,16 @@ class VolumeWatcher(
         val restore = userIndex
         lockedIndex = -1
         userIndex = -1
+        echoPending = false
         if (restore >= 0 && restore != currentIndex) setIndex(restore)
     }
 
+    fun setPct(pct: Int) {
+        setIndex((pct.coerceIn(0, 100) * maxIndex + 50) / 100)
+    }
+
     private fun setIndex(index: Int) {
-        // Flags 0: no system volume panel for our own restores.
+        // Flags 0: no system volume panel for our own changes.
         runCatching { audio.setStreamVolume(AudioManager.STREAM_MUSIC, index, 0) }
     }
 

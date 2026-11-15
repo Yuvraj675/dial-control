@@ -53,9 +53,21 @@ object DialLogic {
     fun headroomIndex(current: Int, max: Int): Int =
         if (max < 2) current else current.coerceIn(1, max - 1)
 
+    /**
+     * After we snap the volume back, the earbuds answer with their own rounded value, which can
+     * land one index off the locked one (AVRCP 0..127 vs a 0..15 index). Within this window such
+     * a change is that echo, not a detent. Treating it as a turn snapped back again and looped:
+     * the volume kept changing and the wheel moved by itself (same failure as CLAUDE.md §6.4).
+     * Only one echo is accepted per restore, so a fast real turn right after it still counts.
+     */
+    const val VOLUME_ECHO_WINDOW_MS = 250L
+
     sealed class VolumeAction {
-        /** HUD closed, echo of our own restore, or nothing changed. */
+        /** HUD closed or nothing changed. */
         object Ignore : VolumeAction()
+
+        /** Echo of our own restore: track the index, no rotation, no new restore. */
+        object Echo : VolumeAction()
 
         /** Detent while locked: snap back to the locked index and rotate in [direction]. */
         data class Turn(val direction: Int) : VolumeAction()
@@ -65,13 +77,16 @@ object DialLogic {
     }
 
     /**
-     * Index-based counterpart of `classify_volume_change`. Our own restore arrives back as a
-     * change onto [lockedIndex] and is swallowed because the delta is zero.
+     * Index-based counterpart of `classify_volume_change`. The direction comes from the last
+     * observed index (not the locked one), so a turn right after an off-by-one echo still counts.
      */
     fun classifyIndexChange(
         newIndex: Int,
+        lastIndex: Int,
         lockedIndex: Int,
         maxIndex: Int,
+        msSinceRestore: Long,
+        echoPending: Boolean,
         isHudOpen: Boolean,
         isScrollMode: Boolean,
     ): VolumeAction {
@@ -82,9 +97,31 @@ object DialLogic {
             }
             return VolumeAction.Ignore
         }
-        val delta = newIndex - lockedIndex
+        if (echoPending && newIndex != lockedIndex && msSinceRestore in 0 until VOLUME_ECHO_WINDOW_MS &&
+            Math.abs(newIndex - lockedIndex) <= 1
+        ) {
+            return VolumeAction.Echo
+        }
+        val delta = newIndex - lastIndex
         if (delta == 0) return VolumeAction.Ignore
         return VolumeAction.Turn(if (delta > 0) 1 else -1)
+    }
+
+    /** Glob-style `*pattern*` matched against the foreground package (cf. `patternMatches`). */
+    fun patternMatchesPackage(pattern: String, packageName: String): Boolean {
+        val clean = pattern.replace("*", "").trim().lowercase()
+        return clean.isNotEmpty() && packageName.lowercase().contains(clean)
+    }
+
+    /** First profile in wheel order whose patterns match; "default" and "home" are fallbacks only. */
+    fun matchProfile(order: List<String>, patterns: Map<String, List<String>>, packageName: String?): String {
+        if (packageName != null) {
+            for (id in order) {
+                if (id == "default" || id == "home") continue
+                if (patterns[id].orEmpty().any { patternMatchesPackage(it, packageName) }) return id
+            }
+        }
+        return "default"
     }
 
     enum class RemoteCommand { PLAY, PAUSE, TOGGLE, NEXT, PREVIOUS }
@@ -105,10 +142,6 @@ object DialLogic {
 
     fun brightnessStepTarget(currentPct: Int, direction: Int): Int =
         (currentPct + if (direction > 0) BRIGHTNESS_STEP else -BRIGHTNESS_STEP).coerceIn(0, 100)
-
-    /** Wheel highlight moves one slice per detent and wraps around. */
-    fun wrapIndex(current: Int, direction: Int, count: Int): Int =
-        if (count <= 0) 0 else Math.floorMod(current + direction, count)
 
     /** CW (direction 1) scrolls content down, i.e. the finger swipes up, like a mouse wheel. */
     fun swipeUpFor(direction: Int): Boolean = direction > 0

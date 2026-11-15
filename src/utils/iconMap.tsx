@@ -49,6 +49,17 @@ import {
   Link,
   Zap,
   Timer,
+  Bell,
+  Camera,
+  Lock,
+  Flashlight,
+  LayoutGrid,
+  ArrowUp,
+  ArrowDown,
+  Moon,
+  Power,
+  Columns2,
+  PanelTop,
 } from "lucide-react";
 
 export const ICON_MAP: Record<string, React.FC<{ className?: string; size?: number; strokeWidth?: number }>> = {
@@ -117,6 +128,19 @@ export const ICON_MAP: Record<string, React.FC<{ className?: string; size?: numb
   link: Link,
   zap: Zap,
   timer: Timer,
+
+  // Phone (Android system slices)
+  notifications: Bell,
+  quick_settings: PanelTop,
+  screenshot: Camera,
+  lock: Lock,
+  torch: Flashlight,
+  recents: LayoutGrid,
+  swipe_up: ArrowUp,
+  swipe_down: ArrowDown,
+  dnd: Moon,
+  power: Power,
+  split_screen: Columns2,
 };
 
 export function getActionIcon(iconKey: string, size = 18, className = "", strokeWidth = 1.75) {

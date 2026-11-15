@@ -1,6 +1,8 @@
 import React, { useState, useRef } from "react";
 import { ProfilesConfig, WheelAction, ActionType, DialProfile, getOrderedProfileIds } from "../../types/profile";
 import { SYSTEM_ACTION_TEMPLATES } from "../../data/defaultProfiles";
+import { ANDROID_SYSTEM_ACTIONS } from "../../data/androidProfiles";
+import { isAndroidApp } from "../../utils/platform";
 import { DonutRadialHUD } from "../hud/DonutRadialHUD";
 import { getActionIcon, ICON_MAP } from "../../utils/iconMap";
 import { comboToTokens, formatTokenForDisplay, parseKeysInput } from "../../utils/macro";
@@ -27,6 +29,9 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
+/** Slice types that need desktop keystroke injection or a shell, which Android does not offer. */
+const DESKTOP_ONLY_TYPES: ActionType[] = ["hotkey", "command", "text", "macro"];
+
 interface SettingsWindowProps {
   config: ProfilesConfig;
   onSaveConfig: (updated: ProfilesConfig) => void;
@@ -36,6 +41,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
   config,
   onSaveConfig,
 }) => {
+  const onAndroid = isAndroidApp();
   const [activeTab, setActiveTab] = useState<"profiles" | "appearance" | "hardware">("profiles");
   const [selectedProfileId, setSelectedProfileId] = useState<string>("default");
   const [selectedActionIndex, setSelectedActionIndex] = useState<number>(0);
@@ -705,14 +711,16 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
   };
 
   const handleAddAction = () => {
-    const newAction: WheelAction = {
-      id: `custom_${Date.now()}`,
-      label: "NEW SHORTCUT",
-      icon: "disc",
-      type: "hotkey",
-      keys: ["KEY_LEFTCTRL", "KEY_S"],
-      desc: "CUSTOM ACTION",
-    };
+    const newAction: WheelAction = onAndroid
+      ? { id: `custom_${Date.now()}`, label: "BACK", icon: "back", type: "system", action: "back", desc: "CUSTOM ACTION" }
+      : {
+          id: `custom_${Date.now()}`,
+          label: "NEW SHORTCUT",
+          icon: "disc",
+          type: "hotkey",
+          keys: ["KEY_LEFTCTRL", "KEY_S"],
+          desc: "CUSTOM ACTION",
+        };
     const updatedActions = [...actions, newAction];
     const updatedProfile = { ...activeProfile, actions: updatedActions };
     setCurrentConfig({
@@ -827,8 +835,18 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
   const availableIcons = Object.keys(ICON_MAP);
 
   // Pool of all existing actions across all profiles and system templates for importing
-  const allExistingActions: { action: WheelAction; sourceName: string }[] = [...SYSTEM_ACTION_TEMPLATES];
-  const seenIds = new Set<string>(SYSTEM_ACTION_TEMPLATES.map((t) => t.action.id));
+  // Android cannot inject desktop keystrokes, so its pool offers phone actions instead.
+  const templates = onAndroid
+    ? [
+        ...SYSTEM_ACTION_TEMPLATES.filter((t) => !DESKTOP_ONLY_TYPES.includes(t.action.type)),
+        ...ANDROID_SYSTEM_ACTIONS.map((a) => ({
+          action: { id: `sys_${a.action}`, label: a.label, icon: a.icon, type: "system" as const, action: a.action },
+          sourceName: "Phone",
+        })),
+      ]
+    : SYSTEM_ACTION_TEMPLATES;
+  const allExistingActions: { action: WheelAction; sourceName: string }[] = [...templates];
+  const seenIds = new Set<string>(templates.map((t) => t.action.id));
   for (const [, prof] of Object.entries(currentConfig.profiles)) {
     for (const act of prof.actions) {
       if (act.id !== "home_dial" && act.id !== "close_hud" && !seenIds.has(act.id)) {
@@ -1283,16 +1301,30 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                                 : []);
                           } else if (newType === "command") {
                             updates.icon = "terminal";
+                          } else if (newType === "system") {
+                            const first = ANDROID_SYSTEM_ACTIONS[0];
+                            updates.action = first.action;
+                            updates.icon = first.icon;
+                            updates.label = first.label;
                           }
                           handleUpdateAction(updates);
                         }}
                         className="w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white focus:outline-none focus:border-white font-ndot uppercase tracking-wider"
                       >
-                        <option value="hotkey">HOTKEY KEYPRESS</option>
-                        <option value="launch">OPEN APP / FILE / URL</option>
-                        <option value="command">RUN SHELL COMMAND</option>
-                        <option value="text">TYPE TEXT / SNIPPET</option>
-                        <option value="macro">MACRO (MULTI-STEP SEQUENCE)</option>
+                        {onAndroid ? (
+                          <>
+                            <option value="system">PHONE ACTION (BACK / HOME / SCREENSHOT…)</option>
+                            <option value="launch">OPEN APP</option>
+                          </>
+                        ) : (
+                          <>
+                            <option value="hotkey">HOTKEY KEYPRESS</option>
+                            <option value="launch">OPEN APP / FILE / URL</option>
+                            <option value="command">RUN SHELL COMMAND</option>
+                            <option value="text">TYPE TEXT / SNIPPET</option>
+                            <option value="macro">MACRO (MULTI-STEP SEQUENCE)</option>
+                          </>
+                        )}
                         <option value="mode">INTERACTIVE MODE (SCROLL / VOLUME / BRIGHTNESS)</option>
                         <option value="key">MEDIA KEY (PLAY/NEXT/PREV)</option>
                         <option value="mute">MUTE AUDIO TOGGLE</option>
@@ -1330,6 +1362,29 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({
                           <option value="scroll">SCROLL WHEEL EMULATION</option>
                           <option value="volume">VOLUME GAUGE</option>
                           <option value="brightness">BRIGHTNESS GAUGE</option>
+                        </select>
+                      </div>
+                    )}
+
+                    {/* Phone Action Selector (Android) */}
+                    {selectedAction.type === "system" && (
+                      <div>
+                        <label className="font-ndot text-[11px] text-neutral-400 mb-1.5 block uppercase tracking-wider">
+                          Phone Action
+                        </label>
+                        <select
+                          value={selectedAction.action || "back"}
+                          onChange={(e) => {
+                            const def = ANDROID_SYSTEM_ACTIONS.find((a) => a.action === e.target.value);
+                            if (def) handleUpdateAction({ action: def.action, icon: def.icon, label: def.label });
+                          }}
+                          className="w-full px-3.5 py-2 rounded-lg bg-[#111317] border border-white/10 text-xs text-white focus:outline-none focus:border-white font-ndot uppercase tracking-wider"
+                        >
+                          {ANDROID_SYSTEM_ACTIONS.map((a) => (
+                            <option key={a.action} value={a.action}>
+                              {a.label}
+                            </option>
+                          ))}
                         </select>
                       </div>
                     )}

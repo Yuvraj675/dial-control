@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { DonutRadialHUD } from "./components/hud/DonutRadialHUD";
 import { SettingsWindow } from "./components/settings/SettingsWindow";
 import { DEFAULT_CONFIG, sanitizeAndMigrateConfig } from "./data/defaultProfiles";
+import { ANDROID_DEFAULT_CONFIG } from "./data/androidProfiles";
+import { isAndroidApp } from "./utils/platform";
 import { ProfilesConfig, WheelAction, DialProfile, getOrderedProfileIds } from "./types/profile";
 import { resolveContextProfile, wrapIndex } from "./utils/contextMatch";
 import { Disc, Layers, Sliders, Eye, EyeOff } from "lucide-react";
@@ -9,18 +11,20 @@ import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 
 const CURRENT_CONFIG_KEY = "dial_config_v5";
+// The phone has its own built-in wheel (system actions instead of desktop hotkeys).
+const BUILTIN_CONFIG = isAndroidApp() ? ANDROID_DEFAULT_CONFIG : DEFAULT_CONFIG;
 
 export function App() {
   const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
   const [config, setConfig] = useState<ProfilesConfig>(() => {
-    let cfg: ProfilesConfig = DEFAULT_CONFIG;
+    let cfg: ProfilesConfig = BUILTIN_CONFIG;
     const saved = localStorage.getItem(CURRENT_CONFIG_KEY);
     if (saved) {
       try {
         cfg = JSON.parse(saved);
       } catch (e) {
-        cfg = DEFAULT_CONFIG;
+        cfg = BUILTIN_CONFIG;
       }
     }
     return sanitizeAndMigrateConfig(cfg);
@@ -106,6 +110,9 @@ export function App() {
           invoke("save_config", { config: sanitized }).catch((e) =>
             console.error("[Config] Failed to persist migrated config to backend:", e)
           );
+        } else if (isAndroidApp()) {
+          // First run on the phone: the backend matches apps to profiles from the saved config.
+          invoke("save_config", { config: stateRef.current.config }).catch(console.error);
         }
       })
       .catch((e) => console.error("[Config] Failed to load config from backend:", e));
@@ -358,7 +365,7 @@ export function App() {
         const { profile_id, app, title } = event.payload;
         console.log(`[Context] Foreground -> App: '${app}', Title: '${title}', Backend matched: '${profile_id}'`);
 
-        const targetId = resolveContextProfile(stateRef.current.config, event.payload, DEFAULT_CONFIG);
+        const targetId = resolveContextProfile(stateRef.current.config, event.payload, BUILTIN_CONFIG);
 
         // The foreground title keeps changing while the HUD is open (song changes, tab titles);
         // switching then would yank the wheel back to slice 0 mid-interaction. Defer instead.

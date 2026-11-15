@@ -26,6 +26,7 @@ class DialService : Service() {
         super.onCreate()
         instance = this
         createChannel()
+        DialController.config = com.yuvraj.dialcontrol.web.Commands.loadConfig(this)
         val notification = buildNotification(null)
         if (Build.VERSION.SDK_INT >= 29) {
             startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
@@ -52,7 +53,6 @@ class DialService : Service() {
     }
 
     override fun onDestroy() {
-        DialController.exitScroll()
         DialController.hideHud()
         session?.stop()
         volume?.stop()

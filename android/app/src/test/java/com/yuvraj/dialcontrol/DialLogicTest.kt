@@ -6,7 +6,6 @@ import com.yuvraj.dialcontrol.dial.DialLogic.GestureAction
 import com.yuvraj.dialcontrol.dial.DialLogic.MultiPress
 import com.yuvraj.dialcontrol.dial.DialLogic.RemoteCommand
 import com.yuvraj.dialcontrol.dial.DialLogic.VolumeAction
-import com.yuvraj.dialcontrol.profile.Profiles
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -43,27 +42,67 @@ class DialLogicTest {
         assertEquals(7, DialLogic.headroomIndex(7, 15))
     }
 
+    /** classifyIndexChange with the HUD open, index 7 locked and last seen, no restore pending. */
+    private fun change(new: Int, last: Int = 7, sinceRestore: Long = 10_000, echo: Boolean = false, hud: Boolean = true, scroll: Boolean = false) =
+        DialLogic.classifyIndexChange(new, last, 7, 15, sinceRestore, echo, hud, scroll)
+
     @Test
-    fun indexChangesWhileLockedAreTurnsAndOwnRestoreIsSwallowed() {
-        assertEquals(VolumeAction.Turn(1), DialLogic.classifyIndexChange(8, 7, 15, true, false))
-        assertEquals(VolumeAction.Turn(-1), DialLogic.classifyIndexChange(5, 7, 15, true, false))
-        // Our setStreamVolume(locked) comes back as a change onto the locked index.
-        assertEquals(VolumeAction.Ignore, DialLogic.classifyIndexChange(7, 7, 15, true, false))
-        assertEquals(VolumeAction.Turn(1), DialLogic.classifyIndexChange(8, 7, 15, false, true))
+    fun indexChangesWhileLockedAreTurns() {
+        assertEquals(VolumeAction.Turn(1), change(8))
+        assertEquals(VolumeAction.Turn(-1), change(5))
+        assertEquals(VolumeAction.Turn(1), change(8, hud = false, scroll = true))
+        // Our own setStreamVolume(locked) comes back onto the locked index.
+        assertEquals(VolumeAction.Ignore, change(7))
+    }
+
+    @Test
+    fun offByOneEchoAfterRestoreIsSwallowedOnce() {
+        assertEquals(VolumeAction.Echo, change(8, sinceRestore = 80, echo = true))
+        assertEquals(VolumeAction.Echo, change(6, sinceRestore = 80, echo = true))
+        // Only one echo per restore: the next change is a real turn even inside the window.
+        assertEquals(VolumeAction.Turn(1), change(8, sinceRestore = 120, echo = false))
+        // Outside the window it is a turn, and a bigger jump is never an echo.
+        assertEquals(VolumeAction.Turn(1), change(8, sinceRestore = 400, echo = true))
+        assertEquals(VolumeAction.Turn(1), change(9, sinceRestore = 80, echo = true))
+    }
+
+    @Test
+    fun turnRightAfterAnEchoCountsFromTheEchoedIndex() {
+        // Echo left the phone at 8; a real CCW detent lands back on 7.
+        assertEquals(VolumeAction.Turn(-1), change(7, last = 8))
     }
 
     @Test
     fun volumePassesThroughWhenHudClosedAndMirrorsInVolumeMode() {
-        assertEquals(VolumeAction.Ignore, DialLogic.classifyIndexChange(9, 7, 15, false, false))
-        assertEquals(VolumeAction.NaturalChange(60), DialLogic.classifyIndexChange(9, -1, 15, true, false))
+        assertEquals(VolumeAction.Ignore, change(9, hud = false))
+        assertEquals(VolumeAction.NaturalChange(60), DialLogic.classifyIndexChange(9, 8, -1, 15, 10_000, false, true, false))
     }
 
+    /** Replays a dial session through the same state updates VolumeWatcher makes. */
     @Test
-    fun simulatedTurnSequenceStepsOncePerDetent() {
-        // CW, echo, CW, echo, CCW, echo: three rotations, echoes ignored.
-        val events = listOf(8, 7, 8, 7, 6, 7)
-        val turns = events.map { DialLogic.classifyIndexChange(it, 7, 15, true, false) }
-            .filterIsInstance<VolumeAction.Turn>().map { it.direction }
+    fun simulatedSessionWithEchoesStepsOncePerDetent() {
+        val locked = 7
+        var last = locked
+        var restoreAt = -10_000L
+        var echoPending = false
+        val turns = mutableListOf<Int>()
+        // (time ms, index): CW detent, our restore, earbud echo off by one, CW, restore, CCW, restore.
+        val events = listOf(0L to 8, 5L to 7, 60L to 8, 900L to 9, 905L to 7, 1800L to 6, 1805L to 7)
+        for ((t, idx) in events) {
+            when (val a = DialLogic.classifyIndexChange(idx, last, locked, 15, t - restoreAt, echoPending, true, false)) {
+                is VolumeAction.Turn -> {
+                    turns += a.direction
+                    last = locked
+                    restoreAt = t
+                    echoPending = true
+                }
+                is VolumeAction.Echo -> {
+                    echoPending = false
+                    last = idx
+                }
+                else -> {}
+            }
+        }
         assertEquals(listOf(1, 1, -1), turns)
     }
 
@@ -75,12 +114,6 @@ class DialLogicTest {
         assertTrue(DialLogic.reportedPlayingAfter(RemoteCommand.NEXT, true))
         assertTrue(DialLogic.remoteCommandIsClick(RemoteCommand.TOGGLE))
         assertFalse(DialLogic.remoteCommandIsClick(RemoteCommand.NEXT))
-    }
-
-    @Test
-    fun wheelWrapsBothWays() {
-        assertEquals(0, DialLogic.wrapIndex(9, 1, 10))
-        assertEquals(9, DialLogic.wrapIndex(0, -1, 10))
     }
 
     @Test
@@ -98,15 +131,17 @@ class DialLogicTest {
     }
 
     @Test
-    fun profileMatchesPackageOrFallsBack() {
-        assertEquals("video", Profiles.match(Profiles.defaults, "com.google.android.youtube").id)
-        assertEquals("music", Profiles.match(Profiles.defaults, "com.spotify.music").id)
-        assertEquals("default", Profiles.match(Profiles.defaults, "com.example.unknown").id)
-        assertEquals("default", Profiles.match(Profiles.defaults, null).id)
-    }
-
-    @Test
-    fun everyProfileHasACloseSlice() {
-        for (p in Profiles.defaults) assertTrue(p.id, p.slices.any { it.id == "close" })
+    fun profileMatchesPackageInWheelOrder() {
+        val order = listOf("default", "music", "media_video")
+        val patterns = mapOf(
+            "default" to listOf("*"),
+            "music" to listOf("*spotify*", "*youtube.music*"),
+            "media_video" to listOf("*youtube*"),
+        )
+        assertEquals("media_video", DialLogic.matchProfile(order, patterns, "com.google.android.youtube"))
+        assertEquals("music", DialLogic.matchProfile(order, patterns, "com.google.android.apps.youtube.music"))
+        assertEquals("music", DialLogic.matchProfile(order, patterns, "com.spotify.music"))
+        assertEquals("default", DialLogic.matchProfile(order, patterns, "com.example.unknown"))
+        assertEquals("default", DialLogic.matchProfile(order, patterns, null))
     }
 }

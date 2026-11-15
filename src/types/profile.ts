@@ -9,7 +9,8 @@ export type ActionType =
   | "mute"
   | "home"
   | "profile"
-  | "close";
+  | "close"
+  | "system"; // Android only: phone action in `action` (see ANDROID_SYSTEM_ACTIONS)
 
 /** One step of a macro slice; executed in order by the backend (`actions::Step`). */
 export type MacroStep =
