@@ -20,6 +20,10 @@ export default function ProfileSwitcher() {
   const [focus, setFocus] = useState(false);
   const [paused, setPaused] = useState(false);
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  // The wheel's tick marks are trigonometry, which Node and the browser may round differently in the last
+  // digit, so it is drawn only in the browser. The slice list stays in the server HTML.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
   const { profile } = tabs[tab];
   const n = profile.actions.length;
@@ -82,7 +86,7 @@ export default function ProfileSwitcher() {
         <div ref={fitRef} style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
           <div className="wheel__inner" style={{ transform: `translate(-50%, -50%) scale(${scale})` }}>
             <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
-              <DonutRadialHUD inline profile={profile} selectedIndex={index} isOpen currentMode="menu" theme="signal_red" onSelectAction={(a) => { const i = profile.actions.findIndex((x) => x.id === a.id); if (i >= 0) setIndex(i); }} />
+              {mounted && <DonutRadialHUD inline profile={profile} selectedIndex={index} isOpen currentMode="menu" theme="signal_red" onSelectAction={(a) => { const i = profile.actions.findIndex((x) => x.id === a.id); if (i >= 0) setIndex(i); }} />}
             </div>
           </div>
         </div>

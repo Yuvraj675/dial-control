@@ -21,6 +21,8 @@ npm run preview
 | `src/styles/wheel.css` | Tailwind utilities for the app component only (no preflight) |
 | `public/images`, `public/fonts` | Captured product images, icons and the self-hosted OFL fonts |
 
+React and Motion are shared with the app's component through `resolve.dedupe` in `astro.config.mjs`. Do not replace that with an `alias` to `node_modules/react`: it builds, but the dev server then fails with `module is not defined`.
+
 The app component gets a small `inline` prop so it renders in normal flow instead of as a full-screen overlay. Keep that prop working when you change the component.
 
 ## Downloads
