@@ -4,12 +4,25 @@ import { motion, useReducedMotion } from 'framer-motion';
 import { ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react';
 import { DonutRadialHUD } from '../../../src/components/hud/DonutRadialHUD';
 import { DEFAULT_CONFIG } from '../../../src/data/defaultProfiles';
+import type { DialProfile, WheelAction } from '../../../src/types/profile';
 import { useFit } from './useFit';
 
 type Mode = 'menu' | 'volume' | 'brightness' | 'scroll';
 
-const profile = DEFAULT_CONFIG.profiles.default;
-const actions = profile.actions;
+const PROFILES = DEFAULT_CONFIG.profiles;
+const ORDER = ['default', 'media_video', 'code_editor', 'file_manager', 'browser_nav', 'creative_design'];
+
+/** The app's Home dial: every profile as a slice, then Close (built the way App.tsx builds it). */
+const HOME: DialProfile = {
+  id: 'home',
+  name: 'Home',
+  icon: 'home',
+  match_patterns: [],
+  actions: [
+    ...ORDER.map((id): WheelAction => ({ id: `profile_${id}`, label: PROFILES[id].name.toUpperCase(), icon: PROFILES[id].icon || 'sliders', type: 'profile', action: id })),
+    { id: 'close_hud', label: 'CLOSE', icon: 'close', type: 'close' },
+  ],
+};
 const GAUGE_MODES: Mode[] = ['volume', 'brightness', 'scroll'];
 const iconSrc = `${import.meta.env.BASE_URL}images/app-icon.webp`;
 
@@ -24,6 +37,7 @@ export default function HeroWheel() {
 
   const [open, setOpen] = useState(false);
   const [intro, setIntro] = useState(!reduce);
+  const [profileId, setProfileId] = useState('default');
   const [index, setIndex] = useState(0);
   const [mode, setMode] = useState<Mode>('menu');
   const [gauge, setGauge] = useState(55);
@@ -34,6 +48,9 @@ export default function HeroWheel() {
   const [note, setNote] = useState('');
   const [touched, setTouched] = useState(false);
   const resume = useRef<number | undefined>(undefined);
+
+  const profile = profileId === 'home' ? HOME : PROFILES[profileId];
+  const actions = profile.actions;
 
   // Tell the page the live wheel is here, so the still image can step aside.
   useEffect(() => {
@@ -52,7 +69,7 @@ export default function HeroWheel() {
     if (!auto || hover || focus || !open || mode !== 'menu' || reduce) return;
     const t = window.setInterval(() => setIndex((i) => (i + 1) % actions.length), 1700);
     return () => window.clearInterval(t);
-  }, [auto, hover, focus, open, mode, reduce]);
+  }, [auto, hover, focus, open, mode, reduce, actions.length]);
 
   const takeOver = useCallback(() => {
     setTouched(true);
@@ -68,7 +85,7 @@ export default function HeroWheel() {
     if (mode === 'menu') setIndex((i) => (i + dir + actions.length) % actions.length);
     else if (mode !== 'scroll') setGauge((g) => Math.max(0, Math.min(100, g + dir * 5)));
     setNote('');
-  }, [mode, open, takeOver]);
+  }, [mode, open, takeOver, actions.length]);
 
   const press = useCallback(() => {
     takeOver();
@@ -77,9 +94,11 @@ export default function HeroWheel() {
     const a = actions[index];
     const m = (a.action ?? a.id.replace(/_mode$/, '')) as Mode;
     if (a.type === 'mode' && GAUGE_MODES.includes(m)) { setMode(m); setNote(''); return; }
-    if (a.type === 'close') { setOpen(false); setNote(''); return; }
-    setNote(a.type === 'home' ? 'Opens the dial switcher' : `Runs ${label(a.label)}`);
-  }, [index, mode, open, takeOver]);
+    if (a.type === 'close') { setOpen(false); setProfileId('default'); setIndex(0); setNote(''); return; }
+    if (a.type === 'home') { setProfileId('home'); setIndex(0); setNote('Pick a dial. The real app lists yours here.'); return; }
+    if (a.type === 'profile' && a.action && PROFILES[a.action]) { setProfileId(a.action); setIndex(0); setNote(`Switched to ${PROFILES[a.action].name}. Home brings you back.`); return; }
+    setNote(`Runs ${label(a.label)}`);
+  }, [index, mode, open, takeOver, actions]);
 
   const onKey = (e: React.KeyboardEvent) => {
     const k = e.key;
