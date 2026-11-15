@@ -4,7 +4,7 @@
 
 # Dial Control
 
-**Turn the rotary dial on your CMF Buds Pro 2 case into a context-aware radial controller for Linux, Windows and macOS (Android coming soon).**
+**A context-aware radial menu for Linux, Windows and macOS, driven by the CMF Buds Pro 2 dial or a keyboard shortcut. Launch apps, run shortcuts and macros, scroll, and control volume and brightness from one wheel.**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Tauri v2](https://img.shields.io/badge/Tauri-v2-24C8DB?logo=tauri&logoColor=white)](https://v2.tauri.app/)
@@ -13,9 +13,27 @@
 ![Platforms](https://img.shields.io/badge/platforms-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey)
 ![Android](https://img.shields.io/badge/Android-coming%20soon-yellow)
 
-[Features](#features) · [Install](#install) · [How it works](#how-it-works) · [Build from source](#build-from-source) · [Docs](#documentation) · [Contributing](#contributing)
+[Install](#install-in-one-line) · [Features](#features) · [Keyboard](#keyboard-controls) · [How it works](#how-it-works) · [Build from source](#build-from-source) · [FAQ](#faq) · [Docs](#documentation) · [Contributing](#contributing)
 
 </div>
+
+---
+
+## Install in one line
+
+**Linux and macOS**
+
+```bash
+curl -fsSL https://github.com/Yuvraj675/dial-control/releases/latest/download/install.sh | bash
+```
+
+**Windows** (PowerShell)
+
+```powershell
+irm https://github.com/Yuvraj675/dial-control/releases/latest/download/install.ps1 | iex
+```
+
+It detects your OS and Linux distribution, downloads the right package from the latest release, **verifies its SHA-256 checksum** and installs it. No earbuds? It works with a keyboard shortcut too. Other ways to install, options and a review-first path are in [Install](#install).
 
 ---
 
@@ -83,21 +101,9 @@ Windows and macOS decision logic is unit-tested on any host; the OS integrations
 
 ## Install
 
-### One-line install
+### One-line installer
 
-**Linux and macOS**
-
-```bash
-curl -fsSL https://github.com/Yuvraj675/dial-control/releases/latest/download/install.sh | bash
-```
-
-**Windows** (PowerShell)
-
-```powershell
-irm https://github.com/Yuvraj675/dial-control/releases/latest/download/install.ps1 | iex
-```
-
-The script finds your OS, architecture and Linux distribution, downloads the matching package from the latest [release](https://github.com/Yuvraj675/dial-control/releases), **verifies its SHA-256 checksum** and installs it (`.deb` via apt, `.rpm` via dnf/zypper, `.pkg.tar.zst` via pacman, otherwise the portable AppImage; `.dmg` into Applications on macOS; the per-user setup on Windows). It never installs anything if the checksum does not match.
+The [one-line commands at the top](#install-in-one-line) pick the right package for your system: `.deb` via apt, `.rpm` via dnf/zypper, `.pkg.tar.zst` via pacman, otherwise the portable AppImage on Linux; the `.dmg` into Applications on macOS; the per-user setup on Windows. Nothing is installed if the checksum does not match.
 
 <details>
 <summary>Options and reviewing the script first</summary>
@@ -252,6 +258,29 @@ windowrulev2 = pin,      class:^(dial-control)$, title:^(Dial Control HUD)$
 ```ini
 for_window [app_id="dial-control" title="Dial Control HUD"] floating enable, border none
 ```
+
+## FAQ
+
+**Does the CMF Buds Pro 2 dial work on Linux, Windows and macOS?**
+Yes. The dial sends standard Bluetooth AVRCP volume and media commands, which Dial Control intercepts on all three systems and turns into a radial menu.
+
+**Can I use Dial Control without earbuds?**
+Yes. Press `Super+Shift+D` (`Win+Shift+D` on Windows, `Cmd+Shift+D` on macOS) and use the arrow keys or mouse wheel. See [Keyboard controls](#keyboard-controls).
+
+**What can a slice do?**
+Press a hotkey, open an app, file or URL, run a shell command, type a text snippet, or run a multi-step macro. Scroll, volume and brightness are built in.
+
+**Does it change how my earbuds work?**
+Not until you ask. With the wheel closed, turning the dial changes volume and a click plays or pauses as usual. A double press opens the wheel.
+
+**Do I need the companion app?**
+Only once, to set double press to *Next track* and triple press to *Previous track* (for the CMF Buds Pro 2 that is the Nothing X app). Dial Control does not replace it or change Bluetooth pairing.
+
+**Is it affiliated with Nothing or CMF?**
+No. It is an independent open-source project.
+
+**Is it free and open source?**
+Yes, [MIT licensed](LICENSE).
 
 ## Troubleshooting
 
