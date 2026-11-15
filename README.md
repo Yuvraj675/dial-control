@@ -64,7 +64,7 @@ You do **not** need the CMF Buds Pro 2. Everything the dial does is also availab
 
 | Input | Action |
 |---|---|
-| **`Super+Shift+D`** (Windows: `Win+Shift+D`, macOS: `Cmd+Shift+D`) | Open / close the wheel anywhere. Rebind it in *Settings → Shortcut & Hardware* |
+| **`Super+Shift+D`** (Windows: `Win+Shift+D`, macOS: `Cmd+Shift+D`) | Open / close the wheel anywhere. Rebind it in *Settings → Shortcut* |
 | `→` `↓` or mouse wheel down | Next slice |
 | `←` `↑` or mouse wheel up | Previous slice |
 | `Enter` or `Space` | Run the highlighted slice |
