@@ -14,6 +14,8 @@ interface DonutRadialHUDProps {
   dialRadius?: number;
   donutThickness?: number;
   isStaticPreview?: boolean;
+  /** Render in normal flow (no full-screen overlay), at full size, still opening and closing with the spring. Used by the website. */
+  inline?: boolean;
   onSelectAction?: (action: WheelAction) => void;
   onDismiss?: () => void;
 }
@@ -28,6 +30,7 @@ export const DonutRadialHUD: React.FC<DonutRadialHUDProps> = ({
   dialRadius = 188,
   donutThickness = 68,
   isStaticPreview = false,
+  inline = false,
   onSelectAction,
   onDismiss,
 }) => {
@@ -344,6 +347,14 @@ export const DonutRadialHUD: React.FC<DonutRadialHUDProps> = ({
       <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
         {hudElement}
       </div>
+    );
+  }
+
+  if (inline) {
+    return (
+      <AnimatePresence>
+        {isOpen && <React.Fragment key="hud">{hudElement}</React.Fragment>}
+      </AnimatePresence>
     );
   }
 
