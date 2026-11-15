@@ -1,146 +1,63 @@
-# CMF Buds Pro 2 Smart Dial — Development Guide
+# Development Guide
 
-This guide walks you through developing, running, and extending the **Laptop & Mobile Smart Dial Control System** for the CMF Buds Pro 2.
+## 1. Setup
 
----
-
-## 1. Quick Start
-
-### 1.1 Prerequisites
-On Linux, Python 3.9+ includes native Bluetooth support via `socket.AF_BLUETOOTH` and `socket.BTPROTO_RFCOMM`.
+Prerequisites and system packages are listed in the [README](../README.md#build-from-source).
 
 ```bash
-cd /home/yuvraj/Documents/Code_Projects/dial-control/tools
-chmod +x probe.py listen.py virtual_dial.py
+pnpm install
+pnpm tauri dev          # Vite dev server on :1420 + Rust backend
 ```
 
-### 1.2 Test the Virtual Dial UI Immediately
-You can test the floating radial menu without connecting Bluetooth:
+No earbuds? Use the global shortcut (default `Super+Shift+D`) or the arrow keys / Enter while the HUD has focus. A browser-only preview (`pnpm dev`) renders the UI without the Rust backend.
+
+## 2. Project map
+
+| Path | Purpose |
+|---|---|
+| `src/components/hud` | Donut wheel (Framer Motion) |
+| `src/components/settings` | Profile/slice editor, `ActionEditors.tsx` for launch/macro/test-run |
+| `src/data/defaultProfiles.ts` | Built-in profiles and config migration |
+| `src-tauri/src/lib.rs` | App state, Tauri commands, tray, single-instance IPC |
+| `src-tauri/src/actions.rs` | Slice → steps executor |
+| `src-tauri/src/platform/` | Traits, pure logic, and the three OS backends |
+| `android/` | Native Kotlin app + WebView shim (see [PLATFORMS.md](PLATFORMS.md#android)) |
+| `resources/gnome-extension` | Focused-window D-Bus extension |
+| `scripts/` | Packaging, udev, Windows build |
+
+## 3. Tests and checks
+
+See [CONTRIBUTING.md](../CONTRIBUTING.md#checks) for the full list. When fixing a backend bug, extract the decision into `dial_logic.rs`, `keymap.rs` or `common.rs` and add a regression test there.
+
+## 4. Adding a built-in slice
+
+1. Add the slice to the profile in `src/data/defaultProfiles.ts` (`keys` for Windows/Linux, optional `keys_mac` written for macOS).
+2. Use an icon from `src/utils/iconMap.tsx`.
+3. Run `npm test`: the config and keymap tests verify every key token maps to a real keycode.
+
+New *action types* need: the TypeScript type, an `actions::steps_for` arm, the editor in `ActionEditors.tsx`, and a test.
+
+## 5. Production build
 
 ```bash
-python3 virtual_dial.py --test
-```
-- **Space** / **Tab**: Open / Toggle the Virtual Dial
-- **Right** / **Up**: Rotate selection Clockwise
-- **Left** / **Down**: Rotate selection Counter-Clockwise
-- **Enter**: Confirm selected option & execute action
-- **Esc**: Dismiss the dial
-
----
-
-## 2. Connecting to Hardware
-
-### Step 1: Check Bluetooth Pairing
-Ensure your CMF Buds Pro 2 is paired to your laptop:
-```bash
-bluetoothctl devices | grep -i "CMF Buds Pro 2"
-# Found: 2C:BE:EE:31:11:77
+npx @tauri-apps/cli build --no-bundle
+install -m 755 src-tauri/target/release/dial-control bin/dial-control
+./scripts/build-packages.sh
 ```
 
-### Step 2: Ensure Connection is Free
-> [!IMPORTANT]
-> The Nothing RFCOMM socket can only be connected to **one host application at a time**.
-> Disconnect the earbuds from your mobile phone or close the Nothing X app before scanning from your laptop.
+A plain `cargo build --release` skips the frontend and produces a binary that points at `localhost:1420`.
 
-Connect to your earbuds via BlueZ:
-```bash
-bluetoothctl connect 2C:BE:EE:31:11:77
-```
+## 6. Diagnostics
 
-### Step 3: Discover the Active RFCOMM Channel
-Run the channel scanner:
-```bash
-python3 probe.py --mac 2C:BE:EE:31:11:77
-```
-It tests common channels (15, 28, 17, 1-30) and prints the active Nothing protocol channel.
+- Windows: `%TEMP%\dial-control\dial-control.log`; macOS: `$TMPDIR/dial-control/dial-control.log` (clicks, media-session events, focus changes).
+- Linux: run the binary from a terminal; the dial and context pipelines log to stdout.
+- Android: `adb logcat -s DialControl`, plus the live log on the main screen.
 
-### Step 4: Stream Dial Events in Real Time
-Once the channel is confirmed (e.g. `15` or `28`):
-```bash
-python3 listen.py --mac 2C:BE:EE:31:11:77 --channel <CHANNEL>
-```
-Now spin the dial or click the button on your charging case — you will see live decoded events printed in green:
-```
-[DIAL EVENT] Payload: [0a 01] -> DIAL ROTATE: CLOCKWISE (+) (step: 1)
-[DIAL EVENT] Payload: [01 01] -> DIAL SINGLE CLICK
-```
+## 7. Troubleshooting
 
-### Step 5: Launch the Virtual Dial System
-```bash
-python3 virtual_dial.py --mac 2C:BE:EE:31:11:77 --channel <CHANNEL>
-```
-Now:
-1. Tap the Smart Dial on the case -> **Virtual radial dial pops up on screen**.
-2. Turn the Smart Dial -> **Highlights change smoothly around the circle**.
-3. Tap or double-tap again -> **Action triggers (Volume, Media, Brightness, etc.) and dial closes**.
-
----
-
-## 3. Extending Actions
-
-In `tools/virtual_dial.py`, actions are defined in `DIAL_ACTIONS`:
-
-```python
-DIAL_ACTIONS = [
-    ("🔊 Volume", "volume"),
-    ("☀️ Brightness", "brightness"),
-    ("⏯️ Media Play/Pause", "media_play"),
-    ("⏭️ Next Track", "media_next"),
-    ("⏮️ Prev Track", "media_prev"),
-    ("📜 Scroll Mode", "scroll"),
-    ("🖥️ Switch Workspace", "workspace"),
-    ("🔇 Mute Audio", "mute"),
-]
-```
-
-Add your custom handler inside `execute_action(self, action_key)`:
-
-```python
-def execute_action(self, action_key: str):
-    if action_key == "my_custom_script":
-        subprocess.run(["/path/to/my_script.sh"])
-    elif action_key == "app_launcher":
-        subprocess.run(["gtk-launch", "firefox.desktop"])
-    elif action_key == "workspace":
-        # Example for GNOME / Wayland / i3 / Hyprland
-        subprocess.run(["hyprctl", "dispatch", "workspace", "+1"])
-```
-
----
-
-## 4. Reverse Engineering Findings Summary
-
-From decompiling `com.nothing.smartcenter_3.10.0` with REA and manual DEX analysis:
-
-| Component | Code / Value | Description |
-|---|---|---|
-| **Device Model** | `B172` | Internal codename/model for CMF Buds Pro 2 |
-| **ODM / SoC** | BES (Bestechnic) | Embedded Bluetooth microcontroller in buds |
-| **Service UUID** | `aeac4a03-dff5-498f-843a-34487cf133eb` | Nothing proprietary SPP service |
-| **Dial Device Target** | `deviceType = 4` | Case Dial (`ControlConfigurationEntity`) |
-| **Dial Center Button** | `button = 1` | Function button in dial center |
-| **Dial Gestures** | `1` (click), `2` (double), `7` (hold), `10` (rotate) | Physical actions on the case dial |
-| **Dial Event ID** | `0xE014` (`EVENT_MAGIC_BUTTON`) | Asynchronous RFCOMM notification for dial input |
-| **Rotate Operation** | `23` (`OPERATION_ROTATE_CONTROL`) | Action bound to rotation |
-| **Frame Header** | `0x55` | Start-of-frame delimiter |
-| **Checksum** | CRC-16 / MODBUS | Polynomial `0xA001`, initial `0xFFFF` |
-
----
-
-## 5. Troubleshooting & FAQ
-
-### Q: Socket connection fails with "Device or resource busy"
-**Cause**: Another process (like a previous instance of `listen.py` or a connected phone) is holding the RFCOMM channel open.
-**Fix**:
-1. Check running python processes: `pgrep -af python3`
-2. Disconnect and reconnect in bluetoothctl:
-   ```bash
-   bluetoothctl disconnect 2C:BE:EE:31:11:77
-   bluetoothctl connect 2C:BE:EE:31:11:77
-   ```
-
-### Q: No dial events arrive while turning the dial
-**Cause**: The earbuds might not have activated the dial session yet, or the dial is locked.
-**Fix**:
-1. Double-press and hold the dial on the case for 2 seconds to unlock (Case Lock feature).
-2. Ensure `SET_PROTOCOL_ACTIVATED` (`0xF001`) was sent during connection handshake (handled automatically by `proto.py`).
+| Problem | Cause / fix |
+|---|---|
+| Dial clicks also toggle your player (Linux) | The `evdev` grab failed: check udev permissions and reconnect the earbuds. |
+| Window shows "localhost not found" | Binary built without the frontend; use the production build above. |
+| Events fire twice | Emit each Tauri event once (`app.emit` already broadcasts to all webviews). |
+| `GLIBC_2.39 not found` | Build or run on a newer distribution. |

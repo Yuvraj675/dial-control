@@ -3,6 +3,8 @@ name = "dial-control"
 version = "1.0.0"
 description = "Context-Aware Radial Dial Controller for CMF Buds Pro 2"
 authors = ["Yuvraj Gupta"]
+license = "MIT"
+repository = "https://github.com/Yuvraj675/dial-control"
 edition = "2021"
 
 [lib]

@@ -1,5 +1,8 @@
 # CMF Buds Pro 2 (B172) Bluetooth RFCOMM Protocol Specification
 
+> **Status: archived research.** Dial Control does **not** use this protocol. The dial turned out to be plain Bluetooth AVRCP (volume keys, play/pause, next/previous), which every OS already exposes, so no RFCOMM connection is made at runtime. These notes document the Nothing X wire format for anyone who wants to read or configure the earbuds directly.
+
+
 > **Source**: Reverse-engineered from Nothing X Android APK (`com.nothing.smartcenter_3.10.0`), decompiled DEX bytecode analysis, and verified community implementations (`SoftARV/cmfctl`, `SoaOaoS/something-x`, `maniacx/BudsLink`).
 
 ---

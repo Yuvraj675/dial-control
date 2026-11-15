@@ -1,6 +1,9 @@
 {
   "name": "dial-control",
   "private": true,
+  "description": "Context-aware radial dial controller for the CMF Buds Pro 2",
+  "license": "MIT",
+  "repository": "github:Yuvraj675/dial-control",
   "version": "1.0.0",
   "type": "module",
   "scripts": {
