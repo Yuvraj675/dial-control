@@ -13,7 +13,11 @@
 ![Platforms](https://img.shields.io/badge/platforms-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey)
 ![Android](https://img.shields.io/badge/Android-coming%20soon-yellow)
 
-[Install](#install-in-one-line) · [Features](#features) · [Keyboard](#keyboard-controls) · [How it works](#how-it-works) · [Build from source](#build-from-source) · [FAQ](#faq) · [Docs](#documentation) · [Contributing](#contributing)
+[Website](https://dial-control.netlify.app/) · [Install](#install-in-one-line) · [Features](#features) · [Keyboard](#keyboard-controls) · [How it works](#how-it-works) · [Build from source](#build-from-source) · [FAQ](#faq) · [Docs](#documentation) · [Contributing](#contributing)
+
+<a href="https://dial-control.netlify.app/"><img src="docs/images/website-hero.png" alt="The Dial Control website: a shortcut wheel for your earbuds, with the app's own wheel running beside the headline" width="860" /></a>
+
+**[dial-control.netlify.app](https://dial-control.netlify.app/)**: see the wheel in action, in your browser.
 
 </div>
 
