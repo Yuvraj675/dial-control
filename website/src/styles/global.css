@@ -42,14 +42,14 @@ h3 { font-size: var(--text-title); max-width: 40ch; }
 
 /* ── controls ─────────────────────────────────────────────────── */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-sm); min-height: 52px; padding-inline: var(--space-lg); border: 1px solid transparent; border-radius: var(--radius-pill); font-weight: 600; font-size: var(--text-md); line-height: 1; text-decoration: none; white-space: nowrap; cursor: pointer; transition: background-color var(--dur-micro) var(--ease-out), color var(--dur-micro) var(--ease-out), border-color var(--dur-micro) var(--ease-out), transform var(--dur-micro) var(--ease-out), box-shadow var(--dur-short) var(--ease-out); }
-.btn--primary { background: var(--color-accent); color: var(--color-accent-ink); box-shadow: 0 0 22px -6px color-mix(in oklab, var(--color-accent) 55%, transparent), inset 0 1px 0 color-mix(in oklab, white 22%, transparent); }
-.btn--primary:hover { background: var(--color-focus); box-shadow: 0 0 34px -4px color-mix(in oklab, var(--color-accent) 70%, transparent), inset 0 1px 0 color-mix(in oklab, white 28%, transparent); }
+.btn--primary { background: var(--color-accent); color: var(--color-accent-ink); box-shadow: 0 0 32px rgba(226, 32, 31, 0.32); }
+.btn--primary:hover { background: var(--color-focus); box-shadow: 0 0 44px rgba(226, 32, 31, 0.5); }
 .btn--primary:active { transform: translateY(1px); }
 .btn--quiet { min-height: 44px; padding-inline: var(--space-md); border-color: var(--color-rule); color: var(--color-ink); background: transparent; }
-.btn--quiet:hover { border-color: color-mix(in oklab, var(--color-accent) 55%, var(--color-muted)); background: var(--color-paper-2); box-shadow: 0 0 20px -6px color-mix(in oklab, var(--color-accent) 50%, transparent); }
+.btn--quiet:hover { border-color: var(--color-muted); background: var(--color-paper-2); box-shadow: 0 0 30px rgba(226, 32, 31, 0.28); }
 .btn--quiet:active { transform: translateY(1px); }
 .btn--line { min-height: 44px; padding-inline: var(--space-md); border-color: var(--color-rule); color: var(--color-ink); background: transparent; }
-.btn--line:hover { border-color: color-mix(in oklab, var(--color-accent) 55%, var(--color-muted)); background: var(--color-paper-2); box-shadow: 0 0 20px -6px color-mix(in oklab, var(--color-accent) 50%, transparent); }
+.btn--line:hover { border-color: var(--color-muted); background: var(--color-paper-2); box-shadow: 0 0 30px rgba(226, 32, 31, 0.28); }
 .btn--line:active { transform: translateY(1px); }
 .btn:disabled, .btn[aria-disabled="true"] { opacity: 0.55; cursor: not-allowed; }
 .link { color: var(--color-ink); text-decoration-line: underline; text-decoration-color: var(--color-muted); background: linear-gradient(var(--color-accent), var(--color-accent)) no-repeat 0 100% / 0 1px; transition: background-size var(--dur-short) var(--ease-out); }
@@ -57,7 +57,7 @@ h3 { font-size: var(--text-title); max-width: 40ch; }
 .link:active { color: var(--color-ink-2); }
 
 /* ── nav ──────────────────────────────────────────────────────── */
-.nav { position: sticky; top: 0; z-index: var(--z-sticky-nav); background: color-mix(in oklab, var(--color-paper) 55%, transparent); -webkit-backdrop-filter: blur(18px) saturate(1.5); backdrop-filter: blur(18px) saturate(1.5); border-bottom: 1px solid color-mix(in oklab, var(--color-ink) 7%, transparent); box-shadow: inset 0 -1px 0 color-mix(in oklab, var(--color-accent) 8%, transparent); }
+.nav { position: sticky; top: 0; z-index: var(--z-sticky-nav); background: color-mix(in oklab, black 60%, transparent); -webkit-backdrop-filter: blur(32px) saturate(1.4) brightness(0.55); backdrop-filter: blur(32px) saturate(1.4) brightness(0.55); border-bottom: 1px solid color-mix(in oklab, var(--color-ink) 7%, transparent); box-shadow: inset 0 -1px 0 color-mix(in oklab, var(--color-accent) 8%, transparent); }
 .nav__row { display: flex; align-items: center; justify-content: space-between; min-height: 72px; }
 .brand { display: inline-flex; align-items: center; gap: var(--space-sm); text-decoration: none; font-family: var(--font-display); font-weight: 800; font-variation-settings: "ROND" 100; font-size: var(--text-xl); }
 .brand img { width: 36px; height: 36px; border-radius: var(--space-sm); }
