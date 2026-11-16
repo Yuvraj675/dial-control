@@ -2,10 +2,10 @@ import { defineConfig } from 'astro/config';
 import react from '@astrojs/react';
 import sitemap from '@astrojs/sitemap';
 
-// Defaults serve the GitHub Pages project site. For a custom domain set SITE_URL=https://example.com SITE_BASE=/
-// `||`, not `??`: the workflow passes unset repository variables as empty strings.
-const site = process.env.SITE_URL || 'https://yuvraj675.github.io';
-const base = process.env.SITE_BASE || '/dial-control';
+// Netlify provides URL (the site's address, or the custom domain once attached) at build time. Set SITE_URL and
+// SITE_BASE to build for anywhere else (a subpath host needs SITE_BASE=/name). `||`, not `??`, so empty values fall back.
+const site = process.env.SITE_URL || process.env.URL || 'https://dial-control.netlify.app';
+const base = process.env.SITE_BASE || '/';
 
 export default defineConfig({
   site,

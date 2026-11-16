@@ -5,7 +5,7 @@ The marketing site for Dial Control, built with [Astro](https://astro.build), Re
 ```bash
 cd website
 npm ci
-npm run dev        # http://localhost:4321/dial-control/
+npm run dev        # http://localhost:4321/
 npm run build      # static site in dist/
 npm run preview
 ```
@@ -58,15 +58,13 @@ The page never hard-codes a version. In the browser it detects the visitor's OS 
 
 ## Deploying
 
-`.github/workflows/pages.yml` builds and publishes to GitHub Pages on changes to `website/` or the embedded app code and on demand (not on release: the Pages environment only accepts deployments from main).
+The site is hosted on Netlify, configured by `netlify.toml` at the repository root: base directory `website`, command `npm test && npm run build`, publish `dist`, Node 22, long-lived caching for fingerprinted assets and a few security headers. Every push to `main` deploys; other branches and pull requests get deploy previews. Netlify supplies the `URL` variable at build time, which Astro uses for canonical links, Open Graph tags, the sitemap, `robots.txt` and `/llms.txt`.
 
-One-time setup in the repository: **Settings → Pages → Source: GitHub Actions**. The site is then at `https://<owner>.github.io/dial-control/`.
+One-time setup: **Netlify → Add new site → Import an existing project → GitHub → Yuvraj675/dial-control**. Netlify reads `netlify.toml`, so leave the build settings as detected. Then **Site configuration → Change site name** to `dial-control` (the address in `astro.config.mjs` and the README assumes `https://dial-control.netlify.app`; if the name is taken, set the repository's `SITE_URL` build variable in Netlify to the real address).
 
-### Custom domain
+### Custom domain (optional)
 
-1. Buy a domain and add it under **Settings → Pages → Custom domain** (GitHub shows the DNS records to create).
-2. Add repository **variables** (Settings → Secrets and variables → Actions → Variables): `SITE_URL=https://yourdomain.com` and `SITE_BASE=/`.
-3. Re-run the workflow. Canonical URLs, Open Graph tags, the sitemap and `robots.txt` all follow those two values.
+Add it under **Domain management** in Netlify. `URL` then becomes the custom domain automatically and the next deploy follows it. Building for a subpath host instead needs `SITE_URL` and `SITE_BASE=/name`.
 
 ## SEO checklist
 

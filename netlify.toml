@@ -1,0 +1,29 @@
+# Netlify builds the marketing site in website/ (it imports the app's wheel from ../src, so the whole
+# repo is cloned and only the build runs from the subfolder). Netlify supplies URL (the site's address,
+# or the custom domain once one is attached), which Astro uses for canonical links, the sitemap and llms.txt.
+[build]
+  base = "website"
+  command = "npm test && npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# Fingerprinted build output never changes, so it can be cached for a year; pages are always revalidated.
+[[headers]]
+  for = "/_astro/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/fonts/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    X-Frame-Options = "DENY"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"

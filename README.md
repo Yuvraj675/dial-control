@@ -293,7 +293,7 @@ Yes, [MIT licensed](LICENSE).
 
 ## Documentation
 
-- [Website](https://yuvraj675.github.io/dial-control/) and its [source](website/README.md): the project site, built from this repo
+- [Website](https://dial-control.netlify.app/) and its [source](website/README.md): the project site, built from this repo
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): design, abstractions, repository layout
 - [docs/PLATFORMS.md](docs/PLATFORMS.md): per-OS implementation notes
 - [docs/DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md): workflow, tests, adding slices and platform code
