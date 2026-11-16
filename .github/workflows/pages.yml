@@ -1,7 +1,8 @@
 name: Website
 
-# Publishes website/ to GitHub Pages when the site (or the app code it embeds) changes, when a
-# release is published (so download links stay fresh), or by hand from the Actions tab.
+# Publishes website/ to GitHub Pages when the site (or the app code it embeds) changes, or by hand
+# from the Actions tab. Not on release: the github-pages environment only accepts deployments from main,
+# and the download buttons read the latest release in the browser, so they never go stale.
 # One-time setup: repo Settings > Pages > Source: GitHub Actions.
 on:
   push:
@@ -14,8 +15,6 @@ on:
       - "src/utils/iconMap.tsx"
       - "src/utils/donutGeometry.ts"
       - ".github/workflows/pages.yml"
-  release:
-    types: [published]
   workflow_dispatch:
 
 permissions:

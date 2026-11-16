@@ -58,7 +58,7 @@ The page never hard-codes a version. In the browser it detects the visitor's OS 
 
 ## Deploying
 
-`.github/workflows/pages.yml` builds and publishes to GitHub Pages on changes to `website/` or the embedded app code, when a release is published, and on demand.
+`.github/workflows/pages.yml` builds and publishes to GitHub Pages on changes to `website/` or the embedded app code and on demand (not on release: the Pages environment only accepts deployments from main).
 
 One-time setup in the repository: **Settings → Pages → Source: GitHub Actions**. The site is then at `https://<owner>.github.io/dial-control/`.
 
