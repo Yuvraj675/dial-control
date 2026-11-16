@@ -1,0 +1,49 @@
+name: Bug report
+description: Something does not work as expected (Linux, Windows or macOS)
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing Dial Control. Reports from every platform help, macOS (early access) most of all.
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [Linux, Windows 10, Windows 11, macOS]
+    validations:
+      required: true
+  - type: input
+    id: os_version
+    attributes:
+      label: OS version and desktop environment
+      description: For example "Fedora 44, GNOME 50, Wayland" or "macOS 15.2" or "Windows 11 23H2".
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Dial Control version and how you installed it
+      description: For example "1.0.0, AppImage" or "1.0.0, .dmg".
+    validations:
+      required: true
+  - type: input
+    id: earbuds
+    attributes:
+      label: Earbuds or input device
+      description: Model and firmware if you know it, or "keyboard shortcut only".
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+      description: The steps you took, in order. Does the wheel open? Do clicks pause your player?
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Diagnostics log
+      description: |
+        If dial clicks or turns misbehave, paste the end of the log.
+        Windows: `%TEMP%\dial-control\dial-control.log`. macOS: `$TMPDIR/dial-control/dial-control.log`.
+      render: text

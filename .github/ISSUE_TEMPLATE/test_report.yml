@@ -1,0 +1,25 @@
+name: Test report
+description: It works (or partly works) on your setup, and you want to say so
+labels: [testing]
+body:
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [Linux, Windows 10, Windows 11, macOS]
+    validations:
+      required: true
+  - type: input
+    id: setup
+    attributes:
+      label: Setup
+      description: OS version, desktop environment, earbuds model.
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: What worked and what did not
+      description: Wheel opening, turning, click, double and triple press, per-app wheels, scroll, volume, brightness.
+    validations:
+      required: true
