@@ -132,9 +132,10 @@ export default function FlyingDial() {
       } else if (sy < g.D) {
         // The flight: from the hero to the diagram's centre, tilted and pushed toward you on the way (a bell
         // curve, so it starts and ends flat).
-        const s0 = g.D * 0.05;
+        const s0 = 0;
         const p = clamp((sy - s0) / (g.D - s0));
-        const e = easeInOut(p);
+        // Part linear so the dial starts to ride along at once and is never left to scroll under the nav.
+        const e = 0.45 * p + 0.55 * easeInOut(p);
         const bell = Math.sin(Math.PI * p);
         place('absolute', lerp(g.hx, g.dx, e), lerp(g.hy, g.D + g.top + g.dOff, e), lerp(k0, g.dw / 450, e) * (1 + 0.1 * bell), bell * 170, bell * 14, -bell * 26);
         next = p > 0.002 ? 'flight' : 'hero';
