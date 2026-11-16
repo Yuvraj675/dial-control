@@ -18,6 +18,29 @@ if (keyEls.length) {
 }
 
 if (fine && !calm) {
+  // Pill: tilts toward the pointer (up to 12 degrees) while it is over the pill, and a sheen follows the pointer
+  // across its surface. Only the pill itself reacts, never the text around it. A shadow slides against the lean.
+  document.querySelectorAll<HTMLElement>('[data-pill]').forEach((stage) => {
+    const pill = stage.querySelector<HTMLElement>('.ask__pill');
+    if (!pill) return;
+    const MAX = 12;
+    stage.addEventListener('pointermove', (e) => {
+      const r = stage.getBoundingClientRect();
+      const x = (e.clientX - r.left) / r.width - 0.5;
+      const y = (e.clientY - r.top) / r.height - 0.5;
+      stage.style.transition = 'transform 90ms linear';
+      stage.style.transform = `perspective(700px) rotateX(${(-y * 2 * MAX * 0.8).toFixed(2)}deg) rotateY(${(x * 2 * MAX).toFixed(2)}deg)`;
+      pill.style.boxShadow = `${(-x * 14).toFixed(1)}px ${(10 + y * 6).toFixed(1)}px 18px -12px rgb(0 0 0 / 0.65)`;
+      pill.style.setProperty('--mx', `${((e.clientX - pill.getBoundingClientRect().left)).toFixed(0)}px`);
+      pill.style.setProperty('--my', `${((e.clientY - pill.getBoundingClientRect().top)).toFixed(0)}px`);
+    });
+    stage.addEventListener('pointerleave', () => {
+      stage.style.transition = 'transform 560ms cubic-bezier(0.16, 1, 0.3, 1)';
+      stage.style.transform = '';
+      pill.style.boxShadow = '';
+    });
+  });
+
   // Tilt: lean toward the pointer while it is over the element, settle back when it leaves.
   document.querySelectorAll<HTMLElement>('[data-tilt]').forEach((el) => {
     const max = Number(el.dataset.tilt) || 4;
