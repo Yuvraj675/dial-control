@@ -98,10 +98,21 @@ The wheel changes with the app in front of you. Profiles, slices, icons and shor
 |---|---|---|---|---|---|
 | **Linux** (X11 / Wayland) | BlueZ D-Bus + `evdev` exclusive grab | WirePlumber / PulseAudio | Mutter D-Bus, `/sys/class/backlight` | GNOME Shell extension, Hyprland, Sway, KDE, X11 | Functional |
 | **Windows** 10 / 11 | Core Audio callback, `WH_KEYBOARD_LL`, Raw Input, own SMTC session | WASAPI | DDC/CI (`dxva2`) + WMI | Win32 foreground window | Functional |
-| **macOS** 14+ (Apple Silicon) | CoreGraphics event tap, CoreAudio listener, own Now Playing session | CoreAudio | DisplayServices | `NSWorkspace` + AppleScript | Functional |
+| **macOS** 14+ (Apple Silicon) | CoreGraphics event tap, CoreAudio listener, own Now Playing session | CoreAudio | DisplayServices | `NSWorkspace` + AppleScript | **Early access (beta)** |
 | **Android** 8.0+ | Own `MediaSession` + `STREAM_MUSIC` watcher | `AudioManager` | `Settings.System` | Accessibility service | **Coming soon** (work in progress, no release yet) |
 
+**macOS is early access / beta.** It compiles in CI but has had far less real-hardware testing than Linux and Windows, so expect rough edges (see [Help test and report issues](#help-test-and-report-issues)).
+
 Windows and macOS decision logic is unit-tested on any host; the OS integrations themselves are verified by compilation in CI-style checks, so field reports are welcome (see [Troubleshooting](#troubleshooting)).
+
+## Help test and report issues
+
+Dial Control is young, and the dial behaves differently across operating systems, Bluetooth stacks, media players and earbuds firmware, so real-world testing is the most useful contribution. **Issues and test reports are welcome on every platform** (Linux, Windows and macOS), macOS most of all while it is in beta.
+
+- Install it, try the dial and the wheel with the apps you actually use, and say what works and what does not.
+- Open an issue with your OS and version, desktop environment (Linux), earbuds model and firmware, what you did, what you expected and what happened.
+- Attach the diagnostics log if clicks or turns misbehave: `%TEMP%\dial-control\dial-control.log` (Windows) or `$TMPDIR/dial-control/dial-control.log` (macOS).
+- Ideas and pull requests are welcome too; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Install
 

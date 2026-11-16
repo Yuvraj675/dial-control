@@ -7,7 +7,7 @@
 /* Hallmark · answered F4 · the download section repeats the hero's one action for the visitor's own system, so the second filled button is the same call to action */
 /* Hallmark · dismissed 58 · the lower window holds two install commands, their copy buttons, three short steps and the footer, where most words are URLs and key names */
 /* Hallmark · dismissed 59 · the tenth section is the pinned anatomy diagram the owner asked for, and the sections that were already on the page stay as they were */
-/* Hallmark · dismissed 23 · the spine is a 2px hairline, so its accent is a sliver of the screen and not a field of it */
+/* Hallmark · dismissed 23 · accent stays a sliver of the screen, not a field of it */
 /* Hallmark · waive 47c · the wheel is the app's own component rendered live inside a product slot · the product itself is what the page sells */
 @import url("./tokens.css");
 @import url("./base.css");
@@ -308,16 +308,6 @@ h3 { font-size: var(--text-title); max-width: 40ch; }
 /* an on-page key lights up while you hold the real one (the individual translate property, so it never fights the 3D keys) */
 .key { transition: background-color var(--dur-micro) var(--ease-out), color var(--dur-micro) var(--ease-out), border-color var(--dur-micro) var(--ease-out), translate var(--dur-micro) var(--ease-out); }
 .key.is-down { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-accent-ink); translate: 0 var(--space-3xs); }
-/* a hairline spine at the edge that fills as you read (CSS scroll timeline; absent where unsupported) */
-.spine { display: none; }
-@supports (animation-timeline: scroll()) {
-  @media (prefers-reduced-motion: no-preference) and (min-width: 60rem) {
-    .spine { display: block; position: fixed; inset-block: var(--banner-height) 0; left: max(var(--space-md), 1.4vw); width: 2px; background: var(--color-rule); z-index: var(--z-raised); pointer-events: none; }
-    .spine::after { content: ""; position: absolute; inset: 0; background: var(--color-accent); transform-origin: top; transform: scaleY(0); animation: spine-grow linear both; animation-timeline: scroll(root); }
-    @keyframes spine-grow { to { transform: scaleY(1); } }
-  }
-}
-
 /* Ask your AI: a pill that copies a ready-made prompt, at the foot of the page. */
 .ask { margin-top: var(--space-3xl); display: grid; gap: var(--space-md); justify-items: center; text-align: center; transform-origin: 50% 50%; }
 .ask__pill { --mx: 50%; --my: 50%; position: relative; display: inline-flex; align-items: center; gap: var(--space-sm); padding: var(--space-xs) var(--space-xs) var(--space-xs) var(--space-lg); border: 1px solid var(--color-rule); border-radius: var(--radius-pill); background: var(--color-paper-2); color: var(--color-ink); transition: border-color var(--dur-short) var(--ease-out); }

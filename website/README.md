@@ -48,7 +48,6 @@ React and Motion are shared with the app's component through `resolve.dedupe` in
 - **Ask your AI.** A centred 3D pill under the install steps (it tilts up to 12 degrees toward the pointer with a sheen that follows it, only when the pointer is on the pill itself, and plays the same wiggle, sweep and action-line invitation as the navbar button, offset in time) copies `src/content/ask-ai.md` (placeholders `{{SITE}}` and `{{REPO}}` filled at build) to the clipboard; the same text is served at `/llms.txt`. `src/content/ask-ai.test.ts` guards its facts, links and length. Update the prompt whenever a user-visible feature or requirement changes.
 - **Tilt.** Any element with `data-tilt="<degrees>"` leans toward the pointer (the Settings window; the app switcher and the dial do the same through Framer Motion).
 - **Live keys.** The keys in the keyboard section light up while you hold the real ones (`data-key` holds the `KeyboardEvent.key` value).
-- **A progress spine** at the left edge is pure CSS (a scroll timeline).
 
 To test pointer effects in headless Chrome, launch it with `--blink-settings=primaryPointerType=4,primaryHoverType=2,availablePointerTypes=4,availableHoverTypes=2` (headless reports no pointer), and scroll with `behavior: 'instant'` because the page uses smooth scrolling.
 
