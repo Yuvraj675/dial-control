@@ -368,7 +368,7 @@ h3 { font-size: var(--text-title); max-width: 40ch; }
   .hero { padding-block: var(--space-xl) var(--space-lg); }
   .hero__copy { gap: var(--space-lg); width: 100%; }
   .hero__actions { width: 100%; padding-top: 0; }
-  .hero__actions .btn { width: 100%; min-height: 52px; }
+  .hero__actions .btn { width: auto; max-width: 100%; min-height: 52px; padding-inline: var(--space-xl); }
   .hero__actions .link { display: none; }
   .stage { width: min(100%, 340px); }
   .wheel__caption, .stage__box .static-caption { display: none; }
@@ -387,7 +387,7 @@ h3 { font-size: var(--text-title); max-width: 40ch; }
   .modes li:last-child, .gestures tbody tr:last-child, .faq__row:last-child { border-bottom: 0; }
 
   /* how the dial works: the live wheel is already in the hero, so this is just the steps */
-  .diagram { padding-block: var(--section-gap-s) 0; }
+  .diagram { padding-block: var(--section-gap-s); }
   .diagram__dial { display: none; }
   .diagram__stage { gap: var(--space-xl); }
   .callouts { display: block; width: calc(100% - var(--gutter) * 2); box-sizing: border-box; }
@@ -410,10 +410,15 @@ h3 { font-size: var(--text-title); max-width: 40ch; }
   .switch__stage { order: -1; align-self: center; width: min(100%, 300px); }
   .switch__tabs { flex-wrap: wrap; gap: var(--space-xs); margin: 0 0 var(--space-lg); padding: 0; }
   .tab { flex: none; min-height: 36px; padding-inline: var(--space-md); font-size: var(--text-sm); }
-  .slices { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(5, 44px); grid-auto-flow: column; column-gap: 0; }
-  .slices li { padding-inline: var(--space-md); border-top: 1px solid var(--color-rule); font-size: var(--text-sm); }
-  .slices li:nth-child(5n+1) { border-top: 0; }
-  .slices li:nth-child(n+6) { border-left: 1px solid var(--color-rule); }
+  .slices { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(5, 44px); grid-auto-flow: column; column-gap: 0;
+    background:
+      linear-gradient(var(--color-rule), var(--color-rule)) 50% 0 / 1px 100% no-repeat,
+      linear-gradient(var(--color-rule), var(--color-rule)) 0 44px / 100% 1px no-repeat,
+      linear-gradient(var(--color-rule), var(--color-rule)) 0 88px / 100% 1px no-repeat,
+      linear-gradient(var(--color-rule), var(--color-rule)) 0 132px / 100% 1px no-repeat,
+      linear-gradient(var(--color-rule), var(--color-rule)) 0 176px / 100% 1px no-repeat,
+      var(--group-bg); }
+  .slices li, .slices li:nth-child(n) { padding-inline: var(--space-md); border: 0; font-size: var(--text-sm); }
   .switch__note { margin-top: var(--space-md); }
 
   /* the Settings window fits the page, small but whole, with its notes as one group underneath */
