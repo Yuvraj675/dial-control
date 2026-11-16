@@ -342,3 +342,11 @@ h3 { font-size: var(--text-title); max-width: 40ch; }
   .is-split .w { display: inline-block; opacity: 0; transform: translateY(0.35em); transition: opacity 600ms var(--ease-out), transform 700ms var(--ease-out); transition-delay: calc(var(--i) * 60ms); }
   .is-split.is-in .w { opacity: 1; transform: none; }
 }
+
+/* Scroll snap: each section settles at the top, under the nav. Proximity, never mandatory, so tall sections
+   (the pinned walkthrough, the Settings figure) scroll freely and only snap when a scroll ends near a section start.
+   Off for reduced motion and touch screens, where native momentum scrolling is better left alone. */
+@media (prefers-reduced-motion: no-preference) and (hover: hover) and (pointer: fine) {
+  html { scroll-snap-type: y proximity; scroll-padding-top: var(--banner-height); }
+  .hero, main > section, .footer { scroll-snap-align: start; }
+}
