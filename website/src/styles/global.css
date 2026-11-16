@@ -365,14 +365,15 @@ h3 { font-size: var(--text-title); max-width: 40ch; }
   .brand img { width: 30px; height: 30px; }
   .nav .btn { min-height: 38px; padding-inline: var(--space-md); font-size: var(--text-sm); }
 
-  .hero { padding-block: var(--space-xl) var(--space-lg); }
+  .hero { padding-block: var(--space-xl) 0; }
+  .hero__grid { row-gap: 40px; }
   .hero__copy { gap: var(--space-lg); width: 100%; }
   .hero__actions { width: 100%; padding-top: 0; }
   .hero__actions .btn { width: auto; max-width: 100%; min-height: 52px; padding-inline: var(--space-xl); }
   .hero__actions .link { display: none; }
   .stage { width: min(100%, 340px); }
   .wheel__caption, .stage__box .static-caption { display: none; }
-  .stage--with-controls { padding-bottom: var(--space-xl); }
+  .stage--with-controls { padding-bottom: 60px; } /* exactly the controls' height, so the space under them is the section's own */
 
   .section__head { gap: var(--space-sm); margin-bottom: var(--space-xl); }
   .section__head p { font-size: var(--text-md); color: var(--color-muted); line-height: 1.5; }
@@ -387,7 +388,7 @@ h3 { font-size: var(--text-title); max-width: 40ch; }
   .modes li:last-child, .gestures tbody tr:last-child, .faq__row:last-child { border-bottom: 0; }
 
   /* how the dial works: the live wheel is already in the hero, so this is just the steps */
-  .diagram { padding-block: var(--section-gap-s); }
+  .diagram { padding-block: 20px var(--section-gap-s); } /* gives 40px under the wheel controls, matching the 40px above the wheel */
   .diagram__dial { display: none; }
   .diagram__stage { gap: var(--space-xl); }
   .callouts { display: block; width: calc(100% - var(--gutter) * 2); box-sizing: border-box; }
