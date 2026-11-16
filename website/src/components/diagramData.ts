@@ -22,13 +22,13 @@ export interface Callout {
 /** The walkthrough, in the order a person would learn the dial. The dial performs each step as you scroll
  *  (see `dialAt`); the label and its leader line say what it is doing. */
 export const CALLOUTS: Callout[] = [
-  { id: 'turn', title: 'Turn', text: 'Each notch moves the highlight.', side: 'l', y: -0.34, anchor: { kind: 'ring', deg: -150 }, at: 0.04 },
-  { id: 'click', title: 'Click', text: 'Runs the highlighted option. Volume opens a gauge.', side: 'l', y: 0.3, anchor: { kind: 'point', dx: -20, dy: -12 }, at: 0.17 },
-  { id: 'volume', title: 'Set the volume', text: 'Turn again to move the level. Yours returns after.', side: 'r', y: -0.06, anchor: { kind: 'edge', i: 2 }, at: 0.26 },
-  { id: 'brightness', title: 'Brightness', text: 'The same two moves, for your screen.', side: 'r', y: -0.34, anchor: { kind: 'edge', i: 1 }, at: 0.43 },
-  { id: 'scroll', title: 'Scroll', text: 'The dial becomes a mouse wheel.', side: 'r', y: 0.19, anchor: { kind: 'edge', i: 3 }, at: 0.56 },
+  { id: 'turn', title: 'Turn', text: 'Each notch moves the highlight.', side: 'l', y: -0.34, anchor: { kind: 'ring', deg: -150 }, at: 0.03 },
+  { id: 'click', title: 'Click', text: 'Runs the highlighted option. Volume opens a gauge.', side: 'l', y: 0.3, anchor: { kind: 'point', dx: -74, dy: 56 }, at: 0.158 },
+  { id: 'volume', title: 'Set the volume', text: 'Turn again to move the level. Yours returns after.', side: 'r', y: -0.06, anchor: { kind: 'edge', i: 2 }, at: 0.286 },
+  { id: 'brightness', title: 'Brightness', text: 'The same two moves, for your screen.', side: 'r', y: -0.34, anchor: { kind: 'edge', i: 1 }, at: 0.414 },
+  { id: 'scroll', title: 'Scroll', text: 'The dial becomes a mouse wheel.', side: 'r', y: 0.19, anchor: { kind: 'edge', i: 3 }, at: 0.542 },
   { id: 'home', title: 'Home', text: 'Pick another dial, like Code.', side: 'l', y: -0.06, anchor: { kind: 'edge', i: 7 }, at: 0.67 },
-  { id: 'double', title: 'Double press', text: 'Closes the wheel, and opens it again.', side: 'r', y: 0.4, anchor: { kind: 'point', dx: 20, dy: -12 }, at: 0.8 },
+  { id: 'double', title: 'Double press', text: 'Closes the wheel, and opens it again.', side: 'r', y: 0.4, anchor: { kind: 'point', dx: 74, dy: 56 }, at: 0.798 },
 ];
 
 export type DialMode = 'menu' | 'volume' | 'brightness' | 'scroll';
@@ -37,53 +37,58 @@ export interface DialState { open: boolean; profileId: string; index: number; mo
 const clamp = (x: number, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, x));
 const lerp = (a: number, b: number, t: number) => a + (b - a) * clamp(t);
 
+/** Each step is `STEP_LENGTH` of the walkthrough long. Its first half draws the label and its line; the dial only
+ *  performs the action in the second half, so the words are fully there before anything happens. */
+export const STEP_LENGTH = 0.128;
+
 /** What the dial shows at progress `q` through the walkthrough: it actually does the things the labels say.
  *  Slice order in the System dial: 0 play/pause, 1 brightness, 2 volume, 3 scroll, 7 home. */
 export function dialAt(progress: number): DialState {
   const q = clamp(progress);
-  const seg = (a: number, b: number) => clamp((q - a) / (b - a));
   const base: DialState = { open: true, profileId: 'default', index: 0, mode: 'menu', gauge: 55 };
+  const starts = CALLOUTS.map((c) => c.at);
+  if (q < starts[0] || q >= starts[starts.length - 1] + STEP_LENGTH) return base;
 
-  if (q < 0.04) return base;
-  // Turn: the highlight steps from play/pause to volume.
-  if (q < 0.17) return { ...base, index: Math.round(lerp(0, 2, seg(0.04, 0.17))) };
-  // Click on volume: its gauge opens.
-  if (q < 0.26) return seg(0.17, 0.26) < 0.4 ? { ...base, index: 2 } : { ...base, index: 2, mode: 'volume', gauge: 50 };
-  // Turn again: the level rises, then falls.
-  if (q < 0.43) {
-    const p = seg(0.26, 0.43);
-    return { ...base, index: 2, mode: 'volume', gauge: Math.round(p < 0.5 ? lerp(50, 85, p * 2) : lerp(85, 30, (p - 0.5) * 2)) };
+  let i = starts.findIndex((st) => q < st + STEP_LENGTH);
+  const p = clamp((q - starts[i]) / STEP_LENGTH); // 0..1 through the step
+  const a = clamp((p - 0.5) / 0.5); // 0..1 through the action, which only starts once the label is fully drawn
+  const waiting = p < 0.5;
+
+  switch (CALLOUTS[i].id) {
+    // Turn: the highlight steps from play/pause to volume.
+    case 'turn':
+      return { ...base, index: Math.round(lerp(0, 2, a)) };
+    // Click on volume: its gauge opens.
+    case 'click':
+      return a < 0.5 ? { ...base, index: 2 } : { ...base, index: 2, mode: 'volume', gauge: 50 };
+    // Turn again: the level rises, then falls.
+    case 'volume':
+      return { ...base, index: 2, mode: 'volume', gauge: waiting ? 50 : Math.round(a < 0.5 ? lerp(50, 85, a * 2) : lerp(85, 30, (a - 0.5) * 2)) };
+    // Brightness: back to the wheel, turn to it, click, and the second gauge falls.
+    case 'brightness':
+      if (waiting) return { ...base, index: 2, mode: 'volume', gauge: 30 };
+      if (a < 0.2) return { ...base, index: 2 };
+      if (a < 0.4) return { ...base, index: 1 };
+      return { ...base, index: 1, mode: 'brightness', gauge: Math.round(lerp(70, 35, (a - 0.4) / 0.6)) };
+    // Scroll: back to the wheel, turn to scroll, click.
+    case 'scroll':
+      if (waiting) return { ...base, index: 1, mode: 'brightness', gauge: 35 };
+      if (a < 0.25) return { ...base, index: 1 };
+      if (a < 0.6) return { ...base, index: 3 };
+      return { ...base, index: 3, mode: 'scroll' };
+    // Home: turn to home, click for the list of dials, pick Code.
+    case 'home':
+      if (waiting) return { ...base, index: 3, mode: 'scroll' };
+      if (a < 0.15) return { ...base, index: 3 };
+      if (a < 0.35) return { ...base, index: 7 };
+      if (a < 0.8) return { ...base, profileId: 'home', index: Math.round(lerp(0, 2, (a - 0.35) / 0.45)) };
+      return { ...base, profileId: 'code_editor' };
+    // Double press: the wheel closes, then opens again.
+    default:
+      if (waiting || a < 0.15) return { ...base, profileId: 'code_editor' };
+      if (a < 0.6) return { ...base, open: false };
+      return base;
   }
-  // Brightness: back to the wheel, turn to it, click, and the second gauge falls.
-  if (q < 0.56) {
-    const p = seg(0.43, 0.56);
-    if (p < 0.2) return { ...base, index: 2 };
-    if (p < 0.4) return { ...base, index: 1 };
-    return { ...base, index: 1, mode: 'brightness', gauge: Math.round(lerp(70, 35, (p - 0.4) / 0.6)) };
-  }
-  // Scroll: back to the wheel, turn to scroll, click.
-  if (q < 0.67) {
-    const p = seg(0.56, 0.67);
-    if (p < 0.2) return { ...base, index: 1 };
-    if (p < 0.5) return { ...base, index: 3 };
-    return { ...base, index: 3, mode: 'scroll' };
-  }
-  // Home: turn to home, click for the list of dials, pick Code.
-  if (q < 0.8) {
-    const p = seg(0.67, 0.8);
-    if (p < 0.2) return { ...base, index: 3 };
-    if (p < 0.38) return { ...base, index: 7 };
-    if (p < 0.75) return { ...base, profileId: 'home', index: Math.round(lerp(0, 2, (p - 0.38) / 0.37)) };
-    return { ...base, profileId: 'code_editor', index: 0 };
-  }
-  // Double press: the wheel closes, then opens again.
-  if (q < 0.92) {
-    const p = seg(0.8, 0.92);
-    if (p < 0.25) return { ...base, profileId: 'code_editor' };
-    if (p < 0.65) return { ...base, open: false };
-    return base;
-  }
-  return base;
 }
 
 /** Where a callout's line attaches, for a dial of `size` px centred at (cx, cy). An edge anchor sits just inside the
@@ -91,8 +96,8 @@ export function dialAt(progress: number): DialState {
 export function anchorPoint(anchor: Anchor, cx: number, cy: number, size: number): { x: number; y: number } {
   const k = size / DIAL.natural;
   if (anchor.kind === 'center') return { x: cx, y: cy };
-  // A point is given in the wheel's own 450px units from its centre: the click lines start at the sides of the centre
-  // button, so they leave clear of the label under it.
+  // A point is given in the wheel's own 450px units from its centre: the click lines start at either end of the
+  // label under the centre button, so they leave clear of it.
   if (anchor.kind === 'point') return { x: cx + anchor.dx * k, y: cy + anchor.dy * k };
   const theta = anchor.kind === 'edge' ? -Math.PI / 2 + (anchor.i * 2 * Math.PI) / DIAL.slices : (anchor.deg * Math.PI) / 180;
   const r = anchor.kind === 'edge' ? DIAL.rOuter - 16 : DIAL.rBezel;

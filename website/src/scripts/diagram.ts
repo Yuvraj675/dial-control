@@ -60,15 +60,16 @@ function build() {
   // Pinned from the top of the section meeting the top of the screen until its bottom meets the bottom.
   const tl = createTimeline({
     defaults: { ease: 'linear' },
-    autoplay: onScroll({ target: section, enter: { target: 'top', container: 'top' }, leave: { target: 'bottom', container: 'bottom' }, sync: true }),
+    autoplay: onScroll({ target: section, enter: { target: 'top', container: 72 }, leave: { target: 'bottom', container: 'bottom' }, sync: true }),
   });
   const T = 1000; // timeline length; callouts start at `at` of it
   for (const { c, li, line, dot } of parts) {
     const t = c.at * T;
     const [drawable] = createDrawable(line);
-    tl.add(dot, { r: [0, 4.5], duration: 36 }, t)
-      .add(drawable, { draw: ['0 0', '0 1'], duration: 80 }, t + 10)
-      .add(li, { opacity: [0, 1], translateX: [c.side === 'l' ? 18 : -18, 0], duration: 80 }, t + 60);
+    // The line and label are fully drawn by 0.06 of the way into the step; the dial acts after 0.064 (see dialAt).
+    tl.add(dot, { r: [0, 4.5], duration: 20 }, t)
+      .add(drawable, { draw: ['0 0', '0 1'], duration: 40 }, t + 5)
+      .add(li, { opacity: [0, 1], translateX: [c.side === 'l' ? 14 : -14, 0], duration: 40 }, t + 20);
   }
   const rest = { x: 0 };
   tl.add(rest, { x: 1, duration: 1 }, T); // hold the finished diagram until the dial lets go

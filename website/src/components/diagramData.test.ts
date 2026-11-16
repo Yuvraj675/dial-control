@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CALLOUTS, DIAL, anchorPoint, currentCallout, dialAt, layoutLeaders } from './diagramData.ts';
+import { CALLOUTS, DIAL, STEP_LENGTH, anchorPoint, currentCallout, dialAt, layoutLeaders } from './diagramData.ts';
 
-test('steps come in increasing order with room to draw before the next one', () => {
-  for (let i = 1; i < CALLOUTS.length; i++) assert.ok(CALLOUTS[i].at - CALLOUTS[i - 1].at >= 0.09, CALLOUTS[i].id);
-  assert.ok(CALLOUTS.at(-1)!.at + 0.14 <= 1, 'the last step finishes before the dial unpins');
+test('steps come in increasing order, one step apart', () => {
+  for (let i = 1; i < CALLOUTS.length; i++) assert.ok(CALLOUTS[i].at - CALLOUTS[i - 1].at >= STEP_LENGTH - 1e-9, CALLOUTS[i].id);
+  assert.ok(CALLOUTS.at(-1)!.at + STEP_LENGTH <= 1, 'the last step finishes before the dial unpins');
   assert.equal(new Set(CALLOUTS.map((c) => c.id)).size, CALLOUTS.length);
 });
 
@@ -39,29 +39,53 @@ test('the current step follows progress', () => {
   assert.equal(currentCallout(1), CALLOUTS.length - 1);
 });
 
+const at = (id: string) => CALLOUTS.find((c) => c.id === id)!.at;
+const mid = (id: string, p: number) => at(id) + STEP_LENGTH * p; // a moment p of the way through a step
+
 test('the dial does what each label says, in order', () => {
   assert.equal(dialAt(0).index, 0);
-  // Turn: the highlight reaches volume by the end of the step, passing brightness.
-  const turned = Array.from({ length: 50 }, (_, i) => dialAt(0.04 + (0.13 * i) / 49).index);
+  // Turn: the highlight steps on to volume, passing brightness, only in the second half of the step.
+  const turned = Array.from({ length: 50 }, (_, i) => dialAt(mid('turn', 0.5 + (0.499 * i) / 49)).index);
   assert.deepEqual(turned, [...turned].sort((a, b) => a - b));
   assert.equal(turned.at(-1), 2);
   assert.ok(turned.includes(1));
   // Click: the volume gauge opens.
-  assert.equal(dialAt(0.2).mode, 'menu');
-  assert.equal(dialAt(0.25).mode, 'volume');
+  assert.equal(dialAt(mid('click', 0.6)).mode, 'menu');
+  assert.equal(dialAt(mid('click', 0.95)).mode, 'volume');
   // Turn again: the level rises and then falls.
-  const levels = Array.from({ length: 60 }, (_, i) => dialAt(0.26 + (0.1699 * i) / 59).gauge);
+  const levels = Array.from({ length: 60 }, (_, i) => dialAt(mid('volume', 0.5 + (0.499 * i) / 59)).gauge);
   assert.ok(Math.max(...levels) >= 80 && levels[0] <= 55 && levels.at(-1)! <= 35);
   assert.ok(levels.indexOf(Math.max(...levels)) > 5 && levels.indexOf(Math.max(...levels)) < 55);
   // Brightness, scroll, home, double press.
-  assert.equal(dialAt(0.54).mode, 'brightness');
-  assert.equal(dialAt(0.65).mode, 'scroll');
-  assert.equal(dialAt(0.70).index, 7);
-  assert.equal(dialAt(0.76).profileId, 'home');
-  assert.equal(dialAt(0.795).profileId, 'code_editor');
-  assert.equal(dialAt(0.85).open, false);
-  assert.equal(dialAt(0.95).open, true);
-  assert.equal(dialAt(0.95).profileId, 'default');
+  assert.equal(dialAt(mid('brightness', 0.9)).mode, 'brightness');
+  assert.equal(dialAt(mid('scroll', 0.95)).mode, 'scroll');
+  assert.equal(dialAt(mid('home', 0.66)).index, 7);
+  assert.equal(dialAt(mid('home', 0.8)).profileId, 'home');
+  assert.equal(dialAt(mid('home', 0.99)).profileId, 'code_editor');
+  assert.equal(dialAt(mid('double', 0.7)).open, false);
+  assert.equal(dialAt(mid('double', 0.99)).open, true);
+  assert.equal(dialAt(mid('double', 0.99)).profileId, 'default');
+});
+
+test('the dial waits until the words are fully there: nothing changes in the first half of any step', () => {
+  for (const c of CALLOUTS) {
+    const start = dialAt(c.at + 0.0005);
+    for (const p of [0.1, 0.25, 0.4, 0.49]) assert.deepEqual(dialAt(mid(c.id, p)), start, `${c.id} moved at ${p} of the way through`);
+  }
+});
+
+test('the label is fully drawn before the dial acts: step timing leaves a clear half step', () => {
+  for (let i = 1; i < CALLOUTS.length; i++) assert.ok(Math.abs(CALLOUTS[i].at - CALLOUTS[i - 1].at - STEP_LENGTH) < 1e-9, `${CALLOUTS[i].id} starts one step after the last`);
+  assert.ok(CALLOUTS.at(-1)!.at + STEP_LENGTH <= 0.94, 'a hold at the end');
+});
+
+test('one step hands over to the next without a jump', () => {
+  for (let i = 1; i < CALLOUTS.length; i++) {
+    const before = dialAt(CALLOUTS[i].at - 0.0005);
+    const after = dialAt(CALLOUTS[i].at + 0.0005);
+    assert.ok(Math.abs(after.gauge - before.gauge) <= 1, `${CALLOUTS[i].id}: the gauge jumps`);
+    assert.deepEqual({ ...after, gauge: 0 }, { ...before, gauge: 0 }, `${CALLOUTS[i - 1].id} to ${CALLOUTS[i].id}`);
+  }
 });
 
 test('every state stays in range for its dial at any progress', () => {

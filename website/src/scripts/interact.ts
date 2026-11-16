@@ -1,6 +1,6 @@
 // Small interactions that answer the pointer and the keyboard. All of them are off on touch screens and
 // under reduced motion, and none of them changes layout.
-//   magnetic buttons  the Download buttons lean toward the pointer when it is near (a pull of about 0.3)
+//   stretchy buttons  the Download buttons stretch toward the pointer, but only when it is very close
 //   tilt              the Settings window leans toward the pointer, like the app switcher's dial
 //   live keys         the keys in the keyboard section light up as you press the real ones
 const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -17,25 +17,32 @@ if (keyEls.length) {
 }
 
 if (fine && !calm) {
-  // Magnetic buttons: within reach, shift toward the pointer by 30% of the offset (never more than 8px).
-  const magnets = Array.from(document.querySelectorAll<HTMLElement>('[data-magnet]'));
+  // Stretchy buttons: when the pointer is very close (within 22px of the button, or over it), the button stretches
+  // toward it, up to 9% along the width and 16% along the height. Anchored on the far side, so the near edge reaches out.
+  const stretchy = Array.from(document.querySelectorAll<HTMLElement>('[data-stretch]'));
+  const NEAR = 22;
   let px = -9999;
   let py = -9999;
   let frame = 0;
-  const clamp = (v: number, m: number) => Math.max(-m, Math.min(m, v));
-  const pull = () => {
+  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+  const lean = () => {
     frame = 0;
-    for (const el of magnets) {
+    for (const el of stretchy) {
       const r = el.getBoundingClientRect();
       const dx = px - (r.left + r.width / 2);
       const dy = py - (r.top + r.height / 2);
-      const reach = Math.max(r.width, r.height) * 0.9;
-      el.style.translate = Math.hypot(dx, dy) < reach ? `${clamp(dx * 0.3, 8)}px ${clamp(dy * 0.3, 8)}px` : '';
+      const out = Math.hypot(Math.max(Math.abs(dx) - r.width / 2, 0), Math.max(Math.abs(dy) - r.height / 2, 0));
+      if (out >= NEAR) { el.style.scale = ''; el.style.transformOrigin = ''; continue; }
+      const near = 1 - out / NEAR; // 0 at the edge of the zone, 1 over the button
+      const nx = clamp(dx / (r.width / 2), -1, 1);
+      const ny = clamp(dy / (r.height / 2), -1, 1);
+      el.style.transformOrigin = `${50 - nx * 50}% ${50 - ny * 50}%`;
+      el.style.scale = `${1 + 0.09 * near * Math.abs(nx)} ${1 + 0.16 * near * Math.abs(ny)}`;
     }
   };
-  if (magnets.length) {
-    window.addEventListener('pointermove', (e) => { px = e.clientX; py = e.clientY; if (!frame) frame = requestAnimationFrame(pull); }, { passive: true });
-    document.addEventListener('pointerleave', () => { px = py = -9999; pull(); });
+  if (stretchy.length) {
+    window.addEventListener('pointermove', (e) => { px = e.clientX; py = e.clientY; if (!frame) frame = requestAnimationFrame(lean); }, { passive: true });
+    document.addEventListener('pointerleave', () => { px = py = -9999; lean(); });
   }
 
   // Tilt: lean toward the pointer while it is over the element, settle back when it leaves.

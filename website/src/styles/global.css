@@ -41,7 +41,7 @@ h3 { font-size: var(--text-title); max-width: 40ch; }
 .skip:focus-visible { transform: none; }
 
 /* ── controls ─────────────────────────────────────────────────── */
-.btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-sm); min-height: 52px; padding-inline: var(--space-lg); border: 1px solid transparent; border-radius: var(--radius-pill); font-weight: 600; font-size: var(--text-md); line-height: 1; text-decoration: none; white-space: nowrap; cursor: pointer; transition: background-color var(--dur-micro) var(--ease-out), color var(--dur-micro) var(--ease-out), border-color var(--dur-micro) var(--ease-out), transform var(--dur-micro) var(--ease-out), translate 160ms var(--ease-out); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-sm); min-height: 52px; padding-inline: var(--space-lg); border: 1px solid transparent; border-radius: var(--radius-pill); font-weight: 600; font-size: var(--text-md); line-height: 1; text-decoration: none; white-space: nowrap; cursor: pointer; transition: background-color var(--dur-micro) var(--ease-out), color var(--dur-micro) var(--ease-out), border-color var(--dur-micro) var(--ease-out), transform var(--dur-micro) var(--ease-out), scale 150ms var(--ease-out), transform-origin 150ms var(--ease-out); }
 .btn--primary { background: var(--color-accent); color: var(--color-accent-ink); }
 .btn--primary:hover { background: var(--color-focus); }
 .btn--primary:active { transform: translateY(1px); }
@@ -269,7 +269,7 @@ h3 { font-size: var(--text-title); max-width: 40ch; }
 
 /* Enhanced (wide screen, motion allowed): the section is a long track, its stage pins, and the labels and
    leader lines are laid out around the dial by script. The finished diagram is the end of the track. */
-.js-3d .diagram { --dial-s: min(52svh, 500px); padding-block: 0; min-height: 560svh; }
+.js-3d .diagram { --dial-s: min(52svh, 500px); padding-block: 0; min-height: 900svh; }
 /* A sticky stage is its own stacking layer: lifting it above the flying dial puts the leader lines over the dial's parts. */
 .js-3d .diagram__stage { position: sticky; top: var(--banner-height); height: calc(100svh - var(--banner-height)); display: block; z-index: calc(var(--z-raised) + 1); pointer-events: none; }
 .js-3d .diagram__head { position: absolute; left: 0; right: 0; top: var(--space-md); margin-inline: auto; }
@@ -308,10 +308,6 @@ h3 { font-size: var(--text-title); max-width: 40ch; }
 /* an on-page key lights up while you hold the real one (the individual translate property, so it never fights the 3D keys) */
 .key { transition: background-color var(--dur-micro) var(--ease-out), color var(--dur-micro) var(--ease-out), border-color var(--dur-micro) var(--ease-out), translate var(--dur-micro) var(--ease-out); }
 .key.is-down { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-accent-ink); translate: 0 var(--space-3xs); }
-/* a rule that draws across the top of a row you point at */
-.faq__row, .dl__row { position: relative; }
-.faq__row::before, .dl__row::before { content: ""; position: absolute; left: 0; top: calc(var(--rule-hair) * -1); width: 100%; height: var(--rule-hair); background: var(--color-accent); transform: scaleX(0); transform-origin: left; transition: transform var(--dur-long) var(--ease-out); pointer-events: none; }
-.faq__row:hover::before, .dl__row:hover::before { transform: scaleX(1); }
 /* a hairline spine at the edge that fills as you read (CSS scroll timeline; absent where unsupported) */
 .spine { display: none; }
 @supports (animation-timeline: scroll()) {
