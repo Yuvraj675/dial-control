@@ -6,6 +6,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 
 ### Changed
 - macOS is labelled early access (beta); README asks for issues and test reports on every platform. Removed the left-edge progress line from the website.
+- README opens with a how-it-works flowchart (CMF Buds Pro 2 case dial, interception, wheel, action) in place of the website screenshot.
+- Website navbar has a GitHub icon link beside Download (opens in a new tab).
 
 ## [1.0.0] - 2026-11-16
 

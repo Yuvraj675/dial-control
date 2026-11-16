@@ -59,6 +59,9 @@ h3 { font-size: var(--text-title); max-width: 40ch; }
 /* ── nav ──────────────────────────────────────────────────────── */
 .nav { position: sticky; top: 0; z-index: var(--z-sticky-nav); background: color-mix(in oklab, black 60%, transparent); -webkit-backdrop-filter: blur(32px) saturate(1.4) brightness(0.55); backdrop-filter: blur(32px) saturate(1.4) brightness(0.55); border-bottom: 1px solid color-mix(in oklab, var(--color-ink) 7%, transparent); box-shadow: inset 0 -1px 0 color-mix(in oklab, var(--color-accent) 8%, transparent); }
 .nav__row { display: flex; align-items: center; justify-content: space-between; min-height: 72px; }
+.nav__actions { display: flex; align-items: center; gap: var(--space-sm); }
+.icon-link { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border: 1px solid var(--color-rule); border-radius: var(--radius-pill); color: var(--color-ink); transition: border-color var(--dur-micro) var(--ease-out), background-color var(--dur-micro) var(--ease-out); }
+.icon-link:hover { border-color: var(--color-muted); background: var(--color-paper-2); }
 .brand { display: inline-flex; align-items: center; gap: var(--space-sm); text-decoration: none; font-family: var(--font-display); font-weight: 800; font-variation-settings: "ROND" 100; font-size: var(--text-xl); }
 .brand img { width: 36px; height: 36px; border-radius: var(--space-sm); }
 
@@ -363,6 +366,8 @@ h3 { font-size: var(--text-title); max-width: 40ch; }
   .nav__row { min-height: 60px; }
   .brand { font-size: var(--text-lg); }
   .brand img { width: 30px; height: 30px; }
+  .icon-link { width: 38px; height: 38px; }
+  .icon-link svg { width: 20px; height: 20px; }
   .nav .btn { min-height: 38px; padding-inline: var(--space-md); font-size: var(--text-sm); }
 
   .hero { padding-block: var(--space-xl) 0; }
