@@ -346,87 +346,104 @@ h3 { font-size: var(--text-title); max-width: 40ch; }
   .hero, main > section, .footer { scroll-snap-align: start; }
 }
 
-/* ── phones: a compact, swipeable page ───────────────────────────────────────────────────────────
-   Smaller type and spacing, the repeated lists become swipeable card rows, the FAQ folds into an accordion
-   (script adds .js-faq), the screenshot pans sideways, and the keyboard section is hidden because phones
+/* ── phones ───────────────────────────────────────────────────────────────────────────────────────
+   One calm column: smaller type, generous air between sections, no sideways scrolling anywhere. Lists are
+   inset grouped (one rounded container, hairline-divided rows) like a native settings screen, not a pile of
+   separate cards. The second wheel in "How the dial works" is hidden (the hero already shows the live one),
+   the FAQ folds into an accordion (script adds .js-faq) and the keyboard section is hidden because phones
    have no keyboard. Desktop is untouched: everything here is inside this one query. */
 @media (max-width: 40rem) {
   :root {
-    --gutter: 20px; --banner-height: 60px; --gap-columns: 16px; --section-gap-s: 52px; --section-gap: 60px;
-    --space-xl: 28px; --space-2xl: 36px; --space-3xl: 52px;
+    --gutter: 20px; --banner-height: 60px; --gap-columns: 16px; --section-gap-s: 72px; --section-gap: 80px;
+    --space-xl: 32px; --space-2xl: 44px; --space-3xl: 64px;
     --text-lg: 1rem; --text-xl: 1.0625rem; --text-2xl: 1.25rem; --text-3xl: 1.375rem;
     --text-display: 2.5rem; --text-section: 1.75rem; --text-title: 1.0625rem; --text-lead: 1rem;
+    --group-bg: color-mix(in oklab, var(--color-paper-2) 70%, transparent);
   }
   .nav__row { min-height: 60px; }
   .brand { font-size: var(--text-lg); }
   .brand img { width: 30px; height: 30px; }
   .nav .btn { min-height: 38px; padding-inline: var(--space-md); font-size: var(--text-sm); }
 
-  .hero { padding-block: var(--space-lg) var(--space-xl); }
-  .hero__copy { gap: var(--space-md); width: 100%; }
+  .hero { padding-block: var(--space-xl) var(--space-lg); }
+  .hero__copy { gap: var(--space-lg); width: 100%; }
   .hero__actions { width: 100%; padding-top: 0; }
-  .hero__actions .btn { width: 100%; min-height: 50px; }
+  .hero__actions .btn { width: 100%; min-height: 52px; }
   .hero__actions .link { display: none; }
   .stage { width: min(100%, 340px); }
+  .wheel__caption, .stage__box .static-caption { display: none; }
+  .stage--with-controls { padding-bottom: var(--space-xl); }
 
-  .section__head { gap: var(--space-xs); margin-bottom: var(--space-lg); }
-  .section__head p { font-size: var(--text-md); color: var(--color-muted); }
+  .section__head { gap: var(--space-sm); margin-bottom: var(--space-xl); }
+  .section__head p { font-size: var(--text-md); color: var(--color-muted); line-height: 1.5; }
   #keyboard { display: none; }
 
-  /* swipeable card rows: the walkthrough steps and the Settings window's notes */
-  .callouts, .shot__notes { display: flex; gap: var(--space-sm); margin: 0; width: 100%; max-width: 100%; box-sizing: border-box; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; padding: 0 var(--gutter) var(--space-3xs); scroll-padding-inline: var(--gutter); }
-  .shot__notes { margin: var(--space-md) calc(var(--gutter) * -1) 0; }
-  .callouts::-webkit-scrollbar, .shot__notes::-webkit-scrollbar { display: none; }
-  .callout, .note { flex: 0 0 68%; scroll-snap-align: start; align-content: start; padding: var(--space-md); border: 1px solid var(--color-rule); border-radius: var(--radius-card); background: var(--color-paper-2); }
-  .callout h3, .note h3 { font-size: var(--text-lg); }
-  .callout p, .note p { font-size: var(--text-sm); line-height: 1.45; }
-  .diagram__stage { gap: var(--space-lg); }
+  /* inset grouped lists: one container, rows divided by hairlines */
+  .callouts, .shot__notes, .modes, .gestures tbody, .slices, .faq {
+    margin: 0; padding: 0; border: 1px solid var(--color-rule); border-radius: var(--radius-card); background: var(--group-bg); overflow: hidden;
+  }
+  .callout, .note, .modes li, .gestures tr, .faq__row { padding: var(--space-md) var(--space-lg); border: 0; border-top: 1px solid var(--color-rule); }
+  .callout:first-child, .note:first-child, .modes li:first-child, .gestures tr:first-child, .faq__row:first-child { border-top: 0; }
+  .modes li:last-child, .gestures tbody tr:last-child, .faq__row:last-child { border-bottom: 0; }
 
-  /* the four gestures: a 2 x 2 grid of small cards */
-  .gestures tbody { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-sm); }
-  .gestures tr, .gestures tbody tr:last-child { padding: var(--space-md); border: 1px solid var(--color-rule); border-radius: var(--radius-card); background: var(--color-paper-2); }
-  .gestures th { margin-bottom: var(--space-xs); font-size: var(--text-lg); border: 0; }
+  /* how the dial works: the live wheel is already in the hero, so this is just the steps */
+  .diagram { padding-block: var(--section-gap-s) 0; }
+  .diagram__dial { display: none; }
+  .diagram__stage { gap: var(--space-xl); }
+  .callouts { display: block; width: calc(100% - var(--gutter) * 2); box-sizing: border-box; }
+  .callout, .note { display: grid; gap: var(--space-3xs); }
+  .callout h3, .note h3 { font-size: var(--text-md); }
+  .callout p, .note p { font-size: var(--text-sm); line-height: 1.45; color: var(--color-muted); }
+
+  /* the four gestures: one group, each row a name and its two outcomes side by side */
+  .gestures tbody { display: block; }
+  .gestures tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--space-md); row-gap: var(--space-xs); background: none; }
+  .gestures th { grid-column: 1 / -1; margin: 0; border: 0; font-size: var(--text-lg); }
+  .gestures td { display: block; padding: 0; border: 0; font-size: var(--text-sm); line-height: 1.35; color: var(--color-ink); }
   .gestures tbody tr:last-child th, .gestures tbody tr:last-child td { border-bottom: 0; }
-  .gestures td { grid-template-columns: minmax(0, 1fr); gap: 0; padding-block: var(--space-2xs); font-size: var(--text-sm); line-height: 1.3; color: var(--color-ink); }
-  .gestures td::before { font-size: 0.6875rem; letter-spacing: 0.04em; text-transform: uppercase; }
+  .gestures td::before { display: block; margin-bottom: var(--space-3xs); font-size: 0.6875rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--color-muted); }
 
-  /* the app switcher: wheel first, chips and a two-column slice list under it */
-  .switch { display: flex; flex-direction: column; gap: var(--space-md); }
+  /* the app switcher: wheel first, wrapped chips, two-column slice list; no sideways scrolling */
+  .switch { display: flex; flex-direction: column; gap: var(--space-lg); }
   .switch > * { min-width: 0; max-width: 100%; }
   .switch > div:first-child { width: 100%; }
   .switch__stage { order: -1; align-self: center; width: min(100%, 300px); }
-  .switch__tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 calc(var(--gutter) * -1) var(--space-md); padding-inline: var(--gutter); }
-  .switch__tabs::-webkit-scrollbar { display: none; }
-  .tab { flex: none; min-height: 38px; font-size: var(--text-sm); }
-  .slices { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(5, 42px); column-gap: var(--space-md); }
-  .slices li { font-size: var(--text-sm); }
+  .switch__tabs { flex-wrap: wrap; gap: var(--space-xs); margin: 0 0 var(--space-lg); padding: 0; }
+  .tab { flex: none; min-height: 36px; padding-inline: var(--space-md); font-size: var(--text-sm); }
+  .slices { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(5, 44px); grid-auto-flow: column; column-gap: 0; }
+  .slices li { padding-inline: var(--space-md); border-top: 1px solid var(--color-rule); font-size: var(--text-sm); }
+  .slices li:nth-child(5n+1) { border-top: 0; }
+  .slices li:nth-child(n+6) { border-left: 1px solid var(--color-rule); }
+  .switch__note { margin-top: var(--space-md); }
 
-  /* the Settings window pans sideways instead of shrinking to nothing */
-  .shot__frame { overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
-  .shot__frame::-webkit-scrollbar { display: none; }
-  .shot__frame img { width: 780px; max-width: none; }
+  /* the Settings window fits the page, small but whole, with its notes as one group underneath */
+  .shot__frame img { width: 100%; max-width: 100%; }
+  .shot__notes { display: block; margin-top: var(--space-lg); }
+  .shot figcaption { display: none; }
 
-  .modes li { padding-block: var(--space-md); gap: var(--space-2xs); }
-  .modes strong { font-size: var(--text-2xl); }
-  .modes span { font-size: var(--text-md); color: var(--color-muted); }
+  .modes li { display: grid; gap: var(--space-3xs); }
+  .modes strong { font-size: var(--text-lg); }
+  .modes span { font-size: var(--text-sm); color: var(--color-muted); line-height: 1.45; }
 
-  /* FAQ accordion */
-  .faq.js-faq .faq__row { gap: 0; padding-block: 0; }
-  .faq.js-faq dt { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); max-width: none; padding-block: var(--space-md); font-size: var(--text-md); cursor: pointer; }
+  /* FAQ accordion, as one group */
+  .faq__row { display: block; }
+  .faq dt, .faq dd { font-size: var(--text-md); max-width: none; }
+  .faq dd { color: var(--color-muted); font-size: var(--text-sm); line-height: 1.5; padding-top: var(--space-xs); }
+  .faq.js-faq dt { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); cursor: pointer; }
   .faq.js-faq dt::after { content: "+"; flex: none; color: var(--color-muted); font-size: var(--text-2xl); line-height: 1; transition: transform var(--dur-short) var(--ease-out); }
   .faq.js-faq .faq__row.is-open dt::after { transform: rotate(45deg); }
   .faq.js-faq .faq__row:not(.is-open) dd { display: none; }
-  .faq.js-faq dd { padding-bottom: var(--space-md); font-size: var(--text-md); }
-  .faq__row { padding-block: var(--space-md); gap: var(--space-xs); }
-  .faq dt, .faq dd { font-size: var(--text-md); }
 
   /* download rows and the rest */
-  .dl__row { padding-block: var(--space-lg); gap: var(--space-xs); }
-  .dl__row .btn { justify-self: stretch; width: 100%; }
-  .dl__alts { padding-left: 0; }
-  .install { margin-top: var(--space-xl); gap: var(--space-lg); }
-  .steps { margin-top: var(--space-xl); gap: var(--space-md); }
+  .dl { border: 1px solid var(--color-rule); border-radius: var(--radius-card); background: var(--group-bg); overflow: hidden; }
+  .dl__row { padding: var(--space-lg); gap: var(--space-xs); border: 0; border-top: 1px solid var(--color-rule); }
+  .dl__row:first-child { border-top: 0; }
+  .dl__row:last-child { border-bottom: 0; }
+  .dl__row .btn { justify-self: stretch; width: 100%; margin-top: var(--space-xs); }
+  .dl__alts { padding-left: 0; margin-top: 0; }
+  .install { margin-top: var(--space-2xl); gap: var(--space-lg); }
+  .steps { margin-top: var(--space-2xl); gap: var(--space-lg); }
   .steps li { padding-top: var(--space-md); font-size: var(--text-md); }
   .steps li::before { margin-bottom: var(--space-3xs); font-size: var(--text-2xl); }
-  .footer { padding-block: var(--space-xl); }
+  .footer { padding-block: var(--space-2xl); }
 }
