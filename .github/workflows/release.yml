@@ -17,7 +17,7 @@ jobs:
     name: Verify version
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Tag must match package.json, Cargo.toml and tauri.conf.json
         run: |
           pkg=$(node -p "require('./package.json').version")
@@ -44,7 +44,7 @@ jobs:
         run: |
           dnf install -y gcc gcc-c++ make git curl wget file xz tar zstd binutils dpkg rpm-build \
             openssl-devel webkit2gtk4.1-devel libappindicator-gtk3-devel libayatana-appindicator-gtk3 librsvg2-devel libxdo-devel
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -74,7 +74,7 @@ jobs:
     needs: verify
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -97,7 +97,7 @@ jobs:
     needs: verify
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -121,7 +121,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v4
         with:
           path: release-files
