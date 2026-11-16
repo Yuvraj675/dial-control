@@ -98,3 +98,34 @@ if (fine && !calm) {
     (el.closest('a, button') ?? el).addEventListener('focus', run);
   });
 }
+
+// FAQ on phones: each question folds open and shut. Only while the page is phone-width; wider windows keep the
+// plain two-column list, and without script everything stays open.
+{
+  const faq = document.querySelector<HTMLElement>('.faq');
+  const mq = window.matchMedia('(max-width: 40rem)');
+  if (faq) {
+    const rows = Array.from(faq.querySelectorAll<HTMLElement>('.faq__row'));
+    const set = (row: HTMLElement, open: boolean) => {
+      row.classList.toggle('is-open', open);
+      row.querySelector('dt')?.setAttribute('aria-expanded', String(open));
+    };
+    rows.forEach((row) => {
+      const dt = row.querySelector<HTMLElement>('dt');
+      if (!dt) return;
+      dt.addEventListener('click', () => { if (mq.matches) set(row, !row.classList.contains('is-open')); });
+      dt.addEventListener('keydown', (e) => { if (mq.matches && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); set(row, !row.classList.contains('is-open')); } });
+    });
+    const apply = () => {
+      faq.classList.toggle('js-faq', mq.matches);
+      rows.forEach((row) => {
+        const dt = row.querySelector<HTMLElement>('dt');
+        if (!dt) return;
+        if (mq.matches) { dt.setAttribute('role', 'button'); dt.tabIndex = 0; set(row, false); }
+        else { dt.removeAttribute('role'); dt.removeAttribute('tabindex'); dt.removeAttribute('aria-expanded'); row.classList.remove('is-open'); }
+      });
+    };
+    apply();
+    mq.addEventListener('change', apply);
+  }
+}
