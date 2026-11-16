@@ -19,6 +19,8 @@
 
 **[dial-control.netlify.app](https://dial-control.netlify.app/)**: see the wheel in action, in your browser.
 
+
+https://github.com/user-attachments/assets/abe7ef2b-1d27-466b-a66f-ef3175542bba
 </div>
 
 ---
