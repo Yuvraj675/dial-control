@@ -1,6 +1,7 @@
 // Small interactions that answer the pointer and the keyboard. All of them are off on touch screens and
 // under reduced motion, and none of them changes layout.
-//   stretchy buttons  the Download buttons stretch toward the pointer, but only when it is very close
+//   headings          section headings rise in word by word the first time they scroll into view
+//   scramble          the wordmark and platform names re-draw their letters once when hovered or focused
 //   tilt              the Settings window leans toward the pointer, like the app switcher's dial
 //   live keys         the keys in the keyboard section light up as you press the real ones
 const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -17,34 +18,6 @@ if (keyEls.length) {
 }
 
 if (fine && !calm) {
-  // Stretchy buttons: when the pointer is very close (within 22px of the button, or over it), the button stretches
-  // toward it, up to 9% along the width and 16% along the height. Anchored on the far side, so the near edge reaches out.
-  const stretchy = Array.from(document.querySelectorAll<HTMLElement>('[data-stretch]'));
-  const NEAR = 22;
-  let px = -9999;
-  let py = -9999;
-  let frame = 0;
-  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-  const lean = () => {
-    frame = 0;
-    for (const el of stretchy) {
-      const r = el.getBoundingClientRect();
-      const dx = px - (r.left + r.width / 2);
-      const dy = py - (r.top + r.height / 2);
-      const out = Math.hypot(Math.max(Math.abs(dx) - r.width / 2, 0), Math.max(Math.abs(dy) - r.height / 2, 0));
-      if (out >= NEAR) { el.style.scale = ''; el.style.transformOrigin = ''; continue; }
-      const near = 1 - out / NEAR; // 0 at the edge of the zone, 1 over the button
-      const nx = clamp(dx / (r.width / 2), -1, 1);
-      const ny = clamp(dy / (r.height / 2), -1, 1);
-      el.style.transformOrigin = `${50 - nx * 50}% ${50 - ny * 50}%`;
-      el.style.scale = `${1 + 0.09 * near * Math.abs(nx)} ${1 + 0.16 * near * Math.abs(ny)}`;
-    }
-  };
-  if (stretchy.length) {
-    window.addEventListener('pointermove', (e) => { px = e.clientX; py = e.clientY; if (!frame) frame = requestAnimationFrame(lean); }, { passive: true });
-    document.addEventListener('pointerleave', () => { px = py = -9999; lean(); });
-  }
-
   // Tilt: lean toward the pointer while it is over the element, settle back when it leaves.
   document.querySelectorAll<HTMLElement>('[data-tilt]').forEach((el) => {
     const max = Number(el.dataset.tilt) || 4;
@@ -59,5 +32,46 @@ if (fine && !calm) {
       el.style.transition = 'transform 520ms cubic-bezier(0.16, 1, 0.3, 1)';
       el.style.transform = '';
     });
+  });
+}
+
+// Headings: each section heading rises in word by word the first time it scrolls into view. The words start
+// where they belong (only a few pixels low and a touch transparent) and the class is added by this script, so
+// with scripting off, under reduced motion, or if the observer never fires, the heading simply reads normally.
+if (!calm && 'IntersectionObserver' in window) {
+  const heads = Array.from(document.querySelectorAll<HTMLElement>('.section__head h2, .dl h2'))
+    .filter((h) => !h.closest('[data-diagram]') && h.getBoundingClientRect().top > window.innerHeight);
+  for (const h of heads) {
+    const words = (h.textContent ?? '').trim().split(/\s+/);
+    h.setAttribute('aria-label', words.join(' '));
+    h.innerHTML = words.map((w, i) => `<span class="w" aria-hidden="true" style="--i:${i}">${w}</span>`).join(' ');
+    h.classList.add('is-split');
+  }
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) if (e.isIntersecting) { e.target.classList.add('is-in'); io.unobserve(e.target); }
+  }, { rootMargin: '0px 0px -12% 0px' });
+  heads.forEach((h) => io.observe(h));
+}
+
+// Scramble: letters flick through dots, then settle, once per hover. Doto is a dot font, so dots read as part of it.
+if (fine && !calm) {
+  document.querySelectorAll<HTMLElement>('[data-scramble]').forEach((el) => {
+    const text = el.textContent ?? '';
+    let running = false;
+    const run = () => {
+      if (running) return;
+      running = true;
+      const glyphs = '.:·+*';
+      let step = 0;
+      const total = text.length + 6;
+      const tick = () => {
+        el.textContent = text.split('').map((c, i) => (c === ' ' || i < step - 6 ? c : glyphs[(i + step) % glyphs.length])).join('');
+        if (++step <= total) setTimeout(tick, 28);
+        else { el.textContent = text; running = false; }
+      };
+      tick();
+    };
+    (el.closest('a, button') ?? el).addEventListener('pointerenter', run);
+    (el.closest('a, button') ?? el).addEventListener('focus', run);
   });
 }

@@ -43,7 +43,8 @@ React and Motion are shared with the app's component through `resolve.dedupe` in
 
 `src/scripts/interact.ts` holds the pointer and keyboard touches. They switch themselves off on touch screens and under reduced motion, and none of them changes layout:
 
-- **Stretchy Download buttons.** Only when the pointer is very close (within 22px of the button, or over it) the button stretches toward it, up to 9% along the width and 16% along the height, anchored on the far side so the near edge reaches out. It uses the individual `scale` property so it never fights other transforms.
+- **Word-by-word headings and dot scramble.** Section headings below the first screen rise in word by word the first time they scroll into view (the script adds the classes, so with scripting off or under reduced motion they just read normally). The wordmark and platform names re-draw their letters through dots once per hover or focus, fine pointer only.
+- **Ask your AI.** A pill above the footer notice copies `src/content/ask-ai.md` (placeholders `{{SITE}}` and `{{REPO}}` filled at build) to the clipboard; the same text is served at `/llms.txt`. `src/content/ask-ai.test.ts` guards its facts, links and length. Update the prompt whenever a user-visible feature or requirement changes.
 - **Tilt.** Any element with `data-tilt="<degrees>"` leans toward the pointer (the Settings window; the app switcher and the dial do the same through Framer Motion).
 - **Live keys.** The keys in the keyboard section light up while you hold the real ones (`data-key` holds the `KeyboardEvent.key` value).
 - **A progress spine** at the left edge is pure CSS (a scroll timeline).

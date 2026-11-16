@@ -41,7 +41,7 @@ h3 { font-size: var(--text-title); max-width: 40ch; }
 .skip:focus-visible { transform: none; }
 
 /* ── controls ─────────────────────────────────────────────────── */
-.btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-sm); min-height: 52px; padding-inline: var(--space-lg); border: 1px solid transparent; border-radius: var(--radius-pill); font-weight: 600; font-size: var(--text-md); line-height: 1; text-decoration: none; white-space: nowrap; cursor: pointer; transition: background-color var(--dur-micro) var(--ease-out), color var(--dur-micro) var(--ease-out), border-color var(--dur-micro) var(--ease-out), transform var(--dur-micro) var(--ease-out), scale 150ms var(--ease-out), transform-origin 150ms var(--ease-out); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-sm); min-height: 52px; padding-inline: var(--space-lg); border: 1px solid transparent; border-radius: var(--radius-pill); font-weight: 600; font-size: var(--text-md); line-height: 1; text-decoration: none; white-space: nowrap; cursor: pointer; transition: background-color var(--dur-micro) var(--ease-out), color var(--dur-micro) var(--ease-out), border-color var(--dur-micro) var(--ease-out), transform var(--dur-micro) var(--ease-out); }
 .btn--primary { background: var(--color-accent); color: var(--color-accent-ink); }
 .btn--primary:hover { background: var(--color-focus); }
 .btn--primary:active { transform: translateY(1px); }
@@ -316,4 +316,23 @@ h3 { font-size: var(--text-title); max-width: 40ch; }
     .spine::after { content: ""; position: absolute; inset: 0; background: var(--color-accent); transform-origin: top; transform: scaleY(0); animation: spine-grow linear both; animation-timeline: scroll(root); }
     @keyframes spine-grow { to { transform: scaleY(1); } }
   }
+}
+
+/* Ask your AI: a pill that copies a ready-made prompt, at the foot of the page. */
+.ask { margin-block: var(--space-xl); display: grid; gap: var(--space-sm); justify-items: start; }
+.ask__pill { display: inline-flex; align-items: center; gap: var(--space-sm); padding: var(--space-xs) var(--space-xs) var(--space-xs) var(--space-md); border: 1px solid var(--color-rule); border-radius: var(--radius-pill); background: var(--color-paper-2); color: var(--color-ink); }
+.ask__icon { color: var(--color-accent); flex: none; }
+.ask__label { font-size: var(--text-md); font-weight: 600; padding-right: var(--space-sm); border-right: 1px solid var(--color-rule); line-height: 2; }
+.ask__copy { display: inline-flex; align-items: center; gap: var(--space-xs); min-height: 44px; padding: 0 var(--space-md); border: 0; border-radius: var(--radius-pill); background: transparent; color: var(--color-ink); font: inherit; font-size: var(--text-sm); cursor: pointer; transition: background-color var(--dur-micro) var(--ease-out), color var(--dur-micro) var(--ease-out); }
+.ask__copy:hover { background: var(--color-paper); }
+.ask__copy:active { transform: translateY(1px); }
+.ask__copy.is-done { color: var(--color-accent); }
+.ask__copy:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.ask__note { margin: 0; color: var(--color-muted); font-size: var(--text-sm); }
+.ask__note .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Headings rise in word by word (class added by script; visible by default). */
+@media (prefers-reduced-motion: no-preference) {
+  .is-split .w { display: inline-block; opacity: 0; transform: translateY(0.35em); transition: opacity 600ms var(--ease-out), transform 700ms var(--ease-out); transition-delay: calc(var(--i) * 60ms); }
+  .is-split.is-in .w { opacity: 1; transform: none; }
 }
