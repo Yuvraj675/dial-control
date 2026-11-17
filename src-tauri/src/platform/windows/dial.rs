@@ -304,7 +304,7 @@ unsafe extern "system" fn low_level_keyboard_proc(
                     let dir = if vk == VK_VOLUME_UP { 1 } else { -1 };
 
                     if is_scroll_mode {
-                        let scroll_delta = crate::platform::dial_logic::scroll_delta_for(dir);
+                        let scroll_delta = crate::platform::dial_logic::accelerated_scroll_delta(dir);
                         println!("[Windows Dial] Keyboard Scroll Mode -> dir: {}, delta: {}", dir, scroll_delta);
                         with_app(move |app| {
                             let state: tauri::State<AppState> = app.state();
@@ -712,7 +712,7 @@ unsafe extern "system" fn callback_on_notify(
         let state: tauri::State<AppState> = app.state();
 
         if is_scroll_mode {
-            let scroll_delta = crate::platform::dial_logic::scroll_delta_for(dir);
+            let scroll_delta = crate::platform::dial_logic::accelerated_scroll_delta(dir);
             state.platform.input().emit_scroll(scroll_delta);
             let _ = app.emit("scroll:tick", serde_json::json!({ "direction": dir }));
         } else if is_hud_open {

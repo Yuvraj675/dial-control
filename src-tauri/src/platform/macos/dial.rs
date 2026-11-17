@@ -1,6 +1,6 @@
 use crate::platform::dial_logic::{
     classify_click, classify_multi_press, classify_volume_change, decode_aux_key, headroom_lock, is_rotation_burst,
-    now_millis, scroll_delta_for, ClickAction, GestureAction, MultiPress, RemoteCommand, VolumeAction,
+    now_millis, ClickAction, GestureAction, MultiPress, RemoteCommand, VolumeAction,
 };
 use crate::platform::traits::{DialBackend, PlatformProvider};
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU32, AtomicU64, Ordering};
@@ -230,7 +230,7 @@ unsafe extern "C" fn volume_listener(
                     return;
                 }
                 if is_scroll {
-                    state.platform.input().emit_scroll(scroll_delta_for(direction));
+                    state.platform.input().emit_scroll(crate::platform::dial_logic::accelerated_scroll_delta(direction));
                     let _ = app.emit("scroll:tick", serde_json::json!({ "direction": direction }));
                 } else {
                     emit_rotate(&app, direction, locked_vol().max(0));
@@ -393,7 +393,7 @@ impl MacDial {
                 if key.is_down {
                     with_app(move |app| {
                         let state: tauri::State<crate::AppState> = app.state();
-                        state.platform.input().emit_scroll(scroll_delta_for(dir));
+                        state.platform.input().emit_scroll(crate::platform::dial_logic::accelerated_scroll_delta(dir));
                         let _ = app.emit("scroll:tick", serde_json::json!({ "direction": dir }));
                     });
                 }

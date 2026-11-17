@@ -38,6 +38,56 @@ pub fn scroll_delta_for(direction: i32) -> i32 {
     }
 }
 
+/// Wheel notches for one scroll tick given the gap since the previous tick in the same
+/// direction: a slow turn is one notch, a fast spin ramps up so long pages are reachable.
+pub fn scroll_multiplier(interval_ms: u64) -> i32 {
+    match interval_ms {
+        0..=59 => 5,
+        60..=99 => 3,
+        100..=159 => 2,
+        _ => 1,
+    }
+}
+
+/// Remembers the previous scroll tick so consecutive fast ticks accelerate.
+pub struct ScrollAccel {
+    last_ms: std::sync::atomic::AtomicU64,
+    last_dir: std::sync::atomic::AtomicI32,
+}
+
+impl ScrollAccel {
+    pub const fn new() -> Self {
+        Self {
+            last_ms: std::sync::atomic::AtomicU64::new(0),
+            last_dir: std::sync::atomic::AtomicI32::new(0),
+        }
+    }
+
+    /// `now_ms` must be monotonic. Returns the signed wheel delta for this tick.
+    pub fn step(&self, now_ms: u64, direction: i32) -> i32 {
+        use std::sync::atomic::Ordering::SeqCst;
+        let dir = if direction > 0 { 1 } else { -1 };
+        let last = self.last_ms.swap(now_ms, SeqCst);
+        let last_dir = self.last_dir.swap(dir, SeqCst);
+        let mult = if last_dir == dir && last != 0 {
+            scroll_multiplier(now_ms.saturating_sub(last))
+        } else {
+            1
+        };
+        scroll_delta_for(direction) * mult
+    }
+}
+
+static SCROLL_ACCEL: ScrollAccel = ScrollAccel::new();
+
+/// Signed wheel delta for a scroll-mode tick, accelerating on fast successive turns.
+pub fn accelerated_scroll_delta(direction: i32) -> i32 {
+    static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+    // +1 keeps the very first tick from reading as "no previous tick" at 0 ms.
+    let now = START.get_or_init(std::time::Instant::now).elapsed().as_millis() as u64 + 1;
+    SCROLL_ACCEL.step(now, direction)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClickAction {
     /// Contact bounce or a duplicate observation of the same press.
@@ -316,6 +366,18 @@ mod tests {
         assert_eq!(scroll_delta_for(1), -1);
         assert_eq!(scroll_delta_for(-1), 1);
         assert_eq!(scroll_delta_for(0), 1);
+    }
+
+    #[test]
+    fn fast_scroll_ticks_accelerate_and_reset() {
+        let a = ScrollAccel::new();
+        assert_eq!(a.step(1000, 1), -1); // first tick
+        assert_eq!(a.step(1030, 1), -5); // fast burst
+        assert_eq!(a.step(1110, 1), -3); // 80ms gap
+        assert_eq!(a.step(1400, 1), -1); // slow turn
+        assert_eq!(a.step(1430, 1), -5);
+        assert_eq!(a.step(1450, -1), 1); // reversal resets
+        assert_eq!(a.step(1470, -1), 5);
     }
 
     #[test]

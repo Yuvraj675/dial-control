@@ -248,6 +248,8 @@ Turns the rotary dial into a continuous, physical mouse scroll wheel for long do
   - Emulates mouse wheel using CoreGraphics `CGEventCreateScrollWheelEvent2(null_mut(), kCGScrollEventUnitLine, 1, delta, 0, 0)`.
   - Posts event directly to `kCGHIDEventTap`.
 
+- **Acceleration** (`dial_logic::accelerated_scroll_delta` / `ScrollAccel`, tested): the wheel delta is multiplied by `scroll_multiplier(gap since previous tick)` (<60ms 5, <100ms 3, <160ms 2, else 1); a direction change resets it. Every backend's `emit_scroll(delta)` already takes a signed notch count, so no trait change was needed. Android has its own swipe-based scroll and is unchanged.
+
 #### Focus & Window Management Lifecycle
 1. User selects "Scroll Mode" in HUD.
 2. Frontend sets mode to `"scroll"`, displaying `"ROTATE TO SCROLL"` in the center.

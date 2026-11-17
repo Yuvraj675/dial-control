@@ -4,6 +4,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 
 ## [Unreleased]
 
+### Added
+- Scroll mode accelerates when the dial is spun fast (1 to 5 wheel notches per tick by the gap between ticks; a slow turn or a direction change is one notch).
+
 ### Changed
 - macOS is labelled early access (beta); README asks for issues and test reports on every platform. Removed the left-edge progress line from the website.
 - README opens with a how-it-works flowchart (CMF Buds Pro 2 case dial, interception, wheel, action) in place of the website screenshot.

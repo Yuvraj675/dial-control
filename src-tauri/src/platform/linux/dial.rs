@@ -350,7 +350,7 @@ fn start_bluez_listener(
                                 if is_scroll {
                                     // direction > 0 is clockwise -> scroll down (-1)
                                     // direction < 0 is counter-clockwise -> scroll up (1)
-                                    let scroll_delta = if direction > 0 { -1 } else { 1 };
+                                    let scroll_delta = crate::platform::dial_logic::accelerated_scroll_delta(direction);
                                     let app_clone = app.clone();
                                     thread::spawn(move || {
                                         let state: tauri::State<crate::AppState> = app_clone.state();
