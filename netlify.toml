@@ -25,5 +25,5 @@
   [headers.values]
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
-    X-Frame-Options = "DENY"
+    # No X-Frame-Options and no frame-ancestors: the page may be embedded anywhere (the portfolio previews it live).
     Permissions-Policy = "camera=(), microphone=(), geolocation=()"
