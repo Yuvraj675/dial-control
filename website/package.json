@@ -16,7 +16,7 @@
     "@astrojs/sitemap": "^3.2.1",
     "animejs": "^4.5.0",
     "astro": "^5.2.0",
-    "framer-motion": "^12.4.7",
+    "framer-motion": "^14.13.0",
     "lucide-react": "^0.475.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
